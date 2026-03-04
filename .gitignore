@@ -6,6 +6,7 @@ node_modules/
 dist/
 out/
 .next/
+contracts/broadcast/
 contracts/out/
 contracts/cache/
 contracts/lib/

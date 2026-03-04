@@ -2,7 +2,7 @@
 pragma solidity 0.8.26;
 
 import {Script, console} from "forge-std/Script.sol";
-import {SimpleToken} from "../src/SimpleToken.sol";
+import {SimpleToken} from "../../src/SimpleToken.sol";
 
 /// @title DeployToken
 /// @notice Deploys the SimpleToken ERC20 contract on Sepolia.

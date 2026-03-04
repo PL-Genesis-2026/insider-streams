@@ -4,7 +4,7 @@ pragma solidity 0.8.26;
 import {Script, console} from "forge-std/Script.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {PolicyEngine} from "@chainlink/policy-management/core/PolicyEngine.sol";
-import {SimpleToken} from "../src/SimpleToken.sol";
+import {SimpleToken} from "../../src/SimpleToken.sol";
 
 interface IVault {
     function register(address token, address policyEngine) external;
