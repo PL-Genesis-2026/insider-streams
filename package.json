@@ -1,0 +1,16 @@
+{
+  "name": "private-streams",
+  "private": true,
+  "scripts": {
+    "dev:prediction-market": "pnpm --filter prediction-market-frontend dev",
+    "build:prediction-market": "pnpm --filter prediction-market-frontend build",
+    "dev:insider-streams": "pnpm --filter insider-streams-frontend dev",
+    "build:insider-streams": "pnpm --filter insider-streams-frontend build",
+    "build:contracts": "cd contracts && forge build --via-ir",
+    "test:contracts": "cd contracts && forge test --via-ir"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=10.0.0"
+  }
+}
