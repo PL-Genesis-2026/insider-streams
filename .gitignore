@@ -1,0 +1,17 @@
+node_modules/
+.env
+.env.*
+!.env.example
+!.env.local.example
+dist/
+out/
+.next/
+contracts/out/
+contracts/cache/
+contracts/lib/
+*.log
+*.wasm
+.DS_Store
+.cre_build_tmp.js
+.claude/settings.local.json
+Untitled
