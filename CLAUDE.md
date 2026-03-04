@@ -73,6 +73,13 @@ Private keys are in `.env` files (never committed).
 - `SettlementRequested(uint256 indexed marketId, string question)`
 - `SettlementResponse(uint256 indexed marketId, Status indexed status, Outcome indexed outcome)`
 
+## Deployed Contracts (Eth Sepolia — Compliant Private Transfer)
+
+- **SimpleToken** (DemoToken/DEMO): `0xB308Ef20527c5215ec2B2B10F52b311f3AAc6EEB` (18 decimals)
+- **PolicyEngine proxy**: `0xb208a00A90839246C9f6008EaDD71177e78D4EA1`
+- **Vault** (pre-existing): `0xE588a6c73933BFD66Af9b4A07d48bcE59c0D2d13`
+- **Private Token API**: `https://convergence2026-token-api.cldev.cloud` ([docs](https://convergence2026-token-api.cldev.cloud/docs))
+
 ## Services
 
 - **Firebase project**: `chainlink-cre-d6748` (billing enabled, $1 + $10 budget alerts)
