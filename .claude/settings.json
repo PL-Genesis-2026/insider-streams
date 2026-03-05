@@ -1,7 +1,4 @@
 {
-  "permissions": {
-    "allow": []
-  },
   "env": {
     "DISABLE_TELEMETRY": "1",
     "DISABLE_ERROR_REPORTING": "1",
@@ -10,5 +7,29 @@
     "CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY": "1",
     "CLAUDE_CODE_ENABLE_TELEMETRY": "0",
     "OTEL_SDK_DISABLED": "true"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(echo $PATH)",
+      "Bash(bun:*)",
+      "Bash(cast:*)",
+      "Bash(chmod:*)",
+      "Bash(cp:*)",
+      "Bash(cre:*)",
+      "Bash(curl:*)",
+      "Bash(export:*)",
+      "Bash(forge:*)",
+      "Bash(gcloud:*)",
+      "Bash(gh:*)",
+      "Bash(git:*)",
+      "Bash(go:*)",
+      "Bash(mv:*)",
+      "Bash(node:*)",
+      "Bash(npx:*)",
+      "Bash(pnpm:*)",
+      "Bash(test:*)",
+      "Bash(cast call 0xD0Ad321ab6c124C211Acd0bf98f569b2950F3c9b \"getAuction\\(uint256\\)\\(\\(address,uint256,uint256,uint256,address,uint256,uint8\\)\\)\" 0 --rpc-url https://ethereum-sepolia-rpc.publicnode.com)",
+      "Bash(cast call 0xD0Ad321ab6c124C211Acd0bf98f569b2950F3c9b \"getForwarderAddress\\(\\)\\(address\\)\" --rpc-url https://ethereum-sepolia-rpc.publicnode.com)"
+    ]
   }
 }

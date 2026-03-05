@@ -1,0 +1,9 @@
+{
+  "evms": [
+    {
+      "secretMarketplaceAddress": "0xD0Ad321ab6c124C211Acd0bf98f569b2950F3c9b",
+      "chainSelectorName": "ethereum-testnet-sepolia",
+      "gasLimit": "500000"
+    }
+  ]
+}

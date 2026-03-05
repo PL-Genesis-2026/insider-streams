@@ -1,0 +1,59 @@
+specVersion: 1.3.0
+indexerHints:
+  prune: auto
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: SecretMarketplace
+    network: sepolia
+    source:
+      address: "0xD0Ad321ab6c124C211Acd0bf98f569b2950F3c9b"
+      abi: SecretMarketplace
+      startBlock: 10387045
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - AuctionClosed
+        - AuctionCreated
+        - AuctionForceClosed
+        - BidPlaced
+        - ExpectedAuthorUpdated
+        - ExpectedWorkflowIdUpdated
+        - ExpectedWorkflowNameUpdated
+        - ForwarderAddressUpdated
+        - OwnershipTransferred
+        - ReputationUpdated
+        - SecurityWarning
+        - TradeExecuted
+      abis:
+        - name: SecretMarketplace
+          file: ./abis/SecretMarketplace.json
+      eventHandlers:
+        - event: AuctionClosed(indexed uint256,indexed address,uint256,address,uint256)
+          handler: handleAuctionClosed
+        - event: AuctionCreated(indexed uint256,indexed address,uint256,uint256,uint256)
+          handler: handleAuctionCreated
+        - event: AuctionForceClosed(indexed uint256,indexed address,uint256,address,uint256,int8)
+          handler: handleAuctionForceClosed
+        - event: BidPlaced(indexed uint256,indexed address,uint256,address,uint256)
+          handler: handleBidPlaced
+        - event: ExpectedAuthorUpdated(indexed address,indexed address)
+          handler: handleExpectedAuthorUpdated
+        - event: ExpectedWorkflowIdUpdated(indexed bytes32,indexed bytes32)
+          handler: handleExpectedWorkflowIdUpdated
+        - event: ExpectedWorkflowNameUpdated(indexed bytes10,indexed bytes10)
+          handler: handleExpectedWorkflowNameUpdated
+        - event: ForwarderAddressUpdated(indexed address,indexed address)
+          handler: handleForwarderAddressUpdated
+        - event: OwnershipTransferred(indexed address,indexed address)
+          handler: handleOwnershipTransferred
+        - event: ReputationUpdated(indexed address,indexed uint256,int8,int256)
+          handler: handleReputationUpdated
+        - event: SecurityWarning(string)
+          handler: handleSecurityWarning
+        - event: TradeExecuted(indexed uint256,indexed uint256,indexed address,uint256)
+          handler: handleTradeExecuted
+      file: ./src/secret-marketplace.ts
