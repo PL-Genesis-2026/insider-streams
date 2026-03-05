@@ -4,13 +4,20 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "e2e": "tsx --env-file=.env auction-e2e.ts"
+    "e2e": "tsx --env-file=.env secret-marketplace-e2e.ts",
+    "codegen": "graphql-codegen --config codegen.ts"
   },
   "dependencies": {
-    "@private-streams/contracts": "workspace:*",
+    "@private-streams/common": "workspace:*",
+    "graphql": "^16.13.1",
+    "graphql-request": "^7.4.0",
     "viem": "^2.47.0"
   },
   "devDependencies": {
+    "@graphql-codegen/cli": "^6.1.2",
+    "@graphql-codegen/typescript": "^5.0.8",
+    "@graphql-codegen/typescript-graphql-request": "^6.4.0",
+    "@graphql-codegen/typescript-operations": "^5.0.8",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }

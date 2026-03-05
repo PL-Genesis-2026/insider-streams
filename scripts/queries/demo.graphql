@@ -1,0 +1,21 @@
+# Demo query to verify graphql-codegen setup is working.
+# Delete this file once real queries are in place.
+
+query RecentAuctions {
+  auctionCreateds(first: 5, orderBy: blockTimestamp, orderDirection: desc) {
+    id
+    auctionId
+    seller
+    reservePrice
+    endTime
+    blockTimestamp
+    transactionHash
+  }
+  bidPlaceds(first: 5, orderBy: blockTimestamp, orderDirection: desc) {
+    id
+    auctionId
+    bidder
+    amount
+    blockTimestamp
+  }
+}
