@@ -26,7 +26,6 @@ contract SecretMarketplaceTest is Test {
         auction = new SecretMarketplace(address(usdc), address(market), forwarder);
 
         // Create markets on SimpleMarket so createAuction validation passes
-        // Tests use externalMarketId 0..4
         market.newMarket("Test market 0");  // marketId=0
         market.newMarket("Test market 1");  // marketId=1
         market.newMarket("Test market 2");  // marketId=2
@@ -69,16 +68,6 @@ contract SecretMarketplaceTest is Test {
         assertEq(open.length, 2);
         assertEq(open[0], 0);
         assertEq(open[1], 1);
-    }
-
-    function test_createAuction_tracksMarket() public {
-        vm.prank(seller);
-        auction.createAuction(3, RESERVE_PRICE, block.timestamp + 1 hours);
-
-        uint256[] memory tracked = auction.getTrackedMarkets();
-        assertEq(tracked.length, 1);
-        assertEq(tracked[0], 3);
-        assertEq(auction.trackedMarkets(3), seller);
     }
 
     function test_createAuction_revert_endTimeInPast() public {
@@ -132,6 +121,19 @@ contract SecretMarketplaceTest is Test {
         assertEq(usdc.balanceOf(bidder1), bidder1BalBefore);
     }
 
+    function test_placeBid_revert_sellerCannotBid() public {
+        vm.prank(seller);
+        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
+
+        usdc.mint(seller, MINT_AMOUNT);
+        vm.prank(seller);
+        usdc.approve(address(auction), type(uint256).max);
+
+        vm.prank(seller);
+        vm.expectRevert(SecretMarketplace.SellerCannotBid.selector);
+        auction.placeBid(0, 200e6);
+    }
+
     function test_placeBid_revert_belowReserve() public {
         vm.prank(seller);
         auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
@@ -174,22 +176,34 @@ contract SecretMarketplaceTest is Test {
     // ======== CLOSE ============
     // ===========================
 
-    function test_closeAuction() public {
+    function test_closeAuction_transfersToSeller() public {
         vm.prank(seller);
         auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
 
         vm.prank(bidder1);
         auction.placeBid(0, 200e6);
 
+        uint256 sellerBalBefore = usdc.balanceOf(seller);
         vm.warp(block.timestamp + 2 hours);
         auction.closeAuction(0);
 
         SecretMarketplace.AuctionData memory a = auction.getAuction(0);
         assertEq(uint8(a.status), uint8(SecretMarketplace.AuctionStatus.Closed));
-
         // Seller receives the winning bid
-        // Day one: TradeExecuted event emitted, no actual transfer to seller
-        // So funds stay in contract
+        assertEq(usdc.balanceOf(seller), sellerBalBefore + 200e6);
+    }
+
+    function test_closeAuction_sellerCanClose() public {
+        vm.prank(seller);
+        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
+
+        vm.warp(block.timestamp + 2 hours);
+
+        vm.prank(seller);
+        auction.closeAuction(0);
+
+        SecretMarketplace.AuctionData memory a = auction.getAuction(0);
+        assertEq(uint8(a.status), uint8(SecretMarketplace.AuctionStatus.Closed));
     }
 
     function test_closeAuction_removesFromOpenList() public {
@@ -237,14 +251,14 @@ contract SecretMarketplaceTest is Test {
         auction.closeAuction(0);
     }
 
-    function test_closeAuction_revert_notOwner() public {
+    function test_closeAuction_revert_notSellerOrOwner() public {
         vm.prank(seller);
         auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
 
         vm.warp(block.timestamp + 2 hours);
 
         vm.prank(bidder1);
-        vm.expectRevert();
+        vm.expectRevert(SecretMarketplace.NotSellerOrOwner.selector);
         auction.closeAuction(0);
     }
 
@@ -294,9 +308,6 @@ contract SecretMarketplaceTest is Test {
         auction.forceCloseAuction(0, int8(0));
 
         assertEq(auction.reputationScores(seller), 0);
-        // Market should still be removed from tracking
-        uint256[] memory tracked = auction.getTrackedMarkets();
-        assertEq(tracked.length, 0);
     }
 
     function test_forceCloseAuction_noBids() public {
@@ -320,13 +331,27 @@ contract SecretMarketplaceTest is Test {
         auction.updateReputationScore(0, int8(1));
 
         assertEq(auction.reputationScores(seller), 1);
-        uint256[] memory tracked = auction.getTrackedMarkets();
-        assertEq(tracked.length, 0);
     }
 
-    function test_updateReputationScore_revert_notTracked() public {
-        vm.expectRevert(abi.encodeWithSelector(SecretMarketplace.MarketNotTracked.selector, uint256(99)));
+    function test_updateReputationScore_revert_auctionDoesNotExist() public {
+        vm.expectRevert(SecretMarketplace.AuctionDoesNotExist.selector);
         auction.updateReputationScore(99, int8(1));
+    }
+
+    function test_updateReputationScore_multipleSellersOnSameMarket() public {
+        // Two sellers create auctions for the same external market
+        vm.prank(seller);
+        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours); // auctionId=0
+
+        vm.prank(bidder1); // bidder1 acts as second seller
+        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours); // auctionId=1
+
+        // Update reputation for both — should not conflict
+        auction.updateReputationScore(0, int8(1));  // seller
+        auction.updateReputationScore(1, int8(-1)); // bidder1-as-seller
+
+        assertEq(auction.reputationScores(seller), 1);
+        assertEq(auction.reputationScores(bidder1), -1);
     }
 
     // ===========================
@@ -339,7 +364,6 @@ contract SecretMarketplaceTest is Test {
 
         vm.warp(block.timestamp + 2 hours);
 
-        // action=0 (close), payload=abi.encode(auctionId)
         bytes memory report = abi.encodePacked(uint8(0), abi.encode(uint256(0)));
 
         vm.prank(forwarder);
@@ -380,6 +404,14 @@ contract SecretMarketplaceTest is Test {
 
         vm.prank(bidder1);
         vm.expectRevert();
+        auction.onReport("", report);
+    }
+
+    function test_processReport_revert_unknownAction() public {
+        bytes memory report = abi.encodePacked(uint8(99), abi.encode(uint256(0)));
+
+        vm.prank(forwarder);
+        vm.expectRevert(abi.encodeWithSelector(SecretMarketplace.UnknownAction.selector, uint8(99)));
         auction.onReport("", report);
     }
 
@@ -484,8 +516,10 @@ contract SecretMarketplaceTest is Test {
         auction.placeBid(id, 300e6);
         assertEq(usdc.balanceOf(bidder1), MINT_AMOUNT); // got full refund back
 
-        // Auction ends, owner closes it
+        // Auction ends, seller closes it
+        uint256 sellerBalBefore = usdc.balanceOf(seller);
         vm.warp(block.timestamp + 2 hours);
+        vm.prank(seller);
         auction.closeAuction(id);
 
         // Verify final state
@@ -494,8 +528,10 @@ contract SecretMarketplaceTest is Test {
         assertEq(a.highestBid, 300e6);
         assertEq(uint8(a.status), uint8(SecretMarketplace.AuctionStatus.Closed));
         assertEq(auction.getOpenAuctions().length, 0);
+        // Seller received the winning bid
+        assertEq(usdc.balanceOf(seller), sellerBalBefore + 300e6);
 
-        // Later: CRE updates reputation
+        // Later: owner updates reputation
         auction.updateReputationScore(0, int8(1));
         assertEq(auction.reputationScores(seller), 1);
     }
