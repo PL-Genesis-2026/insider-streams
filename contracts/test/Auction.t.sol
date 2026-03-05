@@ -410,8 +410,21 @@ contract AuctionTest is Test {
 
         vm.prank(bidder1);
         vm.expectEmit(true, true, false, true);
-        emit Auction.BidPlaced(0, bidder1, 200e6);
+        emit Auction.BidPlaced(0, bidder1, 200e6, address(0), 0);
         auction.placeBid(0, 200e6);
+    }
+
+    function test_emits_BidPlaced_withPreviousBidder() public {
+        vm.prank(seller);
+        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
+
+        vm.prank(bidder1);
+        auction.placeBid(0, 200e6);
+
+        vm.prank(bidder2);
+        vm.expectEmit(true, true, false, true);
+        emit Auction.BidPlaced(0, bidder2, 300e6, bidder1, 200e6);
+        auction.placeBid(0, 300e6);
     }
 
     function test_emits_AuctionClosed() public {
@@ -424,8 +437,45 @@ contract AuctionTest is Test {
         vm.warp(block.timestamp + 2 hours);
 
         vm.expectEmit(true, true, false, true);
-        emit Auction.AuctionClosed(0, bidder1, 200e6);
+        emit Auction.AuctionClosed(0, bidder1, 200e6, seller, 0);
         auction.closeAuction(0);
+    }
+
+    function test_emits_AuctionForceClosed() public {
+        vm.prank(seller);
+        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
+
+        vm.prank(bidder1);
+        auction.placeBid(0, 200e6);
+
+        vm.expectEmit(true, true, false, true);
+        emit Auction.AuctionForceClosed(0, bidder1, 200e6, seller, 0, int8(-1));
+        auction.forceCloseAuction(0, int8(-1));
+    }
+
+    function test_emits_RefundWithdrawn() public {
+        vm.prank(seller);
+        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
+
+        vm.prank(bidder1);
+        auction.placeBid(0, 200e6);
+
+        vm.prank(bidder2);
+        auction.placeBid(0, 300e6);
+
+        vm.prank(bidder1);
+        vm.expectEmit(true, false, false, true);
+        emit Auction.RefundWithdrawn(bidder1, 200e6);
+        auction.withdrawRefund();
+    }
+
+    function test_emits_ReputationUpdated() public {
+        vm.prank(seller);
+        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
+
+        vm.expectEmit(true, true, false, true);
+        emit Auction.ReputationUpdated(seller, 0, int8(1), int256(1));
+        auction.updateReputationScore(0, int8(1));
     }
 
     function test_emits_TradeExecuted() public {

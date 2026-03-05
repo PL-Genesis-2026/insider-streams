@@ -5,7 +5,7 @@ export default defineConfig({
   out: "src/generated.ts",
   plugins: [
     foundry({
-      project: "..",
+      project: "../../contracts",
       include: ["Auction.sol/Auction.json", "SimpleMarket.sol/SimpleMarket.json", "MockUSDC.sol/MockUSDC.json"],
       forge: { build: false },
     }),
