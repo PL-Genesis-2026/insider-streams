@@ -16,7 +16,7 @@ pnpm dev:insider-streams
 |----------|---------|
 | MockUSDC | `0xA75c910D441C99bA651a70451D3bE1d690c1DD85` |
 | SimpleMarket | `0xF9EDB9268E01301eE5Ccc985cDb3D825f05a4079` |
-| SecretMarketplace | `0xD0Ad321ab6c124C211Acd0bf98f569b2950F3c9b` |
+| SecretMarketplace | `0xED53f1AE2Ee56ca0fDAA79f0e050E873FCF86616` |
 
 ## Create a Prediction Market
 
@@ -49,7 +49,7 @@ forge script script/CreateMarket.s.sol --rpc-url $RPC_URL --broadcast
 ```bash
 cd contracts
 
-SECRET_MARKETPLACE_ADDRESS=0xD0Ad321ab6c124C211Acd0bf98f569b2950F3c9b \
+SECRET_MARKETPLACE_ADDRESS=0xED53f1AE2Ee56ca0fDAA79f0e050E873FCF86616 \
 EXTERNAL_MARKET_ID=0 \
 RESERVE_PRICE=1000000 \
 AUCTION_DURATION=120 \
@@ -72,7 +72,7 @@ cre workflow simulate auction-closer --target local-simulation --broadcast
 ```bash
 cd contracts
 
-SECRET_MARKETPLACE_ADDRESS=0xD0Ad321ab6c124C211Acd0bf98f569b2950F3c9b \
+SECRET_MARKETPLACE_ADDRESS=0xED53f1AE2Ee56ca0fDAA79f0e050E873FCF86616 \
 AUCTION_ID=0 \
 forge script script/secret-marketplace/CloseAuction.s.sol --rpc-url $RPC_URL --broadcast
 ```
@@ -84,7 +84,7 @@ Force-closes an auction regardless of expiry. Refunds the highest bidder and adj
 ```bash
 cd contracts
 
-SECRET_MARKETPLACE_ADDRESS=0xD0Ad321ab6c124C211Acd0bf98f569b2950F3c9b \
+SECRET_MARKETPLACE_ADDRESS=0xED53f1AE2Ee56ca0fDAA79f0e050E873FCF86616 \
 AUCTION_ID=0 \
 REPUTATION_DELTA=-1 \
 forge script script/secret-marketplace/ForceCloseAuction.s.sol --rpc-url $RPC_URL --broadcast
