@@ -1,42 +1,28 @@
 /**
- * Demo query to verify graphql-codegen setup is working.
+ * Demo queries to verify codegen setup is working.
  * Delete this file once real queries are in place.
  *
- * Run: npx tsx --tsconfig tsconfig.json src/lib/demo-query.ts
+ * Apollo hook usage (React component):
+ *   import { useRecentAuctions } from "@/lib/demo-query";
+ *   const { data, loading, error } = useRecentAuctions();
+ *
+ * API route usage (server-side):
+ *   import { getSubgraphSdk } from "@/lib/demo-query";
+ *   const sdk = getSubgraphSdk();
+ *   const data = await sdk.RecentAuctions();
  */
+import { useQuery } from "@apollo/client/react";
 import { GraphQLClient } from "graphql-request";
-import { gql } from "../__generated__/gql";
+import { RecentAuctionsDocument } from "../__generated__/graphql";
+import { getSdk } from "../__generated__/sdk";
+import { graphqlClient } from "./graphql";
 
-// Studio URL for demo (free, rate-limited)
-const client = new GraphQLClient(
-  "https://api.studio.thegraph.com/query/1743303/insider-streams/version/latest"
-);
-
-const RECENT_AUCTIONS_QUERY = gql(`
-  query RecentAuctions {
-    auctionCreateds(first: 5, orderBy: blockTimestamp, orderDirection: desc) {
-      id
-      auctionId
-      seller
-      reservePrice
-      endTime
-      blockTimestamp
-      transactionHash
-    }
-    bidPlaceds(first: 5, orderBy: blockTimestamp, orderDirection: desc) {
-      id
-      auctionId
-      bidder
-      amount
-      blockTimestamp
-    }
-  }
-`);
-
-async function main() {
-  const data = await client.request(RECENT_AUCTIONS_QUERY);
-  console.log("Recent auctions:", JSON.stringify(data.auctionCreateds, null, 2));
-  console.log("Recent bids:", JSON.stringify(data.bidPlaceds, null, 2));
+// Apollo hook — for React components
+export function useRecentAuctions() {
+  return useQuery(RecentAuctionsDocument);
 }
 
-main().catch(console.error);
+// getSdk — for Next.js API routes (server-side)
+export function getSubgraphSdk(client?: GraphQLClient) {
+  return getSdk(client ?? graphqlClient);
+}

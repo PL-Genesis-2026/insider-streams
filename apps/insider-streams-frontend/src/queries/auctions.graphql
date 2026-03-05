@@ -1,0 +1,18 @@
+query RecentAuctions {
+  auctionCreateds(first: 5, orderBy: blockTimestamp, orderDirection: desc) {
+    id
+    auctionId
+    seller
+    reservePrice
+    endTime
+    blockTimestamp
+    transactionHash
+  }
+  bidPlaceds(first: 5, orderBy: blockTimestamp, orderDirection: desc) {
+    id
+    auctionId
+    bidder
+    amount
+    blockTimestamp
+  }
+}
