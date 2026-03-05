@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
-import {Auction} from "../../src/Auction.sol";
+import {SecretMarketplace} from "../../src/SecretMarketplace.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract PlaceBid is Script {
@@ -16,7 +16,7 @@ contract PlaceBid is Script {
         vm.startBroadcast(bidderPk);
 
         IERC20(tokenAddress).approve(auctionAddress, bidAmount);
-        Auction(auctionAddress).placeBid(auctionId, bidAmount);
+        SecretMarketplace(auctionAddress).placeBid(auctionId, bidAmount);
         console.log("Bid placed on auction", auctionId, "for", bidAmount);
 
         vm.stopBroadcast();

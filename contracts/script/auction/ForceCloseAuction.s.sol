@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
-import {Auction} from "../../src/Auction.sol";
+import {SecretMarketplace} from "../../src/SecretMarketplace.sol";
 
 contract ForceCloseAuction is Script {
     function run() external {
@@ -13,7 +13,7 @@ contract ForceCloseAuction is Script {
 
         vm.startBroadcast(deployerPk);
 
-        Auction(auctionAddress).forceCloseAuction(auctionId, reputationDelta);
+        SecretMarketplace(auctionAddress).forceCloseAuction(auctionId, reputationDelta);
         console.log("Auction force closed:", auctionId);
 
         vm.stopBroadcast();
