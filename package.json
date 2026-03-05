@@ -7,7 +7,9 @@
     "dev:insider-streams": "pnpm --filter insider-streams-frontend dev",
     "build:insider-streams": "pnpm --filter insider-streams-frontend build",
     "build:contracts": "cd contracts && forge build --via-ir",
-    "test:contracts": "cd contracts && forge test --via-ir"
+    "test:contracts": "cd contracts && forge test --via-ir",
+    "e2e": "pnpm --filter @private-streams/scripts e2e",
+    "wagmi": "pnpm --filter @private-streams/contracts wagmi"
   },
   "engines": {
     "node": ">=20.0.0",
