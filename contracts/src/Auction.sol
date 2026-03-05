@@ -267,10 +267,8 @@ contract Auction is ReceiverTemplate {
             pendingReturns[a.highestBidder] += a.highestBid;
         }
 
-        // Update reputation for the seller
-        if (reputationDelta != 0) {
-            _updateReputationScore(a.externalMarketId, reputationDelta);
-        }
+        // Update reputation for the seller (also removes market from tracking)
+        _updateReputationScore(a.externalMarketId, reputationDelta);
 
         emit AuctionForceClosed(auctionId, a.highestBidder, a.highestBid);
     }
