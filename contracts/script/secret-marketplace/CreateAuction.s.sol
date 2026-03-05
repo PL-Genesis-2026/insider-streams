@@ -10,13 +10,16 @@ contract CreateAuction is Script {
         uint256 externalMarketId = vm.envUint("EXTERNAL_MARKET_ID");
         uint256 reservePrice = vm.envUint("RESERVE_PRICE");
         uint256 duration = vm.envUint("AUCTION_DURATION"); // seconds from now
+        bool betOnYes = vm.envBool("BET_ON_YES");
         uint256 deployerPk = vm.envUint("PRIVATE_KEY");
 
         uint256 endTime = block.timestamp + duration;
 
         vm.startBroadcast(deployerPk);
 
-        uint256 auctionId = SecretMarketplace(auctionAddress).createAuction(externalMarketId, reservePrice, endTime);
+        uint256 auctionId = SecretMarketplace(auctionAddress).createAuction(
+            externalMarketId, reservePrice, endTime, address(0), address(0), betOnYes
+        );
         console.log("Auction created with ID:", auctionId);
 
         vm.stopBroadcast();
