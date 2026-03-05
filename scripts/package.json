@@ -1,0 +1,17 @@
+{
+  "name": "@private-streams/scripts",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "e2e": "tsx --env-file=.env auction-e2e.ts"
+  },
+  "dependencies": {
+    "@private-streams/contracts": "workspace:*",
+    "viem": "^2.47.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

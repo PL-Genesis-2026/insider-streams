@@ -28,19 +28,26 @@ contract Auction is ReceiverTemplate {
     event BidPlaced(
         uint256 indexed auctionId,
         address indexed bidder,
-        uint256 amount
+        uint256 amount,
+        address previousBidder,
+        uint256 previousBid
     );
 
     event AuctionClosed(
         uint256 indexed auctionId,
         address indexed winner,
-        uint256 winningBid
+        uint256 winningBid,
+        address seller,
+        uint256 externalMarketId
     );
 
     event AuctionForceClosed(
         uint256 indexed auctionId,
         address indexed refundedBidder,
-        uint256 refundAmount
+        uint256 refundAmount,
+        address seller,
+        uint256 externalMarketId,
+        int8 reputationDelta
     );
 
     event TradeExecuted(
@@ -55,7 +62,8 @@ contract Auction is ReceiverTemplate {
     event ReputationUpdated(
         address indexed seller,
         uint256 indexed externalMarketId,
-        int8 delta
+        int8 delta,
+        int256 newScore
     );
 
     // ===========================
@@ -181,14 +189,17 @@ contract Auction is ReceiverTemplate {
 
         paymentToken.safeTransferFrom(msg.sender, address(this), amount);
 
-        if (a.highestBidder != address(0)) {
-            pendingReturns[a.highestBidder] += a.highestBid;
+        address prevBidder = a.highestBidder;
+        uint256 prevBid = a.highestBid;
+
+        if (prevBidder != address(0)) {
+            pendingReturns[prevBidder] += prevBid;
         }
 
         a.highestBidder = msg.sender;
         a.highestBid = amount;
 
-        emit BidPlaced(auctionId, msg.sender, amount);
+        emit BidPlaced(auctionId, msg.sender, amount, prevBidder, prevBid);
     }
 
     function closeAuction(uint256 auctionId) external onlyOwner { //add roles based modifier for allowing admin + CRE 
@@ -251,7 +262,7 @@ contract Auction is ReceiverTemplate {
             emit TradeExecuted(auctionId, a.externalMarketId, a.highestBidder, a.highestBid);
         }
 
-        emit AuctionClosed(auctionId, a.highestBidder, a.highestBid);
+        emit AuctionClosed(auctionId, a.highestBidder, a.highestBid, a.seller, a.externalMarketId);
     }
 
     function _forceCloseAuction(uint256 auctionId, int8 reputationDelta) internal {
@@ -270,21 +281,20 @@ contract Auction is ReceiverTemplate {
         // Update reputation for the seller (also removes market from tracking)
         _updateReputationScore(a.externalMarketId, reputationDelta);
 
-        emit AuctionForceClosed(auctionId, a.highestBidder, a.highestBid);
+        emit AuctionForceClosed(auctionId, a.highestBidder, a.highestBid, a.seller, a.externalMarketId, reputationDelta);
     }
 
     function _updateReputationScore(uint256 externalMarketId, int8 delta) internal {
         address seller = trackedMarkets[externalMarketId];
         if (seller == address(0)) revert MarketNotTracked(externalMarketId);
 
-        if (delta != 0) {
-            reputationScores[seller] += delta;
-            emit ReputationUpdated(seller, externalMarketId, delta);
-        }
+        reputationScores[seller] += delta;
 
         // Remove market from tracking
         _removeTrackedMarket(externalMarketId);
         delete trackedMarkets[externalMarketId];
+
+        emit ReputationUpdated(seller, externalMarketId, delta, reputationScores[seller]);
     }
 
     // ===========================
