@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# prediction-market-e2e.sh — Full end-to-end prediction market test on Base Sepolia
+# prediction-market-e2e.sh — Full end-to-end prediction market test on Eth Sepolia
 # Follows the CRE prediction market demo flow:
 #   1. Owner creates a market
 #   2. Tester approves MockUSDC + makes prediction
