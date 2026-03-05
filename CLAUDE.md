@@ -1,6 +1,6 @@
 # Private Streams
 
-AI-powered prediction market built on Chainlink Runtime Environment (CRE) with Google Gemini AI, deployed on Base Sepolia.
+AI-powered prediction market built on Chainlink Runtime Environment (CRE) with Google Gemini AI, plus Compliant Private Token Transfers via Chainlink ACE. All deployed on Ethereum Sepolia.
 
 ## Project Structure
 
@@ -47,10 +47,10 @@ cre workflow simulate prediction-market-demo --target local-simulation \
 
 ## Chain & Network
 
-- **Chain**: Base Sepolia (chain ID: 84532)
-- **RPC**: `https://base-sepolia-rpc.publicnode.com`
-- **Chain selector** (CRE): `ethereum-testnet-sepolia-base-1`
-- **CRE Simulation Forwarder**: `0x82300bd7c3958625581cc2f77bc6464dcecdf3e5`
+- **Chain**: Ethereum Sepolia (chain ID: 11155111)
+- **RPC**: `https://ethereum-sepolia-rpc.publicnode.com`
+- **Chain selector** (CRE): `ethereum-testnet-sepolia`
+- **CRE Simulation Forwarder**: `0x15fc6ae953e024d975e77382eeec56a9101f9f88`
 
 ## Wallets
 
@@ -61,10 +61,10 @@ cre workflow simulate prediction-market-demo --target local-simulation \
 
 Private keys are in `.env` files (never committed).
 
-## Deployed Contracts (Base Sepolia)
+## Deployed Contracts (Eth Sepolia — Prediction Market)
 
-- **MockUSDC**: `0xB308Ef20527c5215ec2B2B10F52b311f3AAc6EEB` (6 decimals, public `mint()`)
-- **SimpleMarket**: `0xD9e0f259b1Be422Fd4E24aFFc0d5E63dF8c4e785`
+- **MockUSDC**: `0xA75c910D441C99bA651a70451D3bE1d690c1DD85` (6 decimals, public `mint()`)
+- **SimpleMarket**: `0xF9EDB9268E01301eE5Ccc985cDb3D825f05a4079`
 
 ### SimpleMarket Events
 
