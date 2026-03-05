@@ -39,8 +39,6 @@ Config: `packages/contracts/wagmi.config.ts`
 
 | Contract | Address |
 |----------|---------|
-| MockUSDC | `0xD6e91E517EC7AD3b28CD4Fe7FEEF79ccf3f32349` |
-| SimpleMarket | `0x6A9129C27E3d5e344f1c5cAe59919D8Ba7Fa7416` |
-| SecretMarketplace | `0x77A0cA621FE34B5cdbB7470D14b9EFb32821446c` |
-
-Deploy block: `10386966`
+| MockUSDC | `0x0Ac553C843537176ef748Fc559fE33E9D79F2a38` |
+| SimpleMarket | `0xEF87D346448aC3aFA3fD15E6e1d22e6B86bf054E` |
+| SecretMarketplace | `0xD0Ad321ab6c124C211Acd0bf98f569b2950F3c9b` |

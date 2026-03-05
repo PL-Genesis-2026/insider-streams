@@ -60,7 +60,7 @@ contract SecretMarketplace is ReceiverTemplate {
 
     event ReputationUpdated(
         address indexed seller,
-        uint256 indexed externalMarketId,
+        uint256 indexed auctionId,
         int8 delta,
         int256 newScore
     );
@@ -73,13 +73,13 @@ contract SecretMarketplace is ReceiverTemplate {
     error AuctionNotEnded();
     error AuctionAlreadySettled();
     error BidTooLow();
+    error SellerCannotBid();
     error EndTimeInPast();
     error ReservePriceZero();
     error AuctionDoesNotExist();
-    error NotAdminOrCRE();
-    error MarketAlreadyTracked(uint256 externalMarketId);
-    error MarketNotTracked(uint256 externalMarketId);
     error MarketDoesNotExist(uint256 externalMarketId);
+    error NotSellerOrOwner();
+    error UnknownAction(uint8 action);
 
     // ===========================
     // ======== ENUMS ============
@@ -117,12 +117,8 @@ contract SecretMarketplace is ReceiverTemplate {
     uint256[] public openAuctionIds;
     mapping(uint256 => uint256) private _openAuctionIndex; // auctionId => index+1 (0 means not present)
 
-    // Reputation (stubbed for future implementation)
+    // Reputation — tracked per auction (not per market) to support multiple sellers on the same market
     mapping(address => int256) public reputationScores;
-    // externalMarketId => seller who created an auction for it
-    mapping(uint256 => address) public trackedMarkets;
-    uint256[] public trackedMarketIds;
-    mapping(uint256 => uint256) private _trackedMarketIndex; // marketId => index+1
 
     IERC20 public immutable paymentToken;
     ISimpleMarket public immutable market;
@@ -168,13 +164,6 @@ contract SecretMarketplace is ReceiverTemplate {
         openAuctionIds.push(auctionId);
         _openAuctionIndex[auctionId] = openAuctionIds.length; // index+1
 
-        // Track the external market for reputation scoring
-        if (trackedMarkets[externalMarketId] == address(0)) {
-            trackedMarkets[externalMarketId] = msg.sender;
-            trackedMarketIds.push(externalMarketId);
-            _trackedMarketIndex[externalMarketId] = trackedMarketIds.length;
-        }
-
         emit AuctionCreated(auctionId, msg.sender, externalMarketId, reservePrice, endTime);
         return auctionId;
     }
@@ -184,17 +173,19 @@ contract SecretMarketplace is ReceiverTemplate {
         if (a.endTime == 0) revert AuctionDoesNotExist();
         if (block.timestamp >= a.endTime) revert AuctionNotActive();
         if (a.status != AuctionStatus.Open) revert AuctionAlreadySettled();
+        if (msg.sender == a.seller) revert SellerCannotBid();
         if (amount < a.reservePrice || amount <= a.highestBid) revert BidTooLow();
 
-        paymentToken.safeTransferFrom(msg.sender, address(this), amount);
-
+        // Capture previous bidder before state changes (CEI pattern)
         address prevBidder = a.highestBidder;
         uint256 prevBid = a.highestBid;
 
+        // Effects: update state first
         a.highestBidder = msg.sender;
         a.highestBid = amount;
 
-        // Refund the previous bidder directly
+        // Interactions: external calls last
+        paymentToken.safeTransferFrom(msg.sender, address(this), amount);
         if (prevBidder != address(0)) {
             paymentToken.safeTransfer(prevBidder, prevBid);
         }
@@ -202,7 +193,11 @@ contract SecretMarketplace is ReceiverTemplate {
         emit BidPlaced(auctionId, msg.sender, amount, prevBidder, prevBid);
     }
 
-    function closeAuction(uint256 auctionId) external onlyOwner { //add roles based modifier for allowing admin + CRE 
+    /// @notice Close an expired auction. Callable by the seller or the contract owner.
+    function closeAuction(uint256 auctionId) external {
+        AuctionData storage a = auctions[auctionId];
+        if (a.endTime == 0) revert AuctionDoesNotExist();
+        if (msg.sender != a.seller && msg.sender != owner()) revert NotSellerOrOwner();
         _closeAuction(auctionId);
     }
 
@@ -210,8 +205,8 @@ contract SecretMarketplace is ReceiverTemplate {
         _forceCloseAuction(auctionId, reputationDelta);
     }
 
-    function updateReputationScore(uint256 externalMarketId, int8 delta) external onlyOwner {
-        _updateReputationScore(externalMarketId, delta);
+    function updateReputationScore(uint256 auctionId, int8 delta) external onlyOwner {
+        _updateReputationScore(auctionId, delta);
     }
 
     // ===========================
@@ -229,8 +224,10 @@ contract SecretMarketplace is ReceiverTemplate {
             (uint256 auctionId, int8 delta) = abi.decode(payload, (uint256, int8));
             _forceCloseAuction(auctionId, delta);
         } else if (action == ACTION_UPDATE_REPUTATION) {
-            (uint256 externalMarketId, int8 delta) = abi.decode(payload, (uint256, int8));
-            _updateReputationScore(externalMarketId, delta);
+            (uint256 auctionId, int8 delta) = abi.decode(payload, (uint256, int8));
+            _updateReputationScore(auctionId, delta);
+        } else {
+            revert UnknownAction(action);
         }
     }
 
@@ -248,7 +245,8 @@ contract SecretMarketplace is ReceiverTemplate {
         _removeOpenAuction(auctionId);
 
         if (a.highestBidder != address(0)) {
-            // Day one: just emit event. Later: call market.makePrediction(...)
+            // Transfer winning bid to seller
+            paymentToken.safeTransfer(a.seller, a.highestBid);
             emit TradeExecuted(auctionId, a.externalMarketId, a.highestBidder, a.highestBid);
         }
 
@@ -268,23 +266,19 @@ contract SecretMarketplace is ReceiverTemplate {
             paymentToken.safeTransfer(a.highestBidder, a.highestBid);
         }
 
-        // Update reputation for the seller (also removes market from tracking)
-        _updateReputationScore(a.externalMarketId, reputationDelta);
+        // Update reputation for the seller
+        _updateReputationScore(auctionId, reputationDelta);
 
         emit AuctionForceClosed(auctionId, a.highestBidder, a.highestBid, a.seller, a.externalMarketId, reputationDelta);
     }
 
-    function _updateReputationScore(uint256 externalMarketId, int8 delta) internal {
-        address seller = trackedMarkets[externalMarketId];
-        if (seller == address(0)) revert MarketNotTracked(externalMarketId);
+    function _updateReputationScore(uint256 auctionId, int8 delta) internal {
+        AuctionData storage a = auctions[auctionId];
+        if (a.endTime == 0) revert AuctionDoesNotExist();
 
-        reputationScores[seller] += delta;
+        reputationScores[a.seller] += delta;
 
-        // Remove market from tracking
-        _removeTrackedMarket(externalMarketId);
-        delete trackedMarkets[externalMarketId];
-
-        emit ReputationUpdated(seller, externalMarketId, delta, reputationScores[seller]);
+        emit ReputationUpdated(a.seller, auctionId, delta, reputationScores[a.seller]);
     }
 
     // ===========================
@@ -297,10 +291,6 @@ contract SecretMarketplace is ReceiverTemplate {
 
     function getOpenAuctions() external view returns (uint256[] memory) {
         return openAuctionIds;
-    }
-
-    function getTrackedMarkets() external view returns (uint256[] memory) {
-        return trackedMarketIds;
     }
 
     // ===========================
@@ -319,19 +309,5 @@ contract SecretMarketplace is ReceiverTemplate {
         }
         openAuctionIds.pop();
         delete _openAuctionIndex[auctionId];
-    }
-
-    function _removeTrackedMarket(uint256 marketId) private {
-        uint256 idx1 = _trackedMarketIndex[marketId];
-        if (idx1 == 0) return;
-        uint256 idx = idx1 - 1;
-        uint256 last = trackedMarketIds.length - 1;
-        if (idx != last) {
-            uint256 moved = trackedMarketIds[last];
-            trackedMarketIds[idx] = moved;
-            _trackedMarketIndex[moved] = idx1;
-        }
-        trackedMarketIds.pop();
-        delete _trackedMarketIndex[marketId];
     }
 }

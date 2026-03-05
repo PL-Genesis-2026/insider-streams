@@ -305,13 +305,6 @@ export const secretMarketplaceAbi = [
   {
     type: 'function',
     inputs: [],
-    name: 'getTrackedMarkets',
-    outputs: [{ name: '', internalType: 'uint256[]', type: 'uint256[]' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
     name: 'market',
     outputs: [
       { name: '', internalType: 'contract ISimpleMarket', type: 'address' },
@@ -417,20 +410,6 @@ export const secretMarketplaceAbi = [
   },
   {
     type: 'function',
-    inputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
-    name: 'trackedMarketIds',
-    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
-    name: 'trackedMarkets',
-    outputs: [{ name: '', internalType: 'address', type: 'address' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
     inputs: [{ name: 'newOwner', internalType: 'address', type: 'address' }],
     name: 'transferOwnership',
     outputs: [],
@@ -439,7 +418,7 @@ export const secretMarketplaceAbi = [
   {
     type: 'function',
     inputs: [
-      { name: 'externalMarketId', internalType: 'uint256', type: 'uint256' },
+      { name: 'auctionId', internalType: 'uint256', type: 'uint256' },
       { name: 'delta', internalType: 'int8', type: 'int8' },
     ],
     name: 'updateReputationScore',
@@ -706,7 +685,7 @@ export const secretMarketplaceAbi = [
         indexed: true,
       },
       {
-        name: 'externalMarketId',
+        name: 'auctionId',
         internalType: 'uint256',
         type: 'uint256',
         indexed: true,
@@ -809,23 +788,9 @@ export const secretMarketplaceAbi = [
     inputs: [
       { name: 'externalMarketId', internalType: 'uint256', type: 'uint256' },
     ],
-    name: 'MarketAlreadyTracked',
-  },
-  {
-    type: 'error',
-    inputs: [
-      { name: 'externalMarketId', internalType: 'uint256', type: 'uint256' },
-    ],
     name: 'MarketDoesNotExist',
   },
-  {
-    type: 'error',
-    inputs: [
-      { name: 'externalMarketId', internalType: 'uint256', type: 'uint256' },
-    ],
-    name: 'MarketNotTracked',
-  },
-  { type: 'error', inputs: [], name: 'NotAdminOrCRE' },
+  { type: 'error', inputs: [], name: 'NotSellerOrOwner' },
   {
     type: 'error',
     inputs: [{ name: 'owner', internalType: 'address', type: 'address' }],
@@ -841,6 +806,12 @@ export const secretMarketplaceAbi = [
     type: 'error',
     inputs: [{ name: 'token', internalType: 'address', type: 'address' }],
     name: 'SafeERC20FailedOperation',
+  },
+  { type: 'error', inputs: [], name: 'SellerCannotBid' },
+  {
+    type: 'error',
+    inputs: [{ name: 'action', internalType: 'uint8', type: 'uint8' }],
+    name: 'UnknownAction',
   },
   { type: 'error', inputs: [], name: 'WorkflowNameRequiresAuthorValidation' },
 ] as const

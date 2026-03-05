@@ -98,7 +98,6 @@ const MINT_AMOUNT = 10_000_000_000n;           // 10,000 USDC
 const MIN_BALANCE = 10_000_000n;               // 10 USDC — threshold to trigger mint
 const APPROVAL_AMOUNT = 100_000_000_000n;      // 100,000 USDC — blanket approval
 const BID_AMOUNT = 1_000_000n;                 // 1 USDC
-const HIGHER_BID = 2_000_000n;                 // 2 USDC
 const AUCTION_DURATION = 60;                   // seconds
 const FORCE_CLOSE_AUCTION_DURATION = 300;      // seconds (won't wait for it)
 const QUESTION_1 = "The New York Yankees won the 2009 World Series.";
@@ -162,8 +161,8 @@ async function main() {
   await waitForTx(approveBidder, "Bidder approved SecretMarketplace");
 
   // ══════════════════════════════════════════════════════════════════════════
-  // AUCTION 1: Normal flow → AuctionCreated, BidPlaced (x2),
-  //            AuctionClosed, TradeExecuted
+  // AUCTION 1: Normal flow → AuctionCreated, BidPlaced, AuctionClosed,
+  //            TradeExecuted
   // ══════════════════════════════════════════════════════════════════════════
 
   console.log("\n>> Step 1: Create market + auction (normal flow)...");
@@ -192,24 +191,16 @@ async function main() {
   const auctionId1 = auctionLogs[0].args.auctionId;
   console.log(`  Auction ID: ${auctionId1}`);
 
-  // EVENT: BidPlaced (first bid, no previous bidder)
-  console.log("\n>> Step 2: Owner bids first (will be outbid)...");
-  const bid1Hash = await ownerClient.writeContract({
+  // EVENT: BidPlaced (bidder bids — seller cannot bid on own auction)
+  console.log("\n>> Step 2: Bidder places bid...");
+  const bid1Hash = await bidderClient.writeContract({
     address: AUCTION, abi: secretMarketplaceAbi, functionName: "placeBid",
     args: [auctionId1, BID_AMOUNT],
   });
-  await waitForTx(bid1Hash, "[EVENT: BidPlaced] first bid");
-
-  // EVENT: BidPlaced (outbid, with previousBidder)
-  console.log("\n>> Step 3: Bidder outbids owner...");
-  const bid2Hash = await bidderClient.writeContract({
-    address: AUCTION, abi: secretMarketplaceAbi, functionName: "placeBid",
-    args: [auctionId1, HIGHER_BID],
-  });
-  await waitForTx(bid2Hash, "[EVENT: BidPlaced] outbid with previousBidder");
+  await waitForTx(bid1Hash, "[EVENT: BidPlaced]");
 
   // Wait for auction 1 to end
-  console.log("\n>> Step 4: Waiting for auction 1 to end...");
+  console.log("\n>> Step 3: Waiting for auction 1 to end...");
   const auctionData = await publicClient.readContract({
     address: AUCTION, abi: secretMarketplaceAbi, functionName: "getAuction",
     args: [auctionId1],
@@ -224,8 +215,8 @@ async function main() {
   }
   console.log("  ok Auction 1 period ended (on-chain)");
 
-  // EVENT: AuctionClosed + TradeExecuted
-  console.log("\n>> Step 5: Close auction 1...");
+  // EVENT: AuctionClosed + TradeExecuted (seller closes own auction)
+  console.log("\n>> Step 4: Seller closes auction 1...");
   const closeHash = await ownerClient.writeContract({
     address: AUCTION, abi: secretMarketplaceAbi, functionName: "closeAuction",
     args: [auctionId1],
@@ -237,7 +228,7 @@ async function main() {
   //            AuctionForceClosed, ReputationUpdated
   // ══════════════════════════════════════════════════════════════════════════
 
-  console.log("\n>> Step 6: Create auction 2 (will be force-closed)...");
+  console.log("\n>> Step 5: Create auction 2 (will be force-closed)...");
   const createMarket2Hash = await ownerClient.writeContract({
     address: MARKET, abi: simpleMarketAbi, functionName: "newMarket",
     args: [QUESTION_2],
@@ -263,7 +254,7 @@ async function main() {
   console.log(`  Auction ID: ${auctionId2}`);
 
   // Bidder places a bid (will be refunded on force-close)
-  console.log("\n>> Step 7: Bidder bids on auction 2...");
+  console.log("\n>> Step 6: Bidder bids on auction 2...");
   const bid3Hash = await bidderClient.writeContract({
     address: AUCTION, abi: secretMarketplaceAbi, functionName: "placeBid",
     args: [auctionId2, BID_AMOUNT],
@@ -271,7 +262,7 @@ async function main() {
   await waitForTx(bid3Hash, "[EVENT: BidPlaced] on auction 2");
 
   // EVENT: AuctionForceClosed + ReputationUpdated
-  console.log("\n>> Step 8: Force-close auction 2 (reputation -1)...");
+  console.log("\n>> Step 7: Force-close auction 2 (reputation -1)...");
   const forceCloseHash = await ownerClient.writeContract({
     address: AUCTION, abi: secretMarketplaceAbi, functionName: "forceCloseAuction",
     args: [auctionId2, -1],
@@ -294,7 +285,7 @@ async function main() {
   console.log("===================================================");
   console.log("  Events fired:");
   console.log("    [x] AuctionCreated      (x2)");
-  console.log("    [x] BidPlaced           (x3: first, outbid, auction2)");
+  console.log("    [x] BidPlaced           (x2)");
   console.log("    [x] AuctionClosed        (x1)");
   console.log("    [x] TradeExecuted        (x1)");
   console.log("    [x] AuctionForceClosed   (x1)");
