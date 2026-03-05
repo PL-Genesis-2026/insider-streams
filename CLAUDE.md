@@ -96,6 +96,18 @@ Private keys are in `.env` files (never committed).
 | `cre-workflow/.env` | CRE private key, Gemini key, Firebase keys |
 | `apps/prediction-market-frontend/.env.local` | `NEXT_PUBLIC_FIREBASE_*` vars |
 
+## Deployment Rules
+
+**Do NOT redeploy contracts that haven't changed.** Redeploying requires updating addresses in `scripts/.env`, `README.md`, `CLAUDE.md`, and re-running E2E tests. Only redeploy the specific contract that changed.
+
+Individual deploy scripts exist in `contracts/script/`:
+- `DeployMockUSDC.s.sol` — rarely changes
+- `DeploySimpleMarket.s.sol` — env: `PAYMENT_TOKEN`, `CRE_FORWARDER_ADDRESS`
+- `DeploySecretMarketplace.s.sol` — env: `PAYMENT_TOKEN`, `MARKET_ADDRESS`, `CRE_FORWARDER_ADDRESS`
+- `DeployAll.s.sol` — deploys everything (only for fresh environments)
+
+After deploying, update the new address in: `scripts/.env`, `README.md`, and the relevant section of `CLAUDE.md`.
+
 ## Architecture Notes
 
 - `SimpleMarket.sol` accepts **any ERC-20** token (constructor arg) — we use MockUSDC, not Circle USDC
