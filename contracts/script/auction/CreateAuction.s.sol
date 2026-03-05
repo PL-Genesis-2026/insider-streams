@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
-import {Auction} from "../../src/Auction.sol";
+import {SecretMarketplace} from "../../src/SecretMarketplace.sol";
 
 contract CreateAuction is Script {
     function run() external {
@@ -16,7 +16,7 @@ contract CreateAuction is Script {
 
         vm.startBroadcast(deployerPk);
 
-        uint256 auctionId = Auction(auctionAddress).createAuction(externalMarketId, reservePrice, endTime);
+        uint256 auctionId = SecretMarketplace(auctionAddress).createAuction(externalMarketId, reservePrice, endTime);
         console.log("Auction created with ID:", auctionId);
 
         vm.stopBroadcast();

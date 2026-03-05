@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
-import {Auction} from "../../src/Auction.sol";
+import {SecretMarketplace} from "../../src/SecretMarketplace.sol";
 
 contract DeployAuction is Script {
     function run() external {
@@ -13,8 +13,8 @@ contract DeployAuction is Script {
 
         vm.startBroadcast(deployerPk);
 
-        Auction auction = new Auction(token, market, forwarder);
-        console.log("Auction deployed at:", address(auction));
+        SecretMarketplace sm = new SecretMarketplace(token, market, forwarder);
+        console.log("SecretMarketplace deployed at:", address(sm));
 
         vm.stopBroadcast();
     }

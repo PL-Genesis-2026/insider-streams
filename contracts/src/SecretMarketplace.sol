@@ -8,9 +8,10 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 interface ISimpleMarket {
     enum Outcome { None, No, Yes, Inconclusive }
     function makePrediction(uint256 marketId, Outcome outcome, uint256 amount) external;
+    function nextMarketId() external view returns (uint256);
 }
 
-contract Auction is ReceiverTemplate {
+contract SecretMarketplace is ReceiverTemplate {
     using SafeERC20 for IERC20;
 
     // ===========================
@@ -35,7 +36,7 @@ contract Auction is ReceiverTemplate {
 
     event AuctionClosed(
         uint256 indexed auctionId,
-        address indexed winner,
+        address indexed buyer,
         uint256 winningBid,
         address seller,
         uint256 externalMarketId
@@ -57,8 +58,6 @@ contract Auction is ReceiverTemplate {
         uint256 amount
     );
 
-    event RefundWithdrawn(address indexed bidder, uint256 amount);
-
     event ReputationUpdated(
         address indexed seller,
         uint256 indexed externalMarketId,
@@ -74,13 +73,13 @@ contract Auction is ReceiverTemplate {
     error AuctionNotEnded();
     error AuctionAlreadySettled();
     error BidTooLow();
-    error NothingToWithdraw();
     error EndTimeInPast();
     error ReservePriceZero();
     error AuctionDoesNotExist();
     error NotAdminOrCRE();
     error MarketAlreadyTracked(uint256 externalMarketId);
     error MarketNotTracked(uint256 externalMarketId);
+    error MarketDoesNotExist(uint256 externalMarketId);
 
     // ===========================
     // ======== ENUMS ============
@@ -100,7 +99,7 @@ contract Auction is ReceiverTemplate {
     struct AuctionData {
         address seller;
         uint256 externalMarketId;
-        uint256 reservePrice;
+        uint256 reservePrice; //ebay-like minimum bid
         uint256 endTime;
         address highestBidder;
         uint256 highestBid;
@@ -113,7 +112,6 @@ contract Auction is ReceiverTemplate {
 
     uint256 public nextAuctionId;
     mapping(uint256 => AuctionData) public auctions;
-    mapping(address => uint256) public pendingReturns;
 
     // Open auction tracking for CRE
     uint256[] public openAuctionIds;
@@ -153,6 +151,7 @@ contract Auction is ReceiverTemplate {
     ) external returns (uint256) {
         if (endTime <= block.timestamp) revert EndTimeInPast();
         if (reservePrice == 0) revert ReservePriceZero();
+        if (externalMarketId >= market.nextMarketId()) revert MarketDoesNotExist(externalMarketId);
 
         uint256 auctionId = nextAuctionId++;
         auctions[auctionId] = AuctionData({
@@ -192,12 +191,13 @@ contract Auction is ReceiverTemplate {
         address prevBidder = a.highestBidder;
         uint256 prevBid = a.highestBid;
 
-        if (prevBidder != address(0)) {
-            pendingReturns[prevBidder] += prevBid;
-        }
-
         a.highestBidder = msg.sender;
         a.highestBid = amount;
+
+        // Refund the previous bidder directly
+        if (prevBidder != address(0)) {
+            paymentToken.safeTransfer(prevBidder, prevBid);
+        }
 
         emit BidPlaced(auctionId, msg.sender, amount, prevBidder, prevBid);
     }
@@ -212,16 +212,6 @@ contract Auction is ReceiverTemplate {
 
     function updateReputationScore(uint256 externalMarketId, int8 delta) external onlyOwner {
         _updateReputationScore(externalMarketId, delta);
-    }
-
-    function withdrawRefund() external {
-        uint256 amount = pendingReturns[msg.sender];
-        if (amount == 0) revert NothingToWithdraw();
-
-        pendingReturns[msg.sender] = 0;
-        paymentToken.safeTransfer(msg.sender, amount);
-
-        emit RefundWithdrawn(msg.sender, amount);
     }
 
     // ===========================
@@ -273,9 +263,9 @@ contract Auction is ReceiverTemplate {
         a.status = AuctionStatus.ForceClosed;
         _removeOpenAuction(auctionId);
 
-        // Refund the current highest bidder
+        // Refund the current highest bidder directly
         if (a.highestBidder != address(0)) {
-            pendingReturns[a.highestBidder] += a.highestBid;
+            paymentToken.safeTransfer(a.highestBidder, a.highestBid);
         }
 
         // Update reputation for the seller (also removes market from tracking)
