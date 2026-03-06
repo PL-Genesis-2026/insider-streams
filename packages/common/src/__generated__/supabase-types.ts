@@ -85,19 +85,19 @@ export type Database = {
         Row: {
           address: string
           created_at: string
-          name: string
+          id: string
           updated_at: string
         }
         Insert: {
           address: string
           created_at?: string
-          name: string
+          id: string
           updated_at?: string
         }
         Update: {
           address?: string
           created_at?: string
-          name?: string
+          id?: string
           updated_at?: string
         }
         Relationships: []
@@ -169,7 +169,19 @@ export type Database = {
       }
     }
     Functions: {
-      [_ in never]: never
+      json_matches_schema: {
+        Args: { instance: Json; schema: Json }
+        Returns: boolean
+      }
+      jsonb_matches_schema: {
+        Args: { instance: Json; schema: Json }
+        Returns: boolean
+      }
+      jsonschema_is_valid: { Args: { schema: Json }; Returns: boolean }
+      jsonschema_validation_errors: {
+        Args: { instance: Json; schema: Json }
+        Returns: string[]
+      }
     }
     Enums: {
       [_ in never]: never
