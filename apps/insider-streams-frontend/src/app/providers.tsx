@@ -6,10 +6,9 @@ import {
   ApolloClient,
   InMemoryCache,
 } from "@apollo/client-integration-nextjs";
+import { env } from "@/env";
 
-const SUBGRAPH_URL =
-  process.env.NEXT_PUBLIC_SUBGRAPH_URL ??
-  "https://api.studio.thegraph.com/query/1743303/insider-streams/version/latest";
+const SUBGRAPH_URL = env.NEXT_PUBLIC_SUBGRAPH_URL;
 
 function makeClient() {
   return new ApolloClient({
