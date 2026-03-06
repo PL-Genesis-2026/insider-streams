@@ -2,11 +2,11 @@
 pragma solidity 0.8.26;
 
 import {Script, console} from "forge-std/Script.sol";
-import {SimpleToken} from "../../src/SimpleToken.sol";
+import {ConfidentialUSDC} from "../../src/ConfidentialUSDC.sol";
 
 /// @title MintTokens
 /// @notice Mints 100 tokens (with 18 decimals) to a specified address.
-///         Set TOKEN_ADDRESS env var to the deployed SimpleToken address.
+///         Set TOKEN_ADDRESS env var to the deployed ConfidentialUSDC address.
 ///         Set MINT_TO env var to the recipient address (defaults to deployer).
 contract MintTokens is Script {
     function run() external {
@@ -17,7 +17,7 @@ contract MintTokens is Script {
         address mintTo = vm.envOr("MINT_TO", deployer);
         uint256 amount = 100 ether; // 100 tokens with 18 decimals
 
-        SimpleToken token = SimpleToken(tokenAddr);
+        ConfidentialUSDC token = ConfidentialUSDC(tokenAddr);
 
         console.log("Token:", tokenAddr);
         console.log("Mint to:", mintTo);

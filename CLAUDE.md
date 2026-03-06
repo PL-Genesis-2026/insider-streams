@@ -12,13 +12,13 @@ private-streams/
 ├── packages/
 │   ├── common/                          # Shared ABIs, addresses, utilities (@private-streams/common)
 │   └── chainlink-private-token-api-client/  # Typed API client for Compliant Private Token API
-├── contracts/                       # Foundry — MockUSDC + SimpleMarket + SecretMarketplace
+├── contracts/                       # Foundry — MockUSDC + ExamplePredictionMarket + SecretMarketplace
 ├── cre-workflows/                   # CRE TypeScript workflows (Bun-managed)
 │   ├── prediction-market-demo/      # Gemini AI settlement workflow
 │   └── auction-closer/             # Cron-based auction closer workflow
 ├── subgraphs/secrets-marketplace/   # The Graph subgraph
 ├── scripts/                         # E2E test scripts and utilities
-│   ├── simple-market-e2e.sh         # SimpleMarket + CRE settlement E2E
+│   ├── simple-market-e2e.sh         # ExamplePredictionMarket + CRE settlement E2E
 │   ├── auction-closer-e2e.sh        # Auction closer CRE workflow E2E
 │   ├── secret-marketplace-e2e.ts    # SecretMarketplace full event lifecycle E2E
 │   ├── generate-contract-types.sh   # Compile contracts + regenerate types/ABIs
@@ -44,7 +44,7 @@ private-streams/
 ## Shared Package (@private-streams/common)
 
 `packages/common/src/index.ts` exports:
-- ABI constants: `secretMarketplaceAbi`, `simpleMarketAbi`, `mockUsdcAbi`
+- ABI constants: `secretMarketplaceAbi`, `examplePredictionMarketAbi`, `mockUsdcAbi`
 - Address constants: `MOCK_USDC_ADDRESS`, `SIMPLE_MARKET_ADDRESS`, `SECRET_MARKETPLACE_ADDRESS`
 - Compliant Private Token addresses: `SIMPLE_TOKEN_ADDRESS`, `POLICY_ENGINE_ADDRESS`, `VAULT_ADDRESS`
 
@@ -81,8 +81,8 @@ turbo run codegen                                  # GraphQL codegen across pack
 turbo run wagmi                                    # regenerate contract ABIs/types
 
 # Contracts
-cd contracts && forge build --via-ir
-cd contracts && forge test --via-ir
+cd contracts && forge build --via-ir --skip SetupAll DeployPolicyEngine
+cd contracts && forge test --via-ir --skip SetupAll DeployPolicyEngine
 
 # Frontends
 turbo run dev --filter=prediction-market-frontend
@@ -101,7 +101,7 @@ cre workflow simulate auction-closer --target local-simulation --non-interactive
 cre workflow simulate auction-closer --target local-simulation --non-interactive --trigger-index 0 --broadcast
 
 # E2E Tests
-./scripts/simple-market-e2e.sh    # SimpleMarket + CRE settlement lifecycle
+./scripts/simple-market-e2e.sh    # ExamplePredictionMarket + CRE settlement lifecycle
 ./scripts/auction-closer-e2e.sh   # Auction create → bid → expire → CRE close
 pnpm e2e                          # SecretMarketplace full event lifecycle (TypeScript)
 ```
@@ -124,33 +124,40 @@ Private keys are in `.env` files (never committed).
 
 ## Deployed Contracts (Eth Sepolia — Prediction Market)
 
-- **MockUSDC**: `0x2aD4A3782b1C323E6F6aEE51584e83818e8befda` (6 decimals, public `mint()`)
-- **SimpleMarket**: `0x1cDDd36691bc9a55AD59b177fcF79FCF4F42Eba2`
+- **MockUSDC**: `0x1B69F56bEC6978D0B62C3f5612019cC6b72D6F7f` (6 decimals, public `mint()`)
+- **ExamplePredictionMarket**: `0x6b3b925114CfE8DF93Da3225cD75ee2087994c1d`
 
-### SimpleMarket Events
+### ExamplePredictionMarket Events
 
-- `MarketCreated(uint256 indexed marketId, address indexed creator, string question, uint256 marketOpen, uint256 marketClose)`
-- `PredictionMade(uint256 indexed marketId, address indexed predictor, Outcome indexed outcome, uint256 amount, uint256 predCountNo, uint256 predCountYes, uint256 predTotalNo, uint256 predTotalYes)`
+- `MarketCreated(uint256 indexed marketId, address indexed creator, string question, uint256 marketOpen, uint256 marketClose, address yesToken, address noToken)`
+- `SharesPurchased(uint256 indexed marketId, address indexed buyer, Outcome indexed outcome, uint256 usdcIn, uint256 sharesOut)`
+- `SharesRedeemed(uint256 indexed marketId, address indexed redeemer, uint256 sharesIn, uint256 usdcOut)`
+- `LiquidityWithdrawn(uint256 indexed marketId, address indexed creator, uint256 usdcOut)`
 - `SettlementRequested(uint256 indexed marketId, string question)`
 - `SettlementResponse(uint256 indexed marketId, Status indexed status, Outcome indexed outcome)`
 
 ## Deployed Contracts (Eth Sepolia — SecretMarketplace / Auctions)
 
-- **SecretMarketplace**: `0x65c44b9C025F9482Cc9B473efAd8301F6E780E08`
-  - Uses MockUSDC as payment token, linked to SimpleMarket
+- **SecretMarketplace**: `0x81c9870dCd9B7e5E8b6EcF5d508c5f6BEE7DE058`
+  - Uses MockUSDC as payment token, linked to ExamplePredictionMarket
+  - `simpleMarket` address is updatable via `setSimpleMarket()` (admin only)
   - CRE Forwarder: `0x15fc6ae953e024d975e77382eeec56a9101f9f88`
-  - CRE report actions: `0x00` = closeAuction, `0x01` = forceCloseAuction, `0x02` = updateReputation
+  - CRE report actions: `0x00` = closeAuction, `0x01` = forceCloseAuction, `0x02` = resolveExternalMarket
 
 ### SecretMarketplace Events
 
-- `AuctionCreated(uint256 indexed auctionId, address indexed seller, uint256 externalMarketId, uint256 reservePrice, uint256 endTime)`
-- `BidPlaced(uint256 indexed auctionId, address indexed bidder, uint256 amount)`
-- `AuctionClosed(uint256 indexed auctionId, address winner, uint256 winningBid, address seller, uint256 externalMarketId)`
-- `TradeExecuted(uint256 indexed auctionId, uint256 indexed externalMarketId, address indexed buyer, uint256 amount)`
+- `SellerRegistered(string seller)`
+- `AuctionCreated(uint256 indexed auctionId, uint256 indexed eventId, string seller, string eventTitle, uint256 endTime)`
+- `BidPlaced(uint256 indexed auctionId, uint256 bidAmount, uint256 previousBid)`
+- `AuctionClosed(uint256 indexed auctionId, uint256 winningBid, string seller, uint256 eventId)`
+- `AuctionForceClosed(uint256 indexed auctionId, uint256 heldAmount, string seller, uint256 eventId, int8 reputationDelta)`
+- `ExternalMarketResolved(uint256 indexed externalMarketId, int8 delta, uint256 auctionsAffected)`
+- `ReputationUpdated(string seller, uint256 indexed auctionId, int8 delta, int256 newScore)`
+- `SimpleMarketUpdated(address indexed previousMarket, address indexed newMarket)`
 
 ## Deployed Contracts (Eth Sepolia — Compliant Private Transfer)
 
-- **SimpleToken** (DemoToken/DEMO): `0xB308Ef20527c5215ec2B2B10F52b311f3AAc6EEB` (18 decimals)
+- **ConfidentialUSDC** (cUSDC): `0xB308Ef20527c5215ec2B2B10F52b311f3AAc6EEB` (18 decimals)
 - **PolicyEngine proxy**: `0xb208a00A90839246C9f6008EaDD71177e78D4EA1`
 - **Vault** (pre-existing): `0xE588a6c73933BFD66Af9b4A07d48bcE59c0D2d13`
 - **Private Token API**: `https://convergence2026-token-api.cldev.cloud` ([docs](https://convergence2026-token-api.cldev.cloud/docs))
@@ -198,7 +205,7 @@ Use the interactive deploy script to deploy contracts and auto-replace addresses
 ./scripts/deploy-contracts.sh
 ```
 
-This script prompts which contracts to redeploy (MockUSDC, SimpleMarket, SecretMarketplace), deploys them via Foundry, then does a best-effort case-insensitive find-and-replace of the old addresses across the entire codebase (source files, configs, scripts, .env files). It also checks .env files for any stale addresses that may remain and warns about them.
+This script prompts which contracts to redeploy (MockUSDC, ExamplePredictionMarket, SecretMarketplace), deploys them via Foundry, then does a best-effort case-insensitive find-and-replace of the old addresses across the entire codebase (source files, configs, scripts, .env files). It also checks .env files for any stale addresses that may remain and warns about them.
 
 After the script finishes, you must still:
 
@@ -240,10 +247,10 @@ After updating CRE workflow configs, the workflow must be redeployed and tested 
 
 | File | Env vars used |
 |------|--------------|
-| `contracts/script/DeploySimpleMarket.s.sol` | `PAYMENT_TOKEN`, `CRE_FORWARDER_ADDRESS` |
+| `contracts/script/DeployExamplePredictionMarket.s.sol` | `PAYMENT_TOKEN`, `CRE_FORWARDER_ADDRESS` |
 | `contracts/script/DeploySecretMarketplace.s.sol` | `PAYMENT_TOKEN`, `SIMPLE_MARKET_ADDRESS`, `CRE_FORWARDER_ADDRESS` |
 
-**Private token scripts** (only if Vault or SimpleToken changed):
+**Private token scripts** (only if Vault or ConfidentialUSDC changed):
 
 | File | What's hardcoded |
 |------|-----------------|
@@ -300,7 +307,7 @@ This updates the generated GraphQL types in the frontend, scripts, and CRE workf
 
 Individual deploy scripts exist in `contracts/script/`:
 - `DeployMockUSDC.s.sol` — rarely changes
-- `DeploySimpleMarket.s.sol` — env: `PAYMENT_TOKEN`, `CRE_FORWARDER_ADDRESS`
+- `DeployExamplePredictionMarket.s.sol` — env: `PAYMENT_TOKEN`, `CRE_FORWARDER_ADDRESS`
 - `DeploySecretMarketplace.s.sol` — env: `PAYMENT_TOKEN`, `SIMPLE_MARKET_ADDRESS`, `CRE_FORWARDER_ADDRESS`
 - `DeployAll.s.sol` — deploys everything (only for fresh environments)
 
@@ -308,12 +315,12 @@ After deploying, follow the full procedure in **"After a Contract Deployment"** 
 
 ## Architecture Notes
 
-- `SimpleMarket.sol` accepts **any ERC-20** token (constructor arg) — we use MockUSDC, not Circle USDC
+- `ExamplePredictionMarket.sol` accepts **any ERC-20** token (constructor arg) — we use MockUSDC, not Circle USDC
 - Markets close after **3 minutes** from creation
 - CRE workflow listens for `SettlementRequested` events, calls Gemini AI with Google Search grounding, submits signed report on-chain
 - Settlement data is also written to Firestore for the frontend
 - **Auction-closer CRE workflow** runs on a 30-second cron, reads `getOpenAuctions()` and `getAuction(id)` to find expired auctions, then submits a signed report with `ACTION_CLOSE_AUCTION` (0x00) to close them
-- `closeAuction()` transfers the winning bid to the seller (does NOT place bets on SimpleMarket)
+- `closeAuction()` keeps funds in contract; admin withdraws via `withdrawFunds()`
 - CRE CLI installed at `~/.cre/bin/cre` (add to PATH: `export PATH="$HOME/.cre/bin:$PATH"`)
 
 ## Reference Docs

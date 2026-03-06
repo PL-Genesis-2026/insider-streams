@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [
     foundry({
       project: "../../contracts",
-      include: ["SecretMarketplace.sol/SecretMarketplace.json", "SimpleMarket.sol/SimpleMarket.json", "MockUSDC.sol/MockUSDC.json"],
+      include: ["SecretMarketplace.sol/SecretMarketplace.json", "ExamplePredictionMarket.sol/ExamplePredictionMarket.json", "MockUSDC.sol/MockUSDC.json"],
       forge: { build: false },
     }),
   ],
