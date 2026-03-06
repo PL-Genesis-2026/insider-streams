@@ -1,0 +1,339 @@
+{
+  "meta": {
+    "mocked": true,
+    "note": "MOCK DATA ONLY. The current subgraph does not yet provide title/category/summary style listing metadata. Those fields will require backend/schema work before this file can be replaced with live data."
+  },
+  "auctions": [
+    {
+      "auctionId": "241",
+      "category": "Macro / energy",
+      "title": "Refinery output revision",
+      "summary": "Channel checks suggest the next production guidance update will come in below consensus.",
+      "description": "Multiple independent sources within the refining sector have indicated that upcoming Q2 production guidance for a major Gulf Coast operator will fall 8–12% below Street consensus. The signal is grounded in maintenance scheduling data, contractor deployment patterns, and internal procurement memos that point to deferred turnaround completions. This pre-announcement intelligence window has historically produced 2–4 day lead time before public disclosure.",
+      "seller": "North Basin",
+      "sellerAddress": "0x8f3d...91aa",
+      "sellerFullAddress": "0x8f3dA42b16cC08Ee92fCe3F45D21091aa",
+      "sellerReputation": 94,
+      "sellerTotalAuctions": 23,
+      "currentBid": "$4,800",
+      "currentBidRaw": 4800,
+      "reserve": "$6,000",
+      "reserveRaw": 6000,
+      "closesIn": "43m left",
+      "endTime": "2026-03-06T17:43:00Z",
+      "createdAt": "2026-03-06T14:00:00Z",
+      "status": "Open",
+      "externalMarketId": "PM-ENERGY-441",
+      "betOnYes": true,
+      "bidCount": 4,
+      "bids": [
+        {
+          "bidder": "0x55D2...f69Ce",
+          "bidderName": "Signal Desk",
+          "amount": "$4,800",
+          "amountRaw": 4800,
+          "timestamp": "2026-03-06T16:41:00Z",
+          "txHash": "0x7a3f...e8b1"
+        },
+        {
+          "bidder": "0x1234...abcd",
+          "bidderName": "Anon",
+          "amount": "$3,200",
+          "amountRaw": 3200,
+          "timestamp": "2026-03-06T15:28:00Z",
+          "txHash": "0x9c2d...f4a0"
+        },
+        {
+          "bidder": "0x55D2...f69Ce",
+          "bidderName": "Signal Desk",
+          "amount": "$2,400",
+          "amountRaw": 2400,
+          "timestamp": "2026-03-06T14:52:00Z",
+          "txHash": "0xb1e5...3c72"
+        },
+        {
+          "bidder": "0xabcd...1234",
+          "bidderName": "Anon",
+          "amount": "$1,800",
+          "amountRaw": 1800,
+          "timestamp": "2026-03-06T14:15:00Z",
+          "txHash": "0xd4f8...7e91"
+        }
+      ],
+      "timeline": [
+        { "type": "created", "timestamp": "2026-03-06T14:00:00Z", "label": "Auction created", "detail": "Reserve set at $6,000" },
+        { "type": "bid", "timestamp": "2026-03-06T14:15:00Z", "label": "First bid placed", "detail": "$1,800 by 0xabcd...1234" },
+        { "type": "bid", "timestamp": "2026-03-06T14:52:00Z", "label": "Bid placed", "detail": "$2,400 by 0x55D2...f69Ce" },
+        { "type": "bid", "timestamp": "2026-03-06T15:28:00Z", "label": "Outbid", "detail": "$3,200 by 0x1234...abcd" },
+        { "type": "bid", "timestamp": "2026-03-06T16:41:00Z", "label": "Current high bid", "detail": "$4,800 by 0x55D2...f69Ce" }
+      ]
+    },
+    {
+      "auctionId": "238",
+      "category": "Equities / earnings",
+      "title": "Search revenue softness",
+      "summary": "A seller is offering a pre-earnings signal tied to an ad revenue slowdown thesis.",
+      "description": "The signal relates to a material miss in search advertising revenue for a mega-cap tech company. Based on channel checks with agency holding companies and direct advertiser feedback, the seller claims that keyword auction volumes have declined 6–9% QoQ in verticals that historically drive 35%+ of search revenue. The auction closes before the earnings call.",
+      "seller": "Meridian",
+      "sellerAddress": "0x4a72...7b11",
+      "sellerFullAddress": "0x4a72cE9301BD4427b11",
+      "sellerReputation": 87,
+      "sellerTotalAuctions": 15,
+      "currentBid": "$2,150",
+      "currentBidRaw": 2150,
+      "reserve": "$3,000",
+      "reserveRaw": 3000,
+      "closesIn": "2h 18m left",
+      "endTime": "2026-03-06T19:18:00Z",
+      "createdAt": "2026-03-06T12:00:00Z",
+      "status": "Open",
+      "externalMarketId": "PM-EQ-218",
+      "betOnYes": false,
+      "bidCount": 2,
+      "bids": [
+        {
+          "bidder": "0x77ab...ee01",
+          "bidderName": "Anon",
+          "amount": "$2,150",
+          "amountRaw": 2150,
+          "timestamp": "2026-03-06T14:30:00Z",
+          "txHash": "0xa1b2...c3d4"
+        },
+        {
+          "bidder": "0x33ff...dd99",
+          "bidderName": "Anon",
+          "amount": "$1,500",
+          "amountRaw": 1500,
+          "timestamp": "2026-03-06T13:10:00Z",
+          "txHash": "0xe5f6...g7h8"
+        }
+      ],
+      "timeline": [
+        { "type": "created", "timestamp": "2026-03-06T12:00:00Z", "label": "Auction created", "detail": "Reserve set at $3,000" },
+        { "type": "bid", "timestamp": "2026-03-06T13:10:00Z", "label": "First bid placed", "detail": "$1,500 by 0x33ff...dd99" },
+        { "type": "bid", "timestamp": "2026-03-06T14:30:00Z", "label": "Current high bid", "detail": "$2,150 by 0x77ab...ee01" }
+      ]
+    },
+    {
+      "auctionId": "233",
+      "category": "Policy / defense",
+      "title": "Regional strike timing",
+      "summary": "The listing is framed around timing-sensitive geopolitical escalation with downstream market relevance.",
+      "description": "The seller claims to have operational intelligence about the timing of a military escalation event in a contested region. The signal is relevant to energy futures, defense sector equities, and geopolitical event markets. The specificity of the claim — within a 72-hour window — makes the auction particularly valuable for directional positioning ahead of mainstream media coverage.",
+      "seller": "Aster",
+      "sellerAddress": "0xd201...24ce",
+      "sellerFullAddress": "0xd201F3aB9e7C430024ce",
+      "sellerReputation": 91,
+      "sellerTotalAuctions": 8,
+      "currentBid": "$7,300",
+      "currentBidRaw": 7300,
+      "reserve": "$8,500",
+      "reserveRaw": 8500,
+      "closesIn": "Tomorrow",
+      "endTime": "2026-03-07T12:00:00Z",
+      "createdAt": "2026-03-05T18:00:00Z",
+      "status": "Open",
+      "externalMarketId": "PM-GEO-022",
+      "betOnYes": true,
+      "bidCount": 6,
+      "bids": [
+        {
+          "bidder": "0x55D2...f69Ce",
+          "bidderName": "Signal Desk",
+          "amount": "$7,300",
+          "amountRaw": 7300,
+          "timestamp": "2026-03-06T11:15:00Z",
+          "txHash": "0x1122...3344"
+        },
+        {
+          "bidder": "0xbeef...cafe",
+          "bidderName": "Anon",
+          "amount": "$6,800",
+          "amountRaw": 6800,
+          "timestamp": "2026-03-06T09:42:00Z",
+          "txHash": "0x5566...7788"
+        },
+        {
+          "bidder": "0x55D2...f69Ce",
+          "bidderName": "Signal Desk",
+          "amount": "$5,500",
+          "amountRaw": 5500,
+          "timestamp": "2026-03-06T03:20:00Z",
+          "txHash": "0x99aa...bbcc"
+        },
+        {
+          "bidder": "0xdead...beef",
+          "bidderName": "Anon",
+          "amount": "$4,200",
+          "amountRaw": 4200,
+          "timestamp": "2026-03-05T22:30:00Z",
+          "txHash": "0xddee...ff00"
+        },
+        {
+          "bidder": "0xbeef...cafe",
+          "bidderName": "Anon",
+          "amount": "$3,000",
+          "amountRaw": 3000,
+          "timestamp": "2026-03-05T20:15:00Z",
+          "txHash": "0x1234...5678"
+        },
+        {
+          "bidder": "0x1234...abcd",
+          "bidderName": "Anon",
+          "amount": "$2,000",
+          "amountRaw": 2000,
+          "timestamp": "2026-03-05T18:45:00Z",
+          "txHash": "0xabcd...ef01"
+        }
+      ],
+      "timeline": [
+        { "type": "created", "timestamp": "2026-03-05T18:00:00Z", "label": "Auction created", "detail": "Reserve set at $8,500" },
+        { "type": "bid", "timestamp": "2026-03-05T18:45:00Z", "label": "First bid placed", "detail": "$2,000 by 0x1234...abcd" },
+        { "type": "bid", "timestamp": "2026-03-05T20:15:00Z", "label": "Bid placed", "detail": "$3,000 by 0xbeef...cafe" },
+        { "type": "bid", "timestamp": "2026-03-05T22:30:00Z", "label": "Bid placed", "detail": "$4,200 by 0xdead...beef" },
+        { "type": "bid", "timestamp": "2026-03-06T03:20:00Z", "label": "Bid placed", "detail": "$5,500 by 0x55D2...f69Ce" },
+        { "type": "bid", "timestamp": "2026-03-06T09:42:00Z", "label": "Outbid", "detail": "$6,800 by 0xbeef...cafe" },
+        { "type": "bid", "timestamp": "2026-03-06T11:15:00Z", "label": "Current high bid", "detail": "$7,300 by 0x55D2...f69Ce" }
+      ]
+    },
+    {
+      "auctionId": "229",
+      "category": "Commodities / shipping",
+      "title": "Port congestion leak",
+      "summary": "Private operational data tied to shipping delays and their expected effect on a market outcome.",
+      "description": "The seller has access to real-time AIS data and port scheduling systems that show a significant build-up of container vessels at two critical chokepoint ports. The congestion data, combined with inland logistics disruption intelligence, suggests a 2–3 week delay in commodity deliveries that will affect spot prices before the disruption becomes public knowledge.",
+      "seller": "Cinder",
+      "sellerAddress": "0x0c44...c3d8",
+      "sellerFullAddress": "0x0c44B7e2F91D830c3d8",
+      "sellerReputation": 78,
+      "sellerTotalAuctions": 5,
+      "currentBid": "$3,420",
+      "currentBidRaw": 3420,
+      "reserve": "$4,500",
+      "reserveRaw": 4500,
+      "closesIn": "5h 04m left",
+      "endTime": "2026-03-06T22:04:00Z",
+      "createdAt": "2026-03-06T10:00:00Z",
+      "status": "Open",
+      "externalMarketId": "PM-SHIP-090",
+      "betOnYes": true,
+      "bidCount": 3,
+      "bids": [
+        {
+          "bidder": "0x55D2...f69Ce",
+          "bidderName": "Signal Desk",
+          "amount": "$3,420",
+          "amountRaw": 3420,
+          "timestamp": "2026-03-06T14:22:00Z",
+          "txHash": "0xf1e2...d3c4"
+        },
+        {
+          "bidder": "0xaaaa...bbbb",
+          "bidderName": "Anon",
+          "amount": "$2,800",
+          "amountRaw": 2800,
+          "timestamp": "2026-03-06T12:15:00Z",
+          "txHash": "0xb5a6...9788"
+        },
+        {
+          "bidder": "0xcccc...dddd",
+          "bidderName": "Anon",
+          "amount": "$1,200",
+          "amountRaw": 1200,
+          "timestamp": "2026-03-06T10:40:00Z",
+          "txHash": "0xc9d0...e1f2"
+        }
+      ],
+      "timeline": [
+        { "type": "created", "timestamp": "2026-03-06T10:00:00Z", "label": "Auction created", "detail": "Reserve set at $4,500" },
+        { "type": "bid", "timestamp": "2026-03-06T10:40:00Z", "label": "First bid placed", "detail": "$1,200 by 0xcccc...dddd" },
+        { "type": "bid", "timestamp": "2026-03-06T12:15:00Z", "label": "Bid placed", "detail": "$2,800 by 0xaaaa...bbbb" },
+        { "type": "bid", "timestamp": "2026-03-06T14:22:00Z", "label": "Current high bid", "detail": "$3,420 by 0x55D2...f69Ce" }
+      ]
+    },
+    {
+      "auctionId": "221",
+      "category": "Rates / macro",
+      "title": "Emergency desk note",
+      "summary": "A high-volatility macro signal tied to an event market with a short auction window.",
+      "description": "This settled auction contained a rates trading desk note from a primary dealer that anticipated a surprise inter-meeting rate decision. The signal proved accurate within the specified timeframe, and the prediction market resolved in favor of the seller's indicated direction. The winning bidder placed the correct bet on the linked market and profited from the early positioning.",
+      "seller": "Vanta",
+      "sellerAddress": "0xa912...0ef2",
+      "sellerFullAddress": "0xa912C4b8D9eF27100ef2",
+      "sellerReputation": 98,
+      "sellerTotalAuctions": 41,
+      "currentBid": "$9,600",
+      "currentBidRaw": 9600,
+      "reserve": "$9,600",
+      "reserveRaw": 9600,
+      "closesIn": "Closed",
+      "endTime": "2026-03-04T18:00:00Z",
+      "createdAt": "2026-03-04T15:00:00Z",
+      "status": "Settled",
+      "externalMarketId": "PM-RATES-514",
+      "betOnYes": true,
+      "bidCount": 5,
+      "winner": "0x55D2...f69Ce",
+      "winnerName": "Signal Desk",
+      "settledAt": "2026-03-04T18:02:00Z",
+      "marketOutcome": "Yes",
+      "bids": [
+        {
+          "bidder": "0x55D2...f69Ce",
+          "bidderName": "Signal Desk",
+          "amount": "$9,600",
+          "amountRaw": 9600,
+          "timestamp": "2026-03-04T17:45:00Z",
+          "txHash": "0xa1a2...b3b4"
+        },
+        {
+          "bidder": "0xdead...beef",
+          "bidderName": "Anon",
+          "amount": "$8,200",
+          "amountRaw": 8200,
+          "timestamp": "2026-03-04T17:20:00Z",
+          "txHash": "0xc5c6...d7d8"
+        },
+        {
+          "bidder": "0x55D2...f69Ce",
+          "bidderName": "Signal Desk",
+          "amount": "$7,100",
+          "amountRaw": 7100,
+          "timestamp": "2026-03-04T16:55:00Z",
+          "txHash": "0xe9e0...f1f2"
+        },
+        {
+          "bidder": "0xbeef...cafe",
+          "bidderName": "Anon",
+          "amount": "$5,400",
+          "amountRaw": 5400,
+          "timestamp": "2026-03-04T16:10:00Z",
+          "txHash": "0x3344...5566"
+        },
+        {
+          "bidder": "0x1234...abcd",
+          "bidderName": "Anon",
+          "amount": "$3,000",
+          "amountRaw": 3000,
+          "timestamp": "2026-03-04T15:20:00Z",
+          "txHash": "0x7788...99aa"
+        }
+      ],
+      "timeline": [
+        { "type": "created", "timestamp": "2026-03-04T15:00:00Z", "label": "Auction created", "detail": "Reserve set at $9,600" },
+        { "type": "bid", "timestamp": "2026-03-04T15:20:00Z", "label": "First bid placed", "detail": "$3,000 by 0x1234...abcd" },
+        { "type": "bid", "timestamp": "2026-03-04T16:10:00Z", "label": "Bid placed", "detail": "$5,400 by 0xbeef...cafe" },
+        { "type": "bid", "timestamp": "2026-03-04T16:55:00Z", "label": "Bid placed", "detail": "$7,100 by 0x55D2...f69Ce" },
+        { "type": "bid", "timestamp": "2026-03-04T17:20:00Z", "label": "Outbid", "detail": "$8,200 by 0xdead...beef" },
+        { "type": "bid", "timestamp": "2026-03-04T17:45:00Z", "label": "Winning bid", "detail": "$9,600 by 0x55D2...f69Ce" },
+        { "type": "closed", "timestamp": "2026-03-04T18:00:00Z", "label": "Auction closed", "detail": "Winner: 0x55D2...f69Ce" },
+        { "type": "settled", "timestamp": "2026-03-04T18:02:00Z", "label": "Market settled", "detail": "Outcome: Yes — signal confirmed" }
+      ],
+      "secret": {
+        "title": "Fed inter-meeting rate cut — timing signal",
+        "content": "Primary dealer desk note indicates emergency FOMC meeting scheduled for March 5th with high probability (>85%) of a 50bp cut. Source: internal communication from rates desk head at a top-3 primary dealer. Corroborated by unusual options activity in Eurodollar futures and overnight repo rate anomalies observed on March 3rd.",
+        "revealedAt": "2026-03-04T18:02:00Z"
+      }
+    }
+  ]
+}

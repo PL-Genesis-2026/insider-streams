@@ -6,10 +6,12 @@ import {
   ExpectedAuthorUpdated as ExpectedAuthorUpdatedEvent,
   ExpectedWorkflowIdUpdated as ExpectedWorkflowIdUpdatedEvent,
   ExpectedWorkflowNameUpdated as ExpectedWorkflowNameUpdatedEvent,
+  ExternalMarketResolved as ExternalMarketResolvedEvent,
   ForwarderAddressUpdated as ForwarderAddressUpdatedEvent,
   OwnershipTransferred as OwnershipTransferredEvent,
   ReputationUpdated as ReputationUpdatedEvent,
   SecurityWarning as SecurityWarningEvent,
+  SellerRegistered as SellerRegisteredEvent,
   TradeExecuted as TradeExecutedEvent
 } from "../generated/SecretMarketplace/SecretMarketplace"
 import {
@@ -20,10 +22,12 @@ import {
   ExpectedAuthorUpdated,
   ExpectedWorkflowIdUpdated,
   ExpectedWorkflowNameUpdated,
+  ExternalMarketResolved,
   ForwarderAddressUpdated,
   OwnershipTransferred,
   ReputationUpdated,
   SecurityWarning,
+  SellerRegistered,
   TradeExecuted
 } from "../generated/schema"
 
@@ -146,6 +150,23 @@ export function handleExpectedWorkflowNameUpdated(
   entity.save()
 }
 
+export function handleExternalMarketResolved(
+  event: ExternalMarketResolvedEvent
+): void {
+  let entity = new ExternalMarketResolved(
+    event.transaction.hash.concatI32(event.logIndex.toI32())
+  )
+  entity.externalMarketId = event.params.externalMarketId
+  entity.outcome = event.params.outcome
+  entity.auctionsAffected = event.params.auctionsAffected
+
+  entity.blockNumber = event.block.number
+  entity.blockTimestamp = event.block.timestamp
+  entity.transactionHash = event.transaction.hash
+
+  entity.save()
+}
+
 export function handleForwarderAddressUpdated(
   event: ForwarderAddressUpdatedEvent
 ): void {
@@ -199,6 +220,20 @@ export function handleSecurityWarning(event: SecurityWarningEvent): void {
     event.transaction.hash.concatI32(event.logIndex.toI32())
   )
   entity.message = event.params.message
+
+  entity.blockNumber = event.block.number
+  entity.blockTimestamp = event.block.timestamp
+  entity.transactionHash = event.transaction.hash
+
+  entity.save()
+}
+
+export function handleSellerRegistered(event: SellerRegisteredEvent): void {
+  let entity = new SellerRegistered(
+    event.transaction.hash.concatI32(event.logIndex.toI32())
+  )
+  entity.seller = event.params.seller
+  entity.name = event.params.name
 
   entity.blockNumber = event.block.number
   entity.blockTimestamp = event.block.timestamp

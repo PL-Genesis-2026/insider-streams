@@ -580,8 +580,13 @@ async function main() {
   console.log("\n>> Step 10: Creating secret for auction...");
   const { error: secretErr } = await supabase.from("secrets").insert({
     auction_id: testAuctionId,
-    secret_data: { insider_tip: "ETH merge date leaked", confidence: 0.95 },
-    market_data: { question: QUESTION_2, market_id: marketId2.toString() },
+    secret_data: "ETH merge date leaked — confidence 0.95",
+    event_data: {
+      marketplace: "SimpleMarket",
+      event: QUESTION_2,
+      marketId: Number(marketId2),
+      leg: "yes",
+    },
     seller: ownerAddr,
   });
   if (secretErr) throw new Error(`Secret insert failed: ${secretErr.message}`);
