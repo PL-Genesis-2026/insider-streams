@@ -56,7 +56,7 @@ export type Database = {
           event_data: Json | null
           id: string
           secret_data: string
-          seller: string
+          seller_id: string
           updated_at: string
         }
         Insert: {
@@ -66,7 +66,7 @@ export type Database = {
           event_data?: Json | null
           id?: string
           secret_data: string
-          seller: string
+          seller_id: string
           updated_at?: string
         }
         Update: {
@@ -76,10 +76,18 @@ export type Database = {
           event_data?: Json | null
           id?: string
           secret_data?: string
-          seller?: string
+          seller_id?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "secrets_seller_id_fkey"
+            columns: ["seller_id"]
+            isOneToOne: false
+            referencedRelation: "sellers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sellers: {
         Row: {
@@ -108,7 +116,6 @@ export type Database = {
           completed_at: string | null
           created_at: string
           credited_at: string | null
-          failed_reason: string | null
           id: string
           raw_data: Json | null
           recipient_address: string | null
@@ -116,7 +123,6 @@ export type Database = {
           status: string
           token_address: string
           transaction_id: string
-          type: string
           updated_at: string
           user_address: string
         }
@@ -125,7 +131,6 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           credited_at?: string | null
-          failed_reason?: string | null
           id?: string
           raw_data?: Json | null
           recipient_address?: string | null
@@ -133,7 +138,6 @@ export type Database = {
           status?: string
           token_address?: string
           transaction_id: string
-          type?: string
           updated_at?: string
           user_address: string
         }
@@ -142,7 +146,6 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           credited_at?: string | null
-          failed_reason?: string | null
           id?: string
           raw_data?: Json | null
           recipient_address?: string | null
@@ -150,7 +153,6 @@ export type Database = {
           status?: string
           token_address?: string
           transaction_id?: string
-          type?: string
           updated_at?: string
           user_address?: string
         }

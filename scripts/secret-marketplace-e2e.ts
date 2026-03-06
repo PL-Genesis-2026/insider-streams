@@ -428,11 +428,6 @@ async function main() {
     .delete()
     .in("bidder_address", [ownerAddr, bidderAddr]);
   await supabase.from("secrets").delete().eq("auction_id", testAuctionId);
-  await supabase
-    .from("transfers")
-    .delete()
-    .eq("type", "deposit")
-    .in("user_address", [ownerAddr, bidderAddr]);
   console.log("  ok Cleaned up");
 
   // ── Step 11: Deposit — record deposits, verify view reflects them ──────
@@ -446,7 +441,6 @@ async function main() {
     .from("transfers")
     .insert({
       transaction_id: ownerTxId,
-      type: "deposit",
       user_address: ownerAddr,
       sender_address: ownerAddr,
       amount: DEMO_AMOUNT,
@@ -467,7 +461,6 @@ async function main() {
     .from("transfers")
     .insert({
       transaction_id: bidderTxId,
-      type: "deposit",
       user_address: bidderAddr,
       sender_address: bidderAddr,
       amount: DEMO_AMOUNT,
@@ -487,7 +480,6 @@ async function main() {
   // Test idempotency: duplicate transaction_id should be rejected
   const { error: dupDepositErr } = await supabase.from("transfers").insert({
     transaction_id: ownerTxId, // same tx_id — should fail
-    type: "deposit",
     user_address: ownerAddr,
     amount: DEMO_AMOUNT,
   });
@@ -505,7 +497,6 @@ async function main() {
   // Test deposit amount constraint: zero/negative should fail
   const { error: zeroDepositErr } = await supabase.from("transfers").insert({
     transaction_id: `test-zero-${Date.now()}`,
-    type: "deposit",
     user_address: bidderAddr,
     amount: "0",
   });
@@ -536,6 +527,16 @@ async function main() {
 
   // ── Step 12: Create secret for auction ─────────────────────────────────
   console.log("\n>> Step 12: Creating secret for auction...");
+
+  // Ensure a seller row exists (upsert so re-runs don't fail)
+  const testSellerId = "insider-alice";
+  const { error: sellerErr } = await supabase.from("sellers").upsert({
+    id: testSellerId,
+    address: ownerAddr,
+  }, { onConflict: "id" });
+  if (sellerErr) throw new Error(`Seller upsert failed: ${sellerErr.message}`);
+  console.log(`  ok Seller row ensured: ${testSellerId}`);
+
   const { error: secretErr } = await supabase.from("secrets").insert({
     auction_id: testAuctionId,
     secret_data: "ETH merge date leaked — confidence 0.95",
@@ -545,7 +546,7 @@ async function main() {
       marketId: Number(marketId2),
       outcome: "yes",
     },
-    seller: ownerAddr,
+    seller_id: testSellerId,
   });
   if (secretErr) throw new Error(`Secret insert failed: ${secretErr.message}`);
   console.log(`  ok Secret created for auction ${testAuctionId}`);
@@ -665,7 +666,6 @@ async function main() {
   // Invalid address format on transfers table should fail
   const { error: addrErr } = await supabase.from("transfers").insert({
     transaction_id: `test-addr-${Date.now()}`,
-    type: "deposit",
     user_address: "not-an-address",
     amount: "1000000000000000000",
     status: "confirmed",
@@ -746,7 +746,6 @@ async function main() {
       amount: withdrawAmount,
       recipient_address: bidderAddr,
       status: "requested",
-      type: "user_withdrawal",
     })
     .select()
     .single();
@@ -808,11 +807,6 @@ async function main() {
     .delete()
     .in("bidder_address", [ownerAddr, bidderAddr]);
   await supabase.from("secrets").delete().eq("auction_id", testAuctionId);
-  await supabase
-    .from("transfers")
-    .delete()
-    .eq("type", "deposit")
-    .in("user_address", [ownerAddr, bidderAddr]);
   console.log("  ok All test data cleaned up");
 
   // ══════════════════════════════════════════════════════════════════════════
