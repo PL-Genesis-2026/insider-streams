@@ -1,26 +1,153 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:is(.dark *));
+
 :root {
+  --font-theme-sans: var(--font-geist-sans);
+  --font-theme-serif: var(--font-geist-sans);
+
   --background: #ffffff;
   --foreground: #171717;
+  --card: #ffffff;
+  --card-foreground: #171717;
+  --popover: #ffffff;
+  --popover-foreground: #171717;
+  --primary: #171717;
+  --primary-foreground: #f7f7f7;
+  --secondary: #f5f5f5;
+  --secondary-foreground: #171717;
+  --muted: #f5f5f5;
+  --muted-foreground: #5f5f5f;
+  --accent: #ececec;
+  --accent-foreground: #171717;
+  --destructive: #b74d3e;
+  --destructive-foreground: #fff3f1;
+  --border: color-mix(in srgb, #171717 10%, transparent);
+  --input: color-mix(in srgb, #171717 12%, transparent);
+  --ring: #5f5f5f;
+  --radius: 1.25rem;
+  --sidebar: hsl(0 0% 98%);
+  --sidebar-foreground: hsl(240 5.3% 26.1%);
+  --sidebar-primary: hsl(240 5.9% 10%);
+  --sidebar-primary-foreground: hsl(0 0% 98%);
+  --sidebar-accent: hsl(240 4.8% 95.9%);
+  --sidebar-accent-foreground: hsl(240 5.9% 10%);
+  --sidebar-border: hsl(220 13% 91%);
+  --sidebar-ring: hsl(217.2 91.2% 59.8%);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --font-sans: var(--font-theme-sans);
+  --font-serif: var(--font-theme-serif);
   --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.theme-ember-editorial {
+  --font-theme-sans: var(--font-ember-body);
+  --font-theme-serif: var(--font-ember-display);
+
+  --background: #0e0a09;
+  --foreground: #f4ebdf;
+  --card: #171211;
+  --card-foreground: #f5ede2;
+  --popover: #1a1412;
+  --popover-foreground: #f5ece1;
+  --primary: #f0dfcc;
+  --primary-foreground: #181210;
+  --secondary: #26201d;
+  --secondary-foreground: #efe4d7;
+  --muted: #1d1715;
+  --muted-foreground: #c1b1a1;
+  --accent: #c3926e;
+  --accent-foreground: #18110d;
+  --destructive: #b35747;
+  --destructive-foreground: #fff4f1;
+  --border: color-mix(in srgb, #ffffff 14%, transparent);
+  --input: color-mix(in srgb, #ffffff 18%, transparent);
+  --ring: #e0c0a3;
+  --radius: 1.5rem;
+  --sidebar: #120e0d;
+  --sidebar-foreground: #f1e5d8;
+  --sidebar-primary: #f0dfcc;
+  --sidebar-primary-foreground: #181210;
+  --sidebar-accent: #241d1a;
+  --sidebar-accent-foreground: #efe4d7;
+  --sidebar-border: color-mix(in srgb, #ffffff 12%, transparent);
+  --sidebar-ring: #e0c0a3;
+  color-scheme: dark;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+* {
+  border-color: var(--border);
+}
+
+:where(
+    a[href],
+    button:not(:disabled),
+    [role="button"]:not([aria-disabled="true"]),
+    summary,
+    label[for]
+  ) {
+  cursor: pointer;
+}
+
+:where(button:disabled, [aria-disabled="true"]) {
+  cursor: not-allowed;
+}
+
+.theme-ember-editorial {
+  background:
+    radial-gradient(circle at top, rgb(195 146 110 / 0.16), transparent 28%),
+    radial-gradient(circle at bottom right, rgb(240 223 204 / 0.06), transparent 24%),
+    linear-gradient(180deg, #0e0a09 0%, #120d0b 100%);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+.theme-ember-editorial ::selection {
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+  color: var(--foreground);
+}
+
+.dark {
+  --sidebar: hsl(240 5.9% 10%);
+  --sidebar-foreground: hsl(240 4.8% 95.9%);
+  --sidebar-primary: hsl(224.3 76.3% 48%);
+  --sidebar-primary-foreground: hsl(0 0% 100%);
+  --sidebar-accent: hsl(240 3.7% 15.9%);
+  --sidebar-accent-foreground: hsl(240 4.8% 95.9%);
+  --sidebar-border: hsl(240 3.7% 15.9%);
+  --sidebar-ring: hsl(217.2 91.2% 59.8%);
 }
