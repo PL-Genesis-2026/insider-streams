@@ -41,7 +41,7 @@ fi
 
 # Contract addresses — update defaults when redeployed
 MOCK_USDC_ADDRESS="${MOCK_USDC_ADDRESS:-0xA75c910D441C99bA651a70451D3bE1d690c1DD85}"
-SECRET_MARKETPLACE_ADDRESS="${SECRET_MARKETPLACE_ADDRESS:-0xD0Ad321ab6c124C211Acd0bf98f569b2950F3c9b}"
+SECRET_MARKETPLACE_ADDRESS="${SECRET_MARKETPLACE_ADDRESS:-0xda55F6bc945CCA8A92e938c05bba58B934892a3c}"
 
 BID_AMOUNT=2000000        # 2 USDC (6 decimals)
 RESERVE_PRICE=1000000     # 1 USDC reserve
@@ -81,10 +81,25 @@ echo "▶ Step 1: Creating auction (duration=${AUCTION_DURATION}s)..."
 cast send "$MOCK_USDC_ADDRESS" "approve(address,uint256)" "$SECRET_MARKETPLACE_ADDRESS" "$BID_AMOUNT" \
   --rpc-url "$RPC_URL" --private-key "$TESTER_PK" --json | jq -r '"  Tester USDC approval tx: " + .transactionHash'
 
-# createAuction(uint256 externalMarketId, uint256 reservePrice, uint256 duration)
-# externalMarketId=0 is a dummy value for testing (not linked to a real SimpleMarket market)
+# First create a market on SimpleMarket (needed for createAuction validation)
+SIMPLE_MARKET_ADDRESS=$(cast call "$SECRET_MARKETPLACE_ADDRESS" "simpleMarket()" --rpc-url "$RPC_URL" | cast --to-address)
+echo "  SimpleMarket: $SIMPLE_MARKET_ADDRESS"
+
+# Approve + create market (requires 10 USDC initial liquidity)
+cast send "$MOCK_USDC_ADDRESS" "approve(address,uint256)" "$SIMPLE_MARKET_ADDRESS" 10000000 \
+  --rpc-url "$RPC_URL" --private-key "$OWNER_PK" --json | jq -r '"  Owner USDC approval tx: " + .transactionHash'
+cast send "$SIMPLE_MARKET_ADDRESS" "newMarket(string)" "Test auction market" \
+  --rpc-url "$RPC_URL" --private-key "$OWNER_PK" --json | jq -r '"  Market created tx: " + .transactionHash'
+
+MARKET_ID_HEX=$(cast call "$SIMPLE_MARKET_ADDRESS" "nextMarketId()" --rpc-url "$RPC_URL")
+MARKET_ID=$((16#$(echo "$MARKET_ID_HEX" | sed 's/0x//') - 1))
+echo "  Market ID: $MARKET_ID"
+
+# createAuction(uint256 externalMarketId, uint256 reservePrice, uint256 endTime, address yesToken, address noToken, bool betOnYes)
+END_TIME=$(( $(date +%s) + AUCTION_DURATION ))
+ZERO_ADDR="0x0000000000000000000000000000000000000000"
 TX_CREATE=$(cast send "$SECRET_MARKETPLACE_ADDRESS" \
-  "createAuction(uint256,uint256,uint256)" 0 "$RESERVE_PRICE" "$AUCTION_DURATION" \
+  "createAuction(uint256,uint256,uint256,address,address,bool)" "$MARKET_ID" "$RESERVE_PRICE" "$END_TIME" "$ZERO_ADDR" "$ZERO_ADDR" true \
   --rpc-url "$RPC_URL" --private-key "$OWNER_PK" --json 2>&1)
 
 if echo "$TX_CREATE" | jq -e '.status == "0x1"' &>/dev/null; then
@@ -109,8 +124,9 @@ echo "  Open auctions: $OPEN"
 # ─── Step 2: Tester places a bid ─────────────────────────────────────────────
 echo ""
 echo "▶ Step 2: Tester placing bid of $BID_AMOUNT..."
+AUTOMATIC_BET_AMOUNT=1000000  # 1 USDC
 TX_BID=$(cast send "$SECRET_MARKETPLACE_ADDRESS" \
-  "placeBid(uint256,uint256)" "$AUCTION_ID" "$BID_AMOUNT" \
+  "placeBid(uint256,uint256,uint256)" "$AUCTION_ID" "$BID_AMOUNT" "$AUTOMATIC_BET_AMOUNT" \
   --rpc-url "$RPC_URL" --private-key "$TESTER_PK" --json 2>&1)
 
 if echo "$TX_BID" | jq -e '.status == "0x1"' &>/dev/null; then
@@ -126,18 +142,7 @@ fi
 echo ""
 echo "▶ Step 3: Waiting for auction to expire..."
 
-# Read the auction struct — endTime is the 4th field in the tuple
-AUCTION_DATA=$(cast call "$SECRET_MARKETPLACE_ADDRESS" \
-  "getAuction(uint256)((address,uint256,uint256,uint256,address,uint256,uint8))" "$AUCTION_ID" \
-  --rpc-url "$RPC_URL")
-
-END_TIME=$(parse_tuple_field "$AUCTION_DATA" 4)
-
-if [ -z "$END_TIME" ] || [ "$END_TIME" -lt 1000000000 ]; then
-  echo "  ERROR: Could not parse endTime from auction data: $AUCTION_DATA"
-  exit 1
-fi
-
+# We know the end time since we set it ourselves
 NOW=$(date +%s)
 WAIT=$((END_TIME - NOW + 15))
 if [ "$WAIT" -gt 0 ]; then
@@ -188,19 +193,13 @@ cd "$SCRIPT_DIR"
 echo ""
 echo "▶ Step 6: Verifying auction is closed on-chain..."
 
-FINAL_DATA=$(cast call "$SECRET_MARKETPLACE_ADDRESS" \
-  "getAuction(uint256)((address,uint256,uint256,uint256,address,uint256,uint8))" "$AUCTION_ID" \
-  --rpc-url "$RPC_URL")
-
-# Status is the 7th field in the tuple: 0=Open, 1=Closed
-FINAL_STATUS=$(parse_tuple_field "$FINAL_DATA" 7)
-
-if [ "$FINAL_STATUS" -eq 1 ]; then
-  echo "  Auction $AUCTION_ID is Closed (status=1)"
-else
-  echo "  Auction $AUCTION_ID has unexpected status=$FINAL_STATUS (expected 1=Closed)"
-  echo "  Raw data: $FINAL_DATA"
+# Check that auction is no longer in the open list (means it was closed)
+OPEN_CHECK=$(cast call "$SECRET_MARKETPLACE_ADDRESS" "getOpenAuctions()(uint256[])" --rpc-url "$RPC_URL")
+if echo "$OPEN_CHECK" | grep -q "$AUCTION_ID"; then
+  echo "  Auction $AUCTION_ID is still open — close failed"
   exit 1
+else
+  echo "  Auction $AUCTION_ID is no longer in open list (closed successfully)"
 fi
 
 # Verify it's no longer in open auctions

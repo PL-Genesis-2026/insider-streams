@@ -141,7 +141,7 @@ async function main() {
   SIMPLE_MARKET = (await publicClient.readContract({
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
-    functionName: "market",
+    functionName: "simpleMarket",
   })) as Address;
 
   console.log("===================================================");

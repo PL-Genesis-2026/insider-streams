@@ -192,21 +192,47 @@ export const secretMarketplaceAbi = [
   },
   {
     type: 'function',
-    inputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
-    name: 'auctions',
-    outputs: [
-      { name: 'seller', internalType: 'address', type: 'address' },
-      { name: 'externalMarketId', internalType: 'uint256', type: 'uint256' },
-      { name: 'reservePrice', internalType: 'uint256', type: 'uint256' },
-      { name: 'endTime', internalType: 'uint256', type: 'uint256' },
-      { name: 'highestBidder', internalType: 'address', type: 'address' },
-      { name: 'highestBid', internalType: 'uint256', type: 'uint256' },
-      {
-        name: 'status',
-        internalType: 'enum SecretMarketplace.AuctionStatus',
-        type: 'uint8',
-      },
+    inputs: [],
+    name: 'ACTION_CLOSE_AUCTION',
+    outputs: [{ name: '', internalType: 'uint8', type: 'uint8' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [],
+    name: 'ACTION_FORCE_CLOSE_AUCTION',
+    outputs: [{ name: '', internalType: 'uint8', type: 'uint8' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [],
+    name: 'ACTION_RESOLVE_MARKET',
+    outputs: [{ name: '', internalType: 'uint8', type: 'uint8' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [],
+    name: 'CRE_ROLE',
+    outputs: [{ name: '', internalType: 'bytes32', type: 'bytes32' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [],
+    name: 'DEFAULT_ADMIN_ROLE',
+    outputs: [{ name: '', internalType: 'bytes32', type: 'bytes32' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: '', internalType: 'address', type: 'address' },
+      { name: '', internalType: 'uint256', type: 'uint256' },
     ],
+    name: 'buyerAuctions',
+    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
     stateMutability: 'view',
   },
   {
@@ -222,6 +248,9 @@ export const secretMarketplaceAbi = [
       { name: 'externalMarketId', internalType: 'uint256', type: 'uint256' },
       { name: 'reservePrice', internalType: 'uint256', type: 'uint256' },
       { name: 'endTime', internalType: 'uint256', type: 'uint256' },
+      { name: 'yesToken', internalType: 'address', type: 'address' },
+      { name: 'noToken', internalType: 'address', type: 'address' },
+      { name: 'betOnYes', internalType: 'bool', type: 'bool' },
     ],
     name: 'createAuction',
     outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
@@ -231,7 +260,7 @@ export const secretMarketplaceAbi = [
     type: 'function',
     inputs: [
       { name: 'auctionId', internalType: 'uint256', type: 'uint256' },
-      { name: 'reputationDelta', internalType: 'int8', type: 'int8' },
+      { name: 'marketOutcome', internalType: 'uint8', type: 'uint8' },
     ],
     name: 'forceCloseAuction',
     outputs: [],
@@ -244,27 +273,46 @@ export const secretMarketplaceAbi = [
     outputs: [
       {
         name: '',
-        internalType: 'struct SecretMarketplace.AuctionData',
+        internalType: 'struct SecretMarketplace.Auction',
         type: 'tuple',
         components: [
           { name: 'seller', internalType: 'address', type: 'address' },
+          { name: 'reservePrice', internalType: 'uint256', type: 'uint256' },
+          { name: 'endTime', internalType: 'uint256', type: 'uint256' },
+          { name: 'currentBid', internalType: 'uint256', type: 'uint256' },
+          { name: 'currentBidder', internalType: 'address', type: 'address' },
           {
-            name: 'externalMarketId',
+            name: 'automaticBetAmount',
             internalType: 'uint256',
             type: 'uint256',
           },
-          { name: 'reservePrice', internalType: 'uint256', type: 'uint256' },
-          { name: 'endTime', internalType: 'uint256', type: 'uint256' },
-          { name: 'highestBidder', internalType: 'address', type: 'address' },
-          { name: 'highestBid', internalType: 'uint256', type: 'uint256' },
+          {
+            name: 'marketMetadata',
+            internalType: 'struct SecretMarketplace.MarketMetadata',
+            type: 'tuple',
+            components: [
+              { name: 'marketId', internalType: 'uint256', type: 'uint256' },
+              { name: 'yesToken', internalType: 'address', type: 'address' },
+              { name: 'noToken', internalType: 'address', type: 'address' },
+              { name: 'betOnYes', internalType: 'bool', type: 'bool' },
+            ],
+          },
           {
             name: 'status',
             internalType: 'enum SecretMarketplace.AuctionStatus',
             type: 'uint8',
           },
+          { name: 'reputationResolved', internalType: 'bool', type: 'bool' },
         ],
       },
     ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [{ name: 'buyer', internalType: 'address', type: 'address' }],
+    name: 'getBuyerAuctions',
+    outputs: [{ name: '', internalType: 'uint256[]', type: 'uint256[]' }],
     stateMutability: 'view',
   },
   {
@@ -297,6 +345,15 @@ export const secretMarketplaceAbi = [
   },
   {
     type: 'function',
+    inputs: [
+      { name: 'externalMarketId', internalType: 'uint256', type: 'uint256' },
+    ],
+    name: 'getMarketAuctions',
+    outputs: [{ name: '', internalType: 'uint256[]', type: 'uint256[]' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
     inputs: [],
     name: 'getOpenAuctions',
     outputs: [{ name: '', internalType: 'uint256[]', type: 'uint256[]' }],
@@ -304,11 +361,78 @@ export const secretMarketplaceAbi = [
   },
   {
     type: 'function',
-    inputs: [],
-    name: 'market',
+    inputs: [{ name: 'role', internalType: 'bytes32', type: 'bytes32' }],
+    name: 'getRoleAdmin',
+    outputs: [{ name: '', internalType: 'bytes32', type: 'bytes32' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [{ name: 'sellerAddr', internalType: 'address', type: 'address' }],
+    name: 'getSeller',
     outputs: [
-      { name: '', internalType: 'contract ISimpleMarket', type: 'address' },
+      {
+        name: '',
+        internalType: 'struct SecretMarketplace.Seller',
+        type: 'tuple',
+        components: [
+          { name: 'name', internalType: 'string', type: 'string' },
+          { name: 'reputationScore', internalType: 'int256', type: 'int256' },
+          { name: 'registered', internalType: 'bool', type: 'bool' },
+        ],
+      },
     ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [{ name: 'sellerAddr', internalType: 'address', type: 'address' }],
+    name: 'getSellerAuctions',
+    outputs: [{ name: '', internalType: 'uint256[]', type: 'uint256[]' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [],
+    name: 'getUnresolvedMarkets',
+    outputs: [{ name: '', internalType: 'uint256[]', type: 'uint256[]' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'role', internalType: 'bytes32', type: 'bytes32' },
+      { name: 'account', internalType: 'address', type: 'address' },
+    ],
+    name: 'grantRole',
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'role', internalType: 'bytes32', type: 'bytes32' },
+      { name: 'account', internalType: 'address', type: 'address' },
+    ],
+    name: 'hasRole',
+    outputs: [{ name: '', internalType: 'bool', type: 'bool' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: '', internalType: 'uint256', type: 'uint256' },
+      { name: '', internalType: 'uint256', type: 'uint256' },
+    ],
+    name: 'marketAuctions',
+    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
+    name: 'marketResolved',
+    outputs: [{ name: '', internalType: 'bool', type: 'bool' }],
     stateMutability: 'view',
   },
   {
@@ -353,9 +477,17 @@ export const secretMarketplaceAbi = [
     type: 'function',
     inputs: [
       { name: 'auctionId', internalType: 'uint256', type: 'uint256' },
-      { name: 'amount', internalType: 'uint256', type: 'uint256' },
+      { name: 'bidAmount', internalType: 'uint256', type: 'uint256' },
+      { name: 'automaticBetAmount', internalType: 'uint256', type: 'uint256' },
     ],
     name: 'placeBid',
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    inputs: [{ name: 'name', internalType: 'string', type: 'string' }],
+    name: 'registerSeller',
     outputs: [],
     stateMutability: 'nonpayable',
   },
@@ -368,9 +500,42 @@ export const secretMarketplaceAbi = [
   },
   {
     type: 'function',
-    inputs: [{ name: '', internalType: 'address', type: 'address' }],
-    name: 'reputationScores',
-    outputs: [{ name: '', internalType: 'int256', type: 'int256' }],
+    inputs: [
+      { name: 'role', internalType: 'bytes32', type: 'bytes32' },
+      { name: 'callerConfirmation', internalType: 'address', type: 'address' },
+    ],
+    name: 'renounceRole',
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'externalMarketId', internalType: 'uint256', type: 'uint256' },
+      { name: 'outcome', internalType: 'uint8', type: 'uint8' },
+    ],
+    name: 'resolveExternalMarket',
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'role', internalType: 'bytes32', type: 'bytes32' },
+      { name: 'account', internalType: 'address', type: 'address' },
+    ],
+    name: 'revokeRole',
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: '', internalType: 'address', type: 'address' },
+      { name: '', internalType: 'uint256', type: 'uint256' },
+    ],
+    name: 'sellerAuctions',
+    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
     stateMutability: 'view',
   },
   {
@@ -403,6 +568,15 @@ export const secretMarketplaceAbi = [
   },
   {
     type: 'function',
+    inputs: [],
+    name: 'simpleMarket',
+    outputs: [
+      { name: '', internalType: 'contract ISimpleMarket', type: 'address' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
     inputs: [{ name: 'interfaceId', internalType: 'bytes4', type: 'bytes4' }],
     name: 'supportsInterface',
     outputs: [{ name: '', internalType: 'bool', type: 'bool' }],
@@ -417,13 +591,10 @@ export const secretMarketplaceAbi = [
   },
   {
     type: 'function',
-    inputs: [
-      { name: 'auctionId', internalType: 'uint256', type: 'uint256' },
-      { name: 'delta', internalType: 'int8', type: 'int8' },
-    ],
-    name: 'updateReputationScore',
-    outputs: [],
-    stateMutability: 'nonpayable',
+    inputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
+    name: 'unresolvedMarketIds',
+    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
+    stateMutability: 'view',
   },
   {
     type: 'event',
@@ -482,7 +653,7 @@ export const secretMarketplaceAbi = [
         name: 'externalMarketId',
         internalType: 'uint256',
         type: 'uint256',
-        indexed: false,
+        indexed: true,
       },
       {
         name: 'reservePrice',
@@ -496,6 +667,7 @@ export const secretMarketplaceAbi = [
         type: 'uint256',
         indexed: false,
       },
+      { name: 'betOnYes', internalType: 'bool', type: 'bool', indexed: false },
     ],
     name: 'AuctionCreated',
   },
@@ -559,7 +731,13 @@ export const secretMarketplaceAbi = [
         indexed: true,
       },
       {
-        name: 'amount',
+        name: 'bidAmount',
+        internalType: 'uint256',
+        type: 'uint256',
+        indexed: false,
+      },
+      {
+        name: 'automaticBetAmount',
         internalType: 'uint256',
         type: 'uint256',
         indexed: false,
@@ -641,6 +819,26 @@ export const secretMarketplaceAbi = [
     anonymous: false,
     inputs: [
       {
+        name: 'externalMarketId',
+        internalType: 'uint256',
+        type: 'uint256',
+        indexed: true,
+      },
+      { name: 'outcome', internalType: 'uint8', type: 'uint8', indexed: false },
+      {
+        name: 'auctionsAffected',
+        internalType: 'uint256',
+        type: 'uint256',
+        indexed: false,
+      },
+    ],
+    name: 'ExternalMarketResolved',
+  },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      {
         name: 'previousForwarder',
         internalType: 'address',
         type: 'address',
@@ -704,6 +902,66 @@ export const secretMarketplaceAbi = [
     type: 'event',
     anonymous: false,
     inputs: [
+      { name: 'role', internalType: 'bytes32', type: 'bytes32', indexed: true },
+      {
+        name: 'previousAdminRole',
+        internalType: 'bytes32',
+        type: 'bytes32',
+        indexed: true,
+      },
+      {
+        name: 'newAdminRole',
+        internalType: 'bytes32',
+        type: 'bytes32',
+        indexed: true,
+      },
+    ],
+    name: 'RoleAdminChanged',
+  },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      { name: 'role', internalType: 'bytes32', type: 'bytes32', indexed: true },
+      {
+        name: 'account',
+        internalType: 'address',
+        type: 'address',
+        indexed: true,
+      },
+      {
+        name: 'sender',
+        internalType: 'address',
+        type: 'address',
+        indexed: true,
+      },
+    ],
+    name: 'RoleGranted',
+  },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      { name: 'role', internalType: 'bytes32', type: 'bytes32', indexed: true },
+      {
+        name: 'account',
+        internalType: 'address',
+        type: 'address',
+        indexed: true,
+      },
+      {
+        name: 'sender',
+        internalType: 'address',
+        type: 'address',
+        indexed: true,
+      },
+    ],
+    name: 'RoleRevoked',
+  },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
       {
         name: 'message',
         internalType: 'string',
@@ -712,6 +970,20 @@ export const secretMarketplaceAbi = [
       },
     ],
     name: 'SecurityWarning',
+  },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      {
+        name: 'seller',
+        internalType: 'address',
+        type: 'address',
+        indexed: true,
+      },
+      { name: 'name', internalType: 'string', type: 'string', indexed: false },
+    ],
+    name: 'SellerRegistered',
   },
   {
     type: 'event',
@@ -736,13 +1008,23 @@ export const secretMarketplaceAbi = [
         indexed: true,
       },
       {
-        name: 'amount',
+        name: 'automaticBetAmount',
         internalType: 'uint256',
         type: 'uint256',
         indexed: false,
       },
+      { name: 'betOnYes', internalType: 'bool', type: 'bool', indexed: false },
     ],
     name: 'TradeExecuted',
+  },
+  { type: 'error', inputs: [], name: 'AccessControlBadConfirmation' },
+  {
+    type: 'error',
+    inputs: [
+      { name: 'account', internalType: 'address', type: 'address' },
+      { name: 'neededRole', internalType: 'bytes32', type: 'bytes32' },
+    ],
+    name: 'AccessControlUnauthorizedAccount',
   },
   { type: 'error', inputs: [], name: 'AuctionAlreadySettled' },
   { type: 'error', inputs: [], name: 'AuctionDoesNotExist' },
@@ -788,9 +1070,16 @@ export const secretMarketplaceAbi = [
     inputs: [
       { name: 'externalMarketId', internalType: 'uint256', type: 'uint256' },
     ],
+    name: 'MarketAlreadyResolved',
+  },
+  {
+    type: 'error',
+    inputs: [
+      { name: 'externalMarketId', internalType: 'uint256', type: 'uint256' },
+    ],
     name: 'MarketDoesNotExist',
   },
-  { type: 'error', inputs: [], name: 'NotSellerOrOwner' },
+  { type: 'error', inputs: [], name: 'NotSellerOrAdmin' },
   {
     type: 'error',
     inputs: [{ name: 'owner', internalType: 'address', type: 'address' }],
@@ -831,8 +1120,23 @@ export const simpleMarketAbi = [
   },
   {
     type: 'function',
-    inputs: [{ name: 'marketId', internalType: 'uint256', type: 'uint256' }],
-    name: 'claimPrediction',
+    inputs: [],
+    name: 'INITIAL_LIQUIDITY',
+    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'marketId', internalType: 'uint256', type: 'uint256' },
+      {
+        name: 'outcome',
+        internalType: 'enum SimpleMarket.Outcome',
+        type: 'uint8',
+      },
+      { name: 'usdcAmount', internalType: 'uint256', type: 'uint256' },
+    ],
+    name: 'buyShares',
     outputs: [],
     stateMutability: 'nonpayable',
   },
@@ -875,6 +1179,7 @@ export const simpleMarketAbi = [
         type: 'tuple',
         components: [
           { name: 'question', internalType: 'string', type: 'string' },
+          { name: 'creator', internalType: 'address', type: 'address' },
           { name: 'marketOpen', internalType: 'uint256', type: 'uint256' },
           { name: 'marketClose', internalType: 'uint256', type: 'uint256' },
           {
@@ -891,15 +1196,18 @@ export const simpleMarketAbi = [
           { name: 'evidenceURI', internalType: 'string', type: 'string' },
           { name: 'confidenceBps', internalType: 'uint16', type: 'uint16' },
           {
-            name: 'predCounts',
-            internalType: 'uint256[2]',
-            type: 'uint256[2]',
+            name: 'yesToken',
+            internalType: 'contract ShareToken',
+            type: 'address',
           },
           {
-            name: 'predTotals',
-            internalType: 'uint256[2]',
-            type: 'uint256[2]',
+            name: 'noToken',
+            internalType: 'contract ShareToken',
+            type: 'address',
           },
+          { name: 'yesReserve', internalType: 'uint256', type: 'uint256' },
+          { name: 'noReserve', internalType: 'uint256', type: 'uint256' },
+          { name: 'liquidityWithdrawn', internalType: 'bool', type: 'bool' },
         ],
       },
     ],
@@ -908,23 +1216,8 @@ export const simpleMarketAbi = [
   {
     type: 'function',
     inputs: [{ name: 'marketId', internalType: 'uint256', type: 'uint256' }],
-    name: 'getPrediction',
-    outputs: [
-      {
-        name: '',
-        internalType: 'struct SimpleMarket.Prediction',
-        type: 'tuple',
-        components: [
-          { name: 'amount', internalType: 'uint256', type: 'uint256' },
-          {
-            name: 'pred',
-            internalType: 'enum SimpleMarket.Outcome',
-            type: 'uint8',
-          },
-          { name: 'claimed', internalType: 'bool', type: 'bool' },
-        ],
-      },
-    ],
+    name: 'getNoPrice',
+    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
     stateMutability: 'view',
   },
   {
@@ -936,18 +1229,10 @@ export const simpleMarketAbi = [
   },
   {
     type: 'function',
-    inputs: [
-      { name: 'marketId', internalType: 'uint256', type: 'uint256' },
-      {
-        name: 'outcome',
-        internalType: 'enum SimpleMarket.Outcome',
-        type: 'uint8',
-      },
-      { name: 'amount', internalType: 'uint256', type: 'uint256' },
-    ],
-    name: 'makePrediction',
-    outputs: [],
-    stateMutability: 'nonpayable',
+    inputs: [{ name: 'marketId', internalType: 'uint256', type: 'uint256' }],
+    name: 'getYesPrice',
+    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
+    stateMutability: 'view',
   },
   {
     type: 'function',
@@ -955,6 +1240,7 @@ export const simpleMarketAbi = [
     name: 'markets',
     outputs: [
       { name: 'question', internalType: 'string', type: 'string' },
+      { name: 'creator', internalType: 'address', type: 'address' },
       { name: 'marketOpen', internalType: 'uint256', type: 'uint256' },
       { name: 'marketClose', internalType: 'uint256', type: 'uint256' },
       {
@@ -970,6 +1256,15 @@ export const simpleMarketAbi = [
       { name: 'settledAt', internalType: 'uint256', type: 'uint256' },
       { name: 'evidenceURI', internalType: 'string', type: 'string' },
       { name: 'confidenceBps', internalType: 'uint16', type: 'uint16' },
+      {
+        name: 'yesToken',
+        internalType: 'contract ShareToken',
+        type: 'address',
+      },
+      { name: 'noToken', internalType: 'contract ShareToken', type: 'address' },
+      { name: 'yesReserve', internalType: 'uint256', type: 'uint256' },
+      { name: 'noReserve', internalType: 'uint256', type: 'uint256' },
+      { name: 'liquidityWithdrawn', internalType: 'bool', type: 'bool' },
     ],
     stateMutability: 'view',
   },
@@ -1010,6 +1305,16 @@ export const simpleMarketAbi = [
     name: 'paymentToken',
     outputs: [{ name: '', internalType: 'contract IERC20', type: 'address' }],
     stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'marketId', internalType: 'uint256', type: 'uint256' },
+      { name: 'amount', internalType: 'uint256', type: 'uint256' },
+    ],
+    name: 'redeemShares',
+    outputs: [],
+    stateMutability: 'nonpayable',
   },
   {
     type: 'function',
@@ -1078,6 +1383,13 @@ export const simpleMarketAbi = [
     type: 'function',
     inputs: [{ name: 'newOwner', internalType: 'address', type: 'address' }],
     name: 'transferOwnership',
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    inputs: [{ name: 'marketId', internalType: 'uint256', type: 'uint256' }],
+    name: 'withdrawLiquidity',
     outputs: [],
     stateMutability: 'nonpayable',
   },
@@ -1174,6 +1486,31 @@ export const simpleMarketAbi = [
         indexed: true,
       },
       {
+        name: 'usdcOut',
+        internalType: 'uint256',
+        type: 'uint256',
+        indexed: false,
+      },
+    ],
+    name: 'LiquidityWithdrawn',
+  },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      {
+        name: 'marketId',
+        internalType: 'uint256',
+        type: 'uint256',
+        indexed: true,
+      },
+      {
+        name: 'creator',
+        internalType: 'address',
+        type: 'address',
+        indexed: true,
+      },
+      {
         name: 'question',
         internalType: 'string',
         type: 'string',
@@ -1189,6 +1526,18 @@ export const simpleMarketAbi = [
         name: 'marketClose',
         internalType: 'uint256',
         type: 'uint256',
+        indexed: false,
+      },
+      {
+        name: 'yesToken',
+        internalType: 'address',
+        type: 'address',
+        indexed: false,
+      },
+      {
+        name: 'noToken',
+        internalType: 'address',
+        type: 'address',
         indexed: false,
       },
     ],
@@ -1212,61 +1561,6 @@ export const simpleMarketAbi = [
       },
     ],
     name: 'OwnershipTransferred',
-  },
-  {
-    type: 'event',
-    anonymous: false,
-    inputs: [
-      {
-        name: 'marketId',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: true,
-      },
-      {
-        name: 'predictor',
-        internalType: 'address',
-        type: 'address',
-        indexed: true,
-      },
-      {
-        name: 'outcome',
-        internalType: 'enum SimpleMarket.Outcome',
-        type: 'uint8',
-        indexed: true,
-      },
-      {
-        name: 'amount',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: false,
-      },
-      {
-        name: 'predCountNo',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: false,
-      },
-      {
-        name: 'predCountYes',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: false,
-      },
-      {
-        name: 'predTotalNo',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: false,
-      },
-      {
-        name: 'predTotalYes',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: false,
-      },
-    ],
-    name: 'PredictionMade',
   },
   {
     type: 'event',
@@ -1325,10 +1619,75 @@ export const simpleMarketAbi = [
     ],
     name: 'SettlementResponse',
   },
-  { type: 'error', inputs: [], name: 'AlreadyClaimed' },
-  { type: 'error', inputs: [], name: 'AlreadyPredicted' },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      {
+        name: 'marketId',
+        internalType: 'uint256',
+        type: 'uint256',
+        indexed: true,
+      },
+      {
+        name: 'buyer',
+        internalType: 'address',
+        type: 'address',
+        indexed: true,
+      },
+      {
+        name: 'outcome',
+        internalType: 'enum SimpleMarket.Outcome',
+        type: 'uint8',
+        indexed: true,
+      },
+      {
+        name: 'usdcIn',
+        internalType: 'uint256',
+        type: 'uint256',
+        indexed: false,
+      },
+      {
+        name: 'sharesOut',
+        internalType: 'uint256',
+        type: 'uint256',
+        indexed: false,
+      },
+    ],
+    name: 'SharesPurchased',
+  },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      {
+        name: 'marketId',
+        internalType: 'uint256',
+        type: 'uint256',
+        indexed: true,
+      },
+      {
+        name: 'redeemer',
+        internalType: 'address',
+        type: 'address',
+        indexed: true,
+      },
+      {
+        name: 'sharesIn',
+        internalType: 'uint256',
+        type: 'uint256',
+        indexed: false,
+      },
+      {
+        name: 'usdcOut',
+        internalType: 'uint256',
+        type: 'uint256',
+        indexed: false,
+      },
+    ],
+    name: 'SharesRedeemed',
+  },
   { type: 'error', inputs: [], name: 'AmountZero' },
-  { type: 'error', inputs: [], name: 'IncorrectPrediction' },
   {
     type: 'error',
     inputs: [
@@ -1363,6 +1722,7 @@ export const simpleMarketAbi = [
     ],
     name: 'InvalidWorkflowName',
   },
+  { type: 'error', inputs: [], name: 'LiquidityAlreadyWithdrawn' },
   {
     type: 'error',
     inputs: [
@@ -1390,7 +1750,7 @@ export const simpleMarketAbi = [
     ],
     name: 'MarketNotOpen',
   },
-  { type: 'error', inputs: [], name: 'NoWinners' },
+  { type: 'error', inputs: [], name: 'NotCreator' },
   {
     type: 'error',
     inputs: [
