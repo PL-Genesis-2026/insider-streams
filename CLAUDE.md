@@ -20,6 +20,8 @@ private-streams/
 │   ├── auction-closer-e2e.sh        # Auction closer CRE workflow E2E
 │   ├── secret-marketplace-e2e.ts    # SecretMarketplace full event lifecycle E2E
 │   ├── generate-contract-types.sh   # Compile contracts + regenerate types/ABIs
+│   ├── deploy-contracts.sh          # Interactive contract deploy + address replacement
+│   ├── deploy-subgraph.sh           # Build + deploy subgraph (with optional address update)
 │   └── ...
 └── CLAUDE.md
 ```
@@ -121,8 +123,9 @@ Private keys are in `.env` files (never committed).
 - **Subgraph name**: `insider-streams` (Subgraph Studio)
 - **Studio URL** (codegen/testing): `https://api.studio.thegraph.com/query/1743303/insider-streams/version/latest`
 - **Gateway URL** (production): `https://gateway.thegraph.com/api/subgraphs/id/GiEXREmvxbqNfQ3VxnhjKypYRNvEaeVjtAWncPHzPiuj`
-- **Deploy**: `cd subgraphs/secrets-marketplace && npx graph auth --studio <KEY> && npm run deploy -- --version-label "v$(node -p "require('./package.json').version")"`
-- Version tracked in `subgraphs/secrets-marketplace/package.json`; bumped automatically by `scripts/generate-contract-types.sh` after successful deploy
+- **Deploy**: `npx graph auth --studio <KEY>` then `./scripts/deploy-subgraph.sh` (prompts for contract address, auto-fetches start block)
+- **Deploy with new address**: `./scripts/deploy-subgraph.sh --address 0x...` (non-interactive)
+- Version tracked in `subgraphs/secrets-marketplace/package.json`; bumped automatically by `deploy-subgraph.sh` after successful deploy
 
 ## GraphQL Codegen
 
@@ -139,15 +142,103 @@ cd scripts && pnpm codegen                        # scripts
 cd cre-workflows/auction-closer && bun run codegen # CRE workflow
 ```
 
-## Regenerating Contract Types
+## After Major Contract Changes
 
-After modifying contracts, regenerate TypeScript types, subgraph ABIs, and frontend ABIs:
+After making substantial contract changes — especially to public-facing functions, events, or structs — you must regenerate types:
+
 ```bash
-./scripts/generate-contract-types.sh              # full pipeline including subgraph deploy
-./scripts/generate-contract-types.sh --skip-deploy # skip subgraph deploy
+./scripts/generate-contract-types.sh
 ```
 
-Or just regenerate TypeScript types: `pnpm wagmi`
+This script compiles contracts with Foundry, regenerates TypeScript types and ABIs via wagmi into `packages/common`, runs `pnpm install` to update workspace links, and copies extracted JSON ABIs to each frontend app's `src/abis/` directory. It does **not** deploy the subgraph — that is a separate step (see below).
+
+Or just regenerate TypeScript types without recompiling: `pnpm wagmi`
+
+## After a Contract Deployment
+
+Use the interactive deploy script to deploy contracts and auto-replace addresses:
+
+```bash
+./scripts/deploy-contracts.sh
+```
+
+This script prompts which contracts to redeploy (MockUSDC, SimpleMarket, SecretMarketplace), deploys them via Foundry, then does a best-effort case-insensitive find-and-replace of the old addresses across the entire codebase (source files, configs, scripts, .env files). It also checks .env files for any stale addresses that may remain and warns about them.
+
+After the script finishes, you must still:
+
+### 1. Regenerate contract types
+
+```bash
+./scripts/generate-contract-types.sh
+```
+
+### 2. Verify hardcoded contract addresses
+
+The deploy script replaces addresses automatically, but you should verify no stale addresses remain. Contract addresses are hardcoded in multiple locations.
+
+**Critical locations:**
+
+| File | What to update |
+|------|---------------|
+| `packages/common/src/index.ts` | `MOCK_USDC_ADDRESS`, `SIMPLE_MARKET_ADDRESS`, `SECRET_MARKETPLACE_ADDRESS` — **this is what frontends and scripts import** |
+| `CLAUDE.md` | Deployed Contracts sections (Prediction Market, SecretMarketplace, Compliant Private Transfer) |
+| `README.md` | Contract addresses table and any script examples referencing addresses |
+
+**E2E test scripts (shell defaults):**
+
+| File | Variables with hardcoded defaults |
+|------|----------------------------------|
+| `scripts/simple-market-e2e.sh` | `MOCK_USDC_ADDRESS`, `SIMPLE_MARKET_ADDRESS` |
+| `scripts/auction-closer-e2e.sh` | `MOCK_USDC_ADDRESS`, `SECRET_MARKETPLACE_ADDRESS` |
+
+**CRE workflow configs:**
+
+| File | Fields |
+|------|--------|
+| `cre-workflows/auction-closer/config.json` | `secretMarketplaceAddress` |
+| `cre-workflows/prediction-market-demo/config.json` | `simpleMarketAddress` |
+
+After updating CRE workflow configs, the workflow must be redeployed and tested live.
+
+**Foundry deploy scripts** (use env vars, not hardcoded — but verify `contracts/.env` is correct):
+
+| File | Env vars used |
+|------|--------------|
+| `contracts/script/DeploySimpleMarket.s.sol` | `PAYMENT_TOKEN`, `CRE_FORWARDER_ADDRESS` |
+| `contracts/script/DeploySecretMarketplace.s.sol` | `PAYMENT_TOKEN`, `SIMPLE_MARKET_ADDRESS`, `CRE_FORWARDER_ADDRESS` |
+
+**Private token scripts** (only if Vault or SimpleToken changed):
+
+| File | What's hardcoded |
+|------|-----------------|
+| `contracts/script/private-transactions/*.s.sol` | `VAULT` constant (5 files) |
+| `contracts/api-scripts/src/common.ts` | Vault address in `EIP712_DOMAIN` |
+
+**Strategy for finding other uses:** Search the codebase for the old address with `grep -r "0xOLD_ADDRESS" --include='*.ts' --include='*.sh' --include='*.sol' --include='*.json' --include='*.yaml' --include='*.md' .` to catch any locations not listed above. Exclude `node_modules/`, `out/`, and `build/` directories.
+
+### 3. Deploy the subgraph (if SecretMarketplace changed)
+
+Ask the user if they want to deploy a new subgraph version. This is a separate step that should only be run **after** contract types have been regenerated (step 1).
+
+```bash
+./scripts/deploy-subgraph.sh                       # interactive — prompts for contract address
+./scripts/deploy-subgraph.sh --address 0x...       # non-interactive — auto-fetches start block
+./scripts/deploy-subgraph.sh --skip-deploy         # codegen + build only, no deploy
+```
+
+The deploy script copies ABIs from Foundry artifacts, runs `graph codegen` and `graph build`, then deploys to Subgraph Studio. After a successful deploy, it asks if you want to publish to The Graph Network — **publishing requires human interaction in a browser** (wallet signing on Arbitrum). The CLI opens the browser and returns immediately; the user must complete the publish flow in their browser.
+
+After the script completes, tell the user: if the deploy succeeded, click the publish button in the browser when prompted. Once published, offer to regenerate GraphQL types.
+
+### 4. Regenerate GraphQL types
+
+After the subgraph is published and indexing, regenerate typed GraphQL clients:
+
+```bash
+turbo run codegen
+```
+
+This updates the generated GraphQL types in the frontend, scripts, and CRE workflow packages against the published subgraph schema.
 
 ## Services
 
@@ -177,7 +268,7 @@ Individual deploy scripts exist in `contracts/script/`:
 - `DeploySecretMarketplace.s.sol` — env: `PAYMENT_TOKEN`, `SIMPLE_MARKET_ADDRESS`, `CRE_FORWARDER_ADDRESS`
 - `DeployAll.s.sol` — deploys everything (only for fresh environments)
 
-After deploying, update the new address in: `packages/common/src/index.ts`, `scripts/.env`, `README.md`, and the relevant section of `CLAUDE.md`.
+After deploying, follow the full procedure in **"After a Contract Deployment"** above.
 
 ## Architecture Notes
 
