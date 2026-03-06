@@ -1,14 +1,21 @@
 -- ==========================================================================
--- Migration: 001_initial_schema.sql
+-- Consolidated schema for secrets marketplace with web2 private bidding
 -- Supabase project: jeyudbkttazpifxvzqvq
--- Purpose: Schema for secrets marketplace with web2 private bidding
 --
 -- Tables:
---   1. secrets           - Off-chain secret data tied to on-chain auctions
---   2. balances          - User private token (DEMO) balance tracking
---   3. private_bids      - Complete bid history for web2 private bidding
---   4. private_withdrawals - Withdrawal request lifecycle
+--   1. sellers      - Seller identity (id PK, address indexed)
+--   2. secrets      - Off-chain secret data tied to on-chain auctions (FK → sellers)
+--   3. transfers    - Unified table: deposits and withdrawals (direction inferred from status)
+--   4. private_bids - Complete bid history for web2 private bidding
+--
+-- Views:
+--   1. balances     - Computed available/locked/pending from transfers + private_bids
 -- ==========================================================================
+
+-- ==========================================================================
+-- EXTENSION: pg_jsonschema (for JSON schema validation)
+-- ==========================================================================
+CREATE EXTENSION IF NOT EXISTS pg_jsonschema;
 
 -- ==========================================================================
 -- HELPER: updated_at trigger function
@@ -22,7 +29,27 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ==========================================================================
--- TABLE 1: secrets
+-- TABLE 1: sellers
+-- ==========================================================================
+-- Stores seller identity. id is the primary key and must be unique.
+-- Must be created before secrets (secrets.seller_id references sellers.id).
+
+CREATE TABLE sellers (
+  id              text PRIMARY KEY,
+  address         text NOT NULL,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  updated_at      timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT sellers_addr CHECK (address ~* '^0x[a-f0-9]{40}$')
+);
+
+CREATE INDEX idx_sellers_address ON sellers (address);
+
+CREATE TRIGGER sellers_updated_at
+  BEFORE UPDATE ON sellers
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- ==========================================================================
+-- TABLE 2: secrets
 -- ==========================================================================
 -- Stores the actual secret data that sellers are auctioning.
 -- auction_id references the uint256 ID from SecretMarketplace contract.
@@ -31,61 +58,78 @@ $$ LANGUAGE plpgsql;
 CREATE TABLE secrets (
   id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   auction_id     text NOT NULL UNIQUE,
-  secret_data    jsonb NOT NULL,
-  market_data    jsonb,
-  seller         text NOT NULL,
+  secret_data    text NOT NULL,
+  event_data     jsonb,
+  seller_id      text NOT NULL REFERENCES sellers (id),
   buyer          text,
   created_at     timestamptz NOT NULL DEFAULT now(),
   updated_at     timestamptz NOT NULL DEFAULT now(),
 
-  CONSTRAINT secrets_seller_addr CHECK (seller ~* '^0x[a-f0-9]{40}$'),
-  CONSTRAINT secrets_buyer_addr  CHECK (buyer IS NULL OR buyer ~* '^0x[a-f0-9]{40}$')
+  CONSTRAINT secrets_buyer_addr  CHECK (buyer IS NULL OR buyer ~* '^0x[a-f0-9]{40}$'),
+  CONSTRAINT secrets_event_data_schema CHECK (
+    event_data IS NULL OR jsonb_matches_schema(
+      '{
+        "type": "object",
+        "required": ["marketplace", "event", "marketId", "outcome"],
+        "properties": {
+          "marketplace": { "type": "string" },
+          "event": { "type": "string" },
+          "marketId": { "type": "number" },
+          "outcome": { "type": "string", "enum": ["yes", "no"] }
+        },
+        "additionalProperties": false
+      }',
+      event_data
+    )
+  )
 );
 
-CREATE INDEX idx_secrets_seller ON secrets (seller);
+CREATE INDEX idx_secrets_seller_id ON secrets (seller_id);
 
 CREATE TRIGGER secrets_updated_at
   BEFORE UPDATE ON secrets
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ==========================================================================
--- TABLE 2: balances
+-- TABLE 3: transfers
 -- ==========================================================================
--- Tracks each user's DEMO token balance within the web2 private bidding layer.
---
--- Three balance components:
---   available_balance  - Free to bid or withdraw
---   locked_balance     - Currently locked in active bids
---   pending_withdrawal - Currently in the withdrawal pipeline
---
--- Uses numeric(78,0) because DEMO has 18 decimals and bigint overflows at ~9.2 tokens.
--- All balance mutations MUST use SELECT ... FOR UPDATE to prevent race conditions.
+-- Unified table for all token movements (deposits and withdrawals).
+-- Direction is inferred from status values:
+--   Deposits:     pending → confirmed | failed
+--   Withdrawals:  requested → transferring → completed | failed
 
-CREATE TABLE balances (
-  id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_address       text NOT NULL UNIQUE,
-  available_balance  numeric(78,0) NOT NULL DEFAULT 0,
-  locked_balance     numeric(78,0) NOT NULL DEFAULT 0,
-  pending_withdrawal numeric(78,0) NOT NULL DEFAULT 0,
-  created_at         timestamptz NOT NULL DEFAULT now(),
-  updated_at         timestamptz NOT NULL DEFAULT now(),
+CREATE TABLE transfers (
+  id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  transaction_id    text NOT NULL UNIQUE,
+  user_address      text NOT NULL,
+  token_address     text NOT NULL DEFAULT '0xb308ef20527c5215ec2b2b10f52b311f3aac6eeb',
+  amount            text NOT NULL,
+  recipient_address text,
+  sender_address    text,
+  status            text NOT NULL DEFAULT 'requested'
+                      CHECK (status IN ('pending', 'confirmed', 'failed', 'requested', 'transferring', 'completed')),
+  raw_data          jsonb,
+  credited_at       timestamptz,
+  completed_at      timestamptz,
+  created_at        timestamptz NOT NULL DEFAULT now(),
+  updated_at        timestamptz NOT NULL DEFAULT now(),
 
-  CONSTRAINT balances_user_addr              CHECK (user_address ~* '^0x[a-f0-9]{40}$'),
-  CONSTRAINT balances_available_non_negative CHECK (available_balance >= 0),
-  CONSTRAINT balances_locked_non_negative    CHECK (locked_balance >= 0),
-  CONSTRAINT balances_pending_non_negative   CHECK (pending_withdrawal >= 0)
+  CONSTRAINT transfers_user_addr      CHECK (user_address ~* '^0x[a-f0-9]{40}$'),
+  CONSTRAINT transfers_sender_addr    CHECK (sender_address IS NULL OR sender_address ~* '^0x[a-f0-9]{40}$'),
+  CONSTRAINT transfers_amount_positive CHECK (amount::numeric > 0)
 );
 
-CREATE TRIGGER balances_updated_at
-  BEFORE UPDATE ON balances
+CREATE INDEX idx_transfers_user ON transfers (user_address);
+CREATE INDEX idx_transfers_status ON transfers (status);
+
+CREATE TRIGGER transfers_updated_at
+  BEFORE UPDATE ON transfers
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ==========================================================================
--- TABLE 3: private_bids
+-- TABLE 4: private_bids
 -- ==========================================================================
 -- Complete bid history for the web2 private bidding layer.
--- Unlike the on-chain contract (which only stores the current highest bid
--- and refunds previous bidders immediately), this table stores every bid.
 --
 -- Status lifecycle:
 --   active   - Currently the highest bid (balance locked)
@@ -97,9 +141,9 @@ CREATE TRIGGER balances_updated_at
 
 CREATE TABLE private_bids (
   id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  auction_id      text NOT NULL,
-  bidder_address  text NOT NULL,
-  amount          numeric(78,0) NOT NULL,
+  auction_id      text NOT NULL, -- Text because supabase thinks uints are hard
+  bidder_address  text NOT NULL, -- Needed so we can decrement their balance
+  amount          text NOT NULL, 
   status          text NOT NULL DEFAULT 'active'
                     CHECK (status IN ('active', 'outbid', 'won', 'refunded')),
   outbid_at       timestamptz,
@@ -109,7 +153,7 @@ CREATE TABLE private_bids (
   updated_at      timestamptz NOT NULL DEFAULT now(),
 
   CONSTRAINT pb_bidder_addr    CHECK (bidder_address ~* '^0x[a-f0-9]{40}$'),
-  CONSTRAINT pb_amount_positive CHECK (amount > 0)
+  CONSTRAINT pb_amount_positive CHECK (amount::numeric > 0)
 );
 
 CREATE INDEX idx_pb_auction_status ON private_bids (auction_id, status);
@@ -124,46 +168,6 @@ CREATE TRIGGER private_bids_updated_at
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ==========================================================================
--- TABLE 4: private_withdrawals
--- ==========================================================================
--- Tracks withdrawal requests from users wanting DEMO tokens back.
---
--- Primary flow:
---   1. User requests withdrawal -> status='requested'
---      available_balance decreased, pending_withdrawal increased
---   2. Platform calls POST /private-transfer to user's address
---      -> status='transferring'
---   3. Transfer confirmed -> status='completed'
---      pending_withdrawal decreased
---   4. If transfer fails -> status='failed'
---      pending_withdrawal released back to available_balance
-
-CREATE TABLE private_withdrawals (
-  id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_address      text NOT NULL,
-  token_address     text NOT NULL DEFAULT '0xb308ef20527c5215ec2b2b10f52b311f3aac6eeb',
-  amount            numeric(78,0) NOT NULL,
-  recipient_address text,
-  status            text NOT NULL DEFAULT 'requested'
-                      CHECK (status IN ('requested', 'transferring', 'completed', 'failed')),
-  transfer_tx_id    text,
-  completed_at      timestamptz,
-  failed_reason     text,
-  created_at        timestamptz NOT NULL DEFAULT now(),
-  updated_at        timestamptz NOT NULL DEFAULT now(),
-
-  CONSTRAINT pw_user_addr      CHECK (user_address ~* '^0x[a-f0-9]{40}$'),
-  CONSTRAINT pw_amount_positive CHECK (amount > 0)
-);
-
-CREATE INDEX idx_pw_user ON private_withdrawals (user_address);
-CREATE INDEX idx_pw_status ON private_withdrawals (status);
-
-CREATE TRIGGER private_withdrawals_updated_at
-  BEFORE UPDATE ON private_withdrawals
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
--- ==========================================================================
 -- ROW-LEVEL SECURITY
 -- ==========================================================================
 -- All tables: deny everything for anon/authenticated roles.
@@ -171,9 +175,64 @@ CREATE TRIGGER private_withdrawals_updated_at
 -- The backend API authenticates users via EIP-712 and uses service_role.
 
 ALTER TABLE secrets ENABLE ROW LEVEL SECURITY;
-ALTER TABLE balances ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sellers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE transfers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE private_bids ENABLE ROW LEVEL SECURITY;
-ALTER TABLE private_withdrawals ENABLE ROW LEVEL SECURITY;
 
 -- No permissive policies = deny all for anon/authenticated.
 -- service_role bypasses RLS entirely (Supabase default behavior).
+
+-- ==========================================================================
+-- VIEW: balances
+-- ==========================================================================
+-- Computed view — no physical table. Derives balances from transfers + private_bids.
+--
+-- Formula:
+--   available = total_deposited - locked_in_active_bids - spent_on_won_bids
+--               - pending_withdrawals - completed_withdrawals
+--   locked    = SUM(active bids)
+--   pending   = SUM(requested/transferring withdrawals)
+--
+-- Columns are cast to text so PostgREST returns strings (preserving precision
+-- for 18-decimal token amounts).
+
+CREATE OR REPLACE VIEW balances AS
+SELECT
+  t.user_address,
+  (COALESCE(t.total_deposited, 0)
+    - COALESCE(b.locked_balance, 0)
+    - COALESCE(b.spent_on_wins, 0)
+    - COALESCE(t.pending_withdrawal, 0)
+    - COALESCE(t.completed_withdrawals, 0))::text AS available_balance,
+  COALESCE(b.locked_balance, 0)::text AS locked_balance,
+  COALESCE(t.pending_withdrawal, 0)::text AS pending_withdrawal
+FROM
+  (
+    SELECT
+      user_address,
+      COALESCE(SUM(amount::numeric) FILTER (
+        WHERE status = 'confirmed'
+      ), 0) AS total_deposited,
+      COALESCE(SUM(amount::numeric) FILTER (
+        WHERE status IN ('requested', 'transferring')
+      ), 0) AS pending_withdrawal,
+      COALESCE(SUM(amount::numeric) FILTER (
+        WHERE status = 'completed'
+      ), 0) AS completed_withdrawals
+    FROM transfers
+    WHERE user_address IS NOT NULL
+    GROUP BY user_address
+  ) t
+LEFT JOIN
+  (
+    SELECT
+      bidder_address AS user_address,
+      COALESCE(SUM(amount::numeric) FILTER (WHERE status = 'active'), 0) AS locked_balance,
+      COALESCE(SUM(amount::numeric) FILTER (WHERE status = 'won'), 0) AS spent_on_wins
+    FROM private_bids
+    GROUP BY bidder_address
+  ) b ON b.user_address = t.user_address;
+
+-- RLS on view: security_invoker ensures the view runs with the caller's
+-- permissions, so only service_role can query it.
+ALTER VIEW balances SET (security_invoker = true);

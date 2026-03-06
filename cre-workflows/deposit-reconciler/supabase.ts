@@ -28,8 +28,8 @@ interface BatchInsertResponse {
  * Returns the number of newly inserted rows.
  *
  * Both directions come from API `type: "transfer"` transactions:
- * - incoming (is_incoming: true) → type: "deposit", user_address = sender (the depositor)
- * - outgoing (is_incoming: false) → type: "user_withdrawal", user_address = recipient (the user being debited)
+ * - incoming (is_incoming: true) → status: "confirmed", user_address = sender (the depositor)
+ * - outgoing (is_incoming: false) → status: "completed", user_address = recipient (the user being debited)
  */
 export function recordTransactions(
   runtime: Runtime<Config>,
@@ -42,7 +42,6 @@ export function recordTransactions(
   // Map incoming transfers (deposits) to transfer rows
   const depositRows = incoming.map((tx) => ({
     transaction_id: tx.id,
-    type: "deposit",
     user_address: tx.sender.toLowerCase(),
     sender_address: tx.sender.toLowerCase(),
     recipient_address: tx.recipient.toLowerCase(),
@@ -56,7 +55,6 @@ export function recordTransactions(
   // user_address = recipient (the user whose balance is being debited)
   const withdrawalRows = outgoing.map((tx) => ({
     transaction_id: tx.id,
-    type: "user_withdrawal",
     user_address: tx.recipient.toLowerCase(),
     sender_address: tx.sender.toLowerCase(),
     recipient_address: tx.recipient.toLowerCase(),

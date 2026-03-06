@@ -17,7 +17,7 @@ const secretRowSchema = z.object({
   auction_id: z.number().int().nullable(),
   secret_data: jsonSchema,
   market_data: jsonSchema,
-  seller: z.string(),
+  seller_id: z.string(),
   buyer: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
@@ -38,7 +38,7 @@ export async function listSecrets() {
   const { data, error } = await supabase
     .from("secrets")
     .select(
-      "id, auction_id, secret_data, market_data, seller, buyer, created_at, updated_at",
+      "id, auction_id, secret_data, market_data, seller_id, buyer, created_at, updated_at",
     )
     .order("created_at", { ascending: false });
 
@@ -54,7 +54,7 @@ export async function getSecretByAuctionId(auctionId: number) {
   const { data, error } = await supabase
     .from("secrets")
     .select(
-      "id, auction_id, secret_data, market_data, seller, buyer, created_at, updated_at",
+      "id, auction_id, secret_data, market_data, seller_id, buyer, created_at, updated_at",
     )
     .eq("auction_id", auctionId)
     .maybeSingle();
