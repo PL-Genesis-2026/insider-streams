@@ -1,5 +1,16 @@
 import type { CodegenConfig } from "@graphql-codegen/cli";
 
+const sharedConfig = {
+  scalars: {
+    BigDecimal: "string",
+    BigInt: "string",
+    Bytes: "string",
+    Int8: "string",
+    Timestamp: "string",
+  },
+  useTypeImports: true,
+} as const;
+
 const config: CodegenConfig = {
   overwrite: true,
   schema:
@@ -9,6 +20,7 @@ const config: CodegenConfig = {
   generates: {
     // TypedDocumentNode constants — for Apollo Client useQuery/useMutation
     "src/__generated__/graphql.ts": {
+      config: sharedConfig,
       plugins: [
         "typescript",
         "typescript-operations",
@@ -17,6 +29,7 @@ const config: CodegenConfig = {
     },
     // getSdk() — for graphql-request in Next.js API routes
     "src/__generated__/sdk.ts": {
+      config: sharedConfig,
       plugins: [
         "typescript",
         "typescript-operations",
