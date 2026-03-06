@@ -73,7 +73,7 @@ type ExpectedWorkflowNameUpdated @entity(immutable: true) {
 type ExternalMarketResolved @entity(immutable: true) {
   id: Bytes!
   externalMarketId: BigInt! # uint256
-  delta: Int! # int8
+  reputationDelta: Int! # int8
   auctionsAffected: BigInt! # uint256
   blockNumber: BigInt!
   blockTimestamp: BigInt!
@@ -102,7 +102,7 @@ type ReputationUpdated @entity(immutable: true) {
   id: Bytes!
   sellerId: String! # string
   auctionId: BigInt! # uint256
-  delta: Int! # int8
+  reputationDelta: Int! # int8
   newScore: BigInt! # int256
   blockNumber: BigInt!
   blockTimestamp: BigInt!
