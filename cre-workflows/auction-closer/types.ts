@@ -1,6 +1,13 @@
 import { z } from "zod";
 export { secretMarketplaceAbi } from "@private-streams/common";
 
+// ┌──────────────────────────────────────────────────────────────────────┐
+// │ CRON SCHEDULE — Change this to reduce polling frequency after demo  │
+// │ Current: every 30 seconds                                          │
+// │ Production suggestion: "0 */1 * * * *" (every 1 minute)            │
+// └──────────────────────────────────────────────────────────────────────┘
+export const CRON_SCHEDULE = "*/30 * * * * *";
+
 // Config schema validated at startup by CRE Runner
 const evmConfigSchema = z.object({
   chainSelectorName: z.string().min(1),
