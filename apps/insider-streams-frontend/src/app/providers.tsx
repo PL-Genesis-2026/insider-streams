@@ -6,10 +6,9 @@ import {
   ApolloClient,
   InMemoryCache,
 } from "@apollo/client-integration-nextjs";
+import { env } from "@/env";
 
-const SUBGRAPH_URL =
-  process.env.NEXT_PUBLIC_SUBGRAPH_URL ??
-  "https://gateway.thegraph.com/api/subgraphs/id/GiEXREmvxbqNfQ3VxnhjKypYRNvEaeVjtAWncPHzPiuj";
+const SUBGRAPH_URL = env.NEXT_PUBLIC_SUBGRAPH_URL;
 
 function makeClient() {
   return new ApolloClient({
