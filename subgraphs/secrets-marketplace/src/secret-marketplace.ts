@@ -37,7 +37,7 @@ export function handleAuctionClosed(event: AuctionClosedEvent): void {
   )
   entity.auctionId = event.params.auctionId
   entity.winningBid = event.params.winningBid
-  entity.seller = event.params.seller
+  entity.sellerId = event.params.seller
   entity.eventId = event.params.eventId
 
   entity.blockNumber = event.block.number
@@ -53,7 +53,7 @@ export function handleAuctionCreated(event: AuctionCreatedEvent): void {
   )
   entity.auctionId = event.params.auctionId
   entity.eventId = event.params.eventId
-  entity.seller = event.params.seller
+  entity.sellerId = event.params.seller
   entity.eventTitle = event.params.eventTitle
   entity.endTime = event.params.endTime
 
@@ -70,7 +70,7 @@ export function handleAuctionForceClosed(event: AuctionForceClosedEvent): void {
   )
   entity.auctionId = event.params.auctionId
   entity.heldAmount = event.params.heldAmount
-  entity.seller = event.params.seller
+  entity.sellerId = event.params.seller
   entity.eventId = event.params.eventId
   entity.reputationDelta = event.params.reputationDelta
 
@@ -151,7 +151,7 @@ export function handleExternalMarketResolved(
     event.transaction.hash.concatI32(event.logIndex.toI32())
   )
   entity.externalMarketId = event.params.externalMarketId
-  entity.delta = event.params.delta
+  entity.reputationDelta = event.params.delta
   entity.auctionsAffected = event.params.auctionsAffected
 
   entity.blockNumber = event.block.number
@@ -197,9 +197,9 @@ export function handleReputationUpdated(event: ReputationUpdatedEvent): void {
   let entity = new ReputationUpdated(
     event.transaction.hash.concatI32(event.logIndex.toI32())
   )
-  entity.seller = event.params.seller
+  entity.sellerId = event.params.seller
   entity.auctionId = event.params.auctionId
-  entity.delta = event.params.delta
+  entity.reputationDelta = event.params.delta
   entity.newScore = event.params.newScore
 
   entity.blockNumber = event.block.number
@@ -226,7 +226,7 @@ export function handleSellerRegistered(event: SellerRegisteredEvent): void {
   let entity = new SellerRegistered(
     event.transaction.hash.concatI32(event.logIndex.toI32())
   )
-  entity.seller = event.params.seller
+  entity.sellerId = event.params.seller
 
   entity.blockNumber = event.block.number
   entity.blockTimestamp = event.block.timestamp
