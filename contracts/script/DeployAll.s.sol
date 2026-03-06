@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
 import {MockUSDC} from "../src/mock/MockUSDC.sol";
-import {SimpleMarket} from "../src/SimpleMarket.sol";
+import {ExamplePredictionMarket} from "../src/ExamplePredictionMarket.sol";
 import {SecretMarketplace} from "../src/SecretMarketplace.sol";
 
 contract DeployAll is Script {
@@ -16,8 +16,8 @@ contract DeployAll is Script {
         MockUSDC usdc = new MockUSDC(0);
         console.log("MockUSDC deployed at:", address(usdc));
 
-        SimpleMarket market = new SimpleMarket(address(usdc), forwarder);
-        console.log("SimpleMarket deployed at:", address(market));
+        ExamplePredictionMarket market = new ExamplePredictionMarket(address(usdc), forwarder);
+        console.log("ExamplePredictionMarket deployed at:", address(market));
 
         SecretMarketplace sm = new SecretMarketplace(address(usdc), address(market), forwarder);
         console.log("SecretMarketplace deployed at:", address(sm));

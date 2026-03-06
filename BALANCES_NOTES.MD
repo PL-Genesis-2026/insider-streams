@@ -9,6 +9,8 @@ spent_on_wins this is the total amount the user has spent on won bids right? If 
 
 One type of balance we need to check, this is complex, but we need to consider funds earned by a seller when a buyer has won an auction they created, so if a private bid is one, that means we should increment the seller's balance by the same amount that we decrement the buyer's balance by. 
 
+Can you update the
+
 You can rename the secrets table to private_auction_data
 
 Check REST API docs for what statuses are actually available for private transfers and what they mean. Check e2e tests and the cre stuffs to see if something is wrong and/or needs to be updated
