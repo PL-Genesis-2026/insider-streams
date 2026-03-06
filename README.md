@@ -39,7 +39,7 @@ See [CRE Workflows README](cre-workflows/README.md) for details.
 cd contracts
 
 # Create a market
-SIMPLE_MARKET_ADDRESS=0xF9EDB9268E01301eE5Ccc985cDb3D825f05a4079 \
+SIMPLE_MARKET_ADDRESS=0x89F02f5a5162570F1a79C5C505b6CA78D13229e7 \
 QUESTION="The New York Yankees won the 2009 World Series." \
 forge script script/CreateMarket.s.sol --rpc-url $RPC_URL --broadcast
 ```
