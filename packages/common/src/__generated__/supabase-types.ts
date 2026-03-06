@@ -7,78 +7,11 @@ export type Json =
   | Json[]
 
 export type Database = {
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
-      deposits: {
-        Row: {
-          amount: number
-          created_at: string
-          credited_at: string | null
-          id: string
-          raw_data: Json | null
-          sender_address: string | null
-          status: string
-          token_address: string
-          transaction_id: string
-          updated_at: string
-          user_address: string | null
-        }
-        Insert: {
-          amount: number
-          created_at?: string
-          credited_at?: string | null
-          id?: string
-          raw_data?: Json | null
-          sender_address?: string | null
-          status?: string
-          token_address?: string
-          transaction_id: string
-          updated_at?: string
-          user_address?: string | null
-        }
-        Update: {
-          amount?: number
-          created_at?: string
-          credited_at?: string | null
-          id?: string
-          raw_data?: Json | null
-          sender_address?: string | null
-          status?: string
-          token_address?: string
-          transaction_id?: string
-          updated_at?: string
-          user_address?: string | null
-        }
-        Relationships: []
-      }
       private_bids: {
         Row: {
-          amount: number
+          amount: string
           auction_id: string
           bidder_address: string
           created_at: string
@@ -90,7 +23,7 @@ export type Database = {
           won_at: string | null
         }
         Insert: {
-          amount: number
+          amount: string
           auction_id: string
           bidder_address: string
           created_at?: string
@@ -102,7 +35,7 @@ export type Database = {
           won_at?: string | null
         }
         Update: {
-          amount?: number
+          amount?: string
           auction_id?: string
           bidder_address?: string
           created_at?: string
@@ -171,43 +104,52 @@ export type Database = {
       }
       transfers: {
         Row: {
-          amount: number
+          amount: string
           completed_at: string | null
           created_at: string
+          credited_at: string | null
           failed_reason: string | null
           id: string
+          raw_data: Json | null
           recipient_address: string | null
+          sender_address: string | null
           status: string
           token_address: string
-          transaction_id: string | null
+          transaction_id: string
           type: string
           updated_at: string
           user_address: string
         }
         Insert: {
-          amount: number
+          amount: string
           completed_at?: string | null
           created_at?: string
+          credited_at?: string | null
           failed_reason?: string | null
           id?: string
+          raw_data?: Json | null
           recipient_address?: string | null
+          sender_address?: string | null
           status?: string
           token_address?: string
-          transaction_id?: string | null
+          transaction_id: string
           type?: string
           updated_at?: string
           user_address: string
         }
         Update: {
-          amount?: number
+          amount?: string
           completed_at?: string | null
           created_at?: string
+          credited_at?: string | null
           failed_reason?: string | null
           id?: string
+          raw_data?: Json | null
           recipient_address?: string | null
+          sender_address?: string | null
           status?: string
           token_address?: string
-          transaction_id?: string | null
+          transaction_id?: string
           type?: string
           updated_at?: string
           user_address?: string
@@ -356,9 +298,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },

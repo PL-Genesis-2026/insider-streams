@@ -9,7 +9,8 @@
     "build:contracts": "cd contracts && forge build --via-ir",
     "test:contracts": "cd contracts && forge test --via-ir",
     "e2e": "pnpm --filter @private-streams/scripts e2e",
-    "wagmi": "pnpm --filter @private-streams/common wagmi"
+    "wagmi": "pnpm --filter @private-streams/common wagmi",
+    "generate:supabase-types": "./scripts/generate-supabase-types.sh"
   },
   "engines": {
     "node": ">=20.0.0",

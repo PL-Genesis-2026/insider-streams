@@ -471,8 +471,9 @@ async function main() {
     .in("bidder_address", [ownerAddr, bidderAddr]);
   await supabase.from("secrets").delete().eq("auction_id", testAuctionId);
   await supabase
-    .from("deposits")
+    .from("transfers")
     .delete()
+    .eq("type", "deposit")
     .in("user_address", [ownerAddr, bidderAddr]);
   console.log("  ok Cleaned up");
 
@@ -484,9 +485,10 @@ async function main() {
   // Record owner's deposit (simulates cron detecting private transfer to platform EOA)
   const ownerTxId = `test-deposit-owner-${Date.now()}`;
   const { data: ownerDeposit, error: ownerDepositErr } = await supabase
-    .from("deposits")
+    .from("transfers")
     .insert({
       transaction_id: ownerTxId,
+      type: "deposit",
       user_address: ownerAddr,
       sender_address: ownerAddr,
       amount: DEMO_AMOUNT,
@@ -504,9 +506,10 @@ async function main() {
   // Record bidder's deposit
   const bidderTxId = `test-deposit-bidder-${Date.now()}`;
   const { data: bidderDeposit, error: bidderDepositErr } = await supabase
-    .from("deposits")
+    .from("transfers")
     .insert({
       transaction_id: bidderTxId,
+      type: "deposit",
       user_address: bidderAddr,
       sender_address: bidderAddr,
       amount: DEMO_AMOUNT,
@@ -524,8 +527,9 @@ async function main() {
   );
 
   // Test idempotency: duplicate transaction_id should be rejected
-  const { error: dupDepositErr } = await supabase.from("deposits").insert({
+  const { error: dupDepositErr } = await supabase.from("transfers").insert({
     transaction_id: ownerTxId, // same tx_id — should fail
+    type: "deposit",
     user_address: ownerAddr,
     amount: DEMO_AMOUNT,
   });
@@ -541,8 +545,9 @@ async function main() {
   }
 
   // Test deposit amount constraint: zero/negative should fail
-  const { error: zeroDepositErr } = await supabase.from("deposits").insert({
+  const { error: zeroDepositErr } = await supabase.from("transfers").insert({
     transaction_id: `test-zero-${Date.now()}`,
+    type: "deposit",
     user_address: bidderAddr,
     amount: "0",
   });
@@ -553,7 +558,7 @@ async function main() {
     );
   } else {
     // Clean up
-    await supabase.from("deposits").delete().eq("amount", "0");
+    await supabase.from("transfers").delete().eq("amount", "0");
     throw new Error("Zero-amount deposit should have been rejected!");
   }
 
@@ -699,20 +704,21 @@ async function main() {
     throw new Error("Duplicate active bid should have been rejected!");
   }
 
-  // 13b: Invalid address format on deposits table should fail
-  const { error: addrErr } = await supabase.from("deposits").insert({
+  // 13b: Invalid address format on transfers table should fail
+  const { error: addrErr } = await supabase.from("transfers").insert({
     transaction_id: `test-addr-${Date.now()}`,
+    type: "deposit",
     user_address: "not-an-address",
     amount: "1000000000000000000",
     status: "confirmed",
   });
   if (addrErr) {
     console.log(
-      "  ok Invalid address rejected (deposits): " + addrErr.message.slice(0, 80),
+      "  ok Invalid address rejected (transfers): " + addrErr.message.slice(0, 80),
     );
   } else {
     await supabase
-      .from("deposits")
+      .from("transfers")
       .delete()
       .eq("user_address", "not-an-address");
     throw new Error("Invalid address should have been rejected!");
@@ -779,6 +785,7 @@ async function main() {
   const { data: withdrawalRow, error: withdrawInsertErr } = await supabase
     .from("transfers")
     .insert({
+      transaction_id: `test-withdrawal-${Date.now()}`,
       user_address: bidderAddr,
       amount: withdrawAmount,
       recipient_address: bidderAddr,
@@ -848,8 +855,9 @@ async function main() {
     .in("bidder_address", [ownerAddr, bidderAddr]);
   await supabase.from("secrets").delete().eq("auction_id", testAuctionId);
   await supabase
-    .from("deposits")
+    .from("transfers")
     .delete()
+    .eq("type", "deposit")
     .in("user_address", [ownerAddr, bidderAddr]);
   console.log("  ok All test data cleaned up");
 
@@ -879,7 +887,7 @@ async function main() {
   console.log("    [x] Place private bid (view auto-locks)");
   console.log("    [x] Outbid (view auto-releases + locks)");
   console.log("    [x] Constraint: duplicate active bid rejected");
-  console.log("    [x] Constraint: invalid address rejected (deposits)");
+  console.log("    [x] Constraint: invalid address rejected (transfers)");
   console.log("    [x] Overdraw check (app-level via view read)");
   console.log("    [x] Force-close refund (view auto-releases)");
   console.log("    [x] Withdrawal lifecycle (view auto-tracks pending)");
