@@ -2,4 +2,3 @@ packages:
   - "apps/*"
   - "packages/*"
   - "scripts"
-  - "contracts/api-scripts"

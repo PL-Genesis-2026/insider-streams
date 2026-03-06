@@ -79,6 +79,8 @@ if updated != content:
     ! -path '*/.git/*' \
     ! -path '*/__generated__/*' \
     ! -path '*/generated/*' \
+    ! -name 'pnpm-lock.yaml' \
+    ! -name '*.lock' \
     2>/dev/null)
 
   if [ $COUNT -eq 0 ]; then
@@ -112,8 +114,8 @@ deploy_contract() {
   local NEW_ADDR
   NEW_ADDR=$(echo "$OUTPUT" | grep -oE "deployed at: 0x[0-9a-fA-F]{40}" | head -1 | grep -oE "0x[0-9a-fA-F]{40}")
 
-  if [ -z "$NEW_ADDR" ]; then
-    echo -e "  ${RED}ERROR: Could not parse deployed address from forge output${NC}" >&2
+  if [ -z "$NEW_ADDR" ] || [[ ! "$NEW_ADDR" =~ ^0x[0-9a-fA-F]{40}$ ]]; then
+    echo -e "  ${RED}ERROR: Could not parse a valid address from forge output${NC}" >&2
     echo "$OUTPUT" | tail -20 >&2
     return 1
   fi

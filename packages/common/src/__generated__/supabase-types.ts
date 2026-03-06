@@ -7,105 +7,8 @@ export type Json =
   | Json[]
 
 export type Database = {
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
-      balances: {
-        Row: {
-          available_balance: string
-          created_at: string
-          id: string
-          locked_balance: string
-          pending_withdrawal: string
-          updated_at: string
-          user_address: string
-        }
-        Insert: {
-          available_balance?: string
-          created_at?: string
-          id?: string
-          locked_balance?: string
-          pending_withdrawal?: string
-          updated_at?: string
-          user_address: string
-        }
-        Update: {
-          available_balance?: string
-          created_at?: string
-          id?: string
-          locked_balance?: string
-          pending_withdrawal?: string
-          updated_at?: string
-          user_address?: string
-        }
-        Relationships: []
-      }
-      deposits: {
-        Row: {
-          amount: string
-          created_at: string
-          credited_at: string | null
-          id: string
-          raw_data: Json | null
-          sender_address: string | null
-          status: string
-          token_address: string
-          transaction_id: string
-          updated_at: string
-          user_address: string | null
-        }
-        Insert: {
-          amount: string
-          created_at?: string
-          credited_at?: string | null
-          id?: string
-          raw_data?: Json | null
-          sender_address?: string | null
-          status?: string
-          token_address?: string
-          transaction_id: string
-          updated_at?: string
-          user_address?: string | null
-        }
-        Update: {
-          amount?: string
-          created_at?: string
-          credited_at?: string | null
-          id?: string
-          raw_data?: Json | null
-          sender_address?: string | null
-          status?: string
-          token_address?: string
-          transaction_id?: string
-          updated_at?: string
-          user_address?: string | null
-        }
-        Relationships: []
-      }
       private_bids: {
         Row: {
           amount: string
@@ -145,56 +48,14 @@ export type Database = {
         }
         Relationships: []
       }
-      private_withdrawals: {
-        Row: {
-          amount: string
-          completed_at: string | null
-          created_at: string
-          failed_reason: string | null
-          id: string
-          recipient_address: string | null
-          status: string
-          token_address: string
-          transfer_tx_id: string | null
-          updated_at: string
-          user_address: string
-        }
-        Insert: {
-          amount: string
-          completed_at?: string | null
-          created_at?: string
-          failed_reason?: string | null
-          id?: string
-          recipient_address?: string | null
-          status?: string
-          token_address?: string
-          transfer_tx_id?: string | null
-          updated_at?: string
-          user_address: string
-        }
-        Update: {
-          amount?: string
-          completed_at?: string | null
-          created_at?: string
-          failed_reason?: string | null
-          id?: string
-          recipient_address?: string | null
-          status?: string
-          token_address?: string
-          transfer_tx_id?: string | null
-          updated_at?: string
-          user_address?: string
-        }
-        Relationships: []
-      }
       secrets: {
         Row: {
           auction_id: string
           buyer: string | null
           created_at: string
+          event_data: Json | null
           id: string
-          market_data: Json | null
-          secret_data: Json
+          secret_data: string
           seller: string
           updated_at: string
         }
@@ -202,9 +63,9 @@ export type Database = {
           auction_id: string
           buyer?: string | null
           created_at?: string
+          event_data?: Json | null
           id?: string
-          market_data?: Json | null
-          secret_data: Json
+          secret_data: string
           seller: string
           updated_at?: string
         }
@@ -212,20 +73,115 @@ export type Database = {
           auction_id?: string
           buyer?: string | null
           created_at?: string
+          event_data?: Json | null
           id?: string
-          market_data?: Json | null
-          secret_data?: Json
+          secret_data?: string
           seller?: string
           updated_at?: string
         }
         Relationships: []
       }
+      sellers: {
+        Row: {
+          address: string
+          created_at: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          address: string
+          created_at?: string
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      transfers: {
+        Row: {
+          amount: string
+          completed_at: string | null
+          created_at: string
+          credited_at: string | null
+          failed_reason: string | null
+          id: string
+          raw_data: Json | null
+          recipient_address: string | null
+          sender_address: string | null
+          status: string
+          token_address: string
+          transaction_id: string
+          type: string
+          updated_at: string
+          user_address: string
+        }
+        Insert: {
+          amount: string
+          completed_at?: string | null
+          created_at?: string
+          credited_at?: string | null
+          failed_reason?: string | null
+          id?: string
+          raw_data?: Json | null
+          recipient_address?: string | null
+          sender_address?: string | null
+          status?: string
+          token_address?: string
+          transaction_id: string
+          type?: string
+          updated_at?: string
+          user_address: string
+        }
+        Update: {
+          amount?: string
+          completed_at?: string | null
+          created_at?: string
+          credited_at?: string | null
+          failed_reason?: string | null
+          id?: string
+          raw_data?: Json | null
+          recipient_address?: string | null
+          sender_address?: string | null
+          status?: string
+          token_address?: string
+          transaction_id?: string
+          type?: string
+          updated_at?: string
+          user_address?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
-      [_ in never]: never
+      balances: {
+        Row: {
+          available_balance: string | null
+          locked_balance: string | null
+          pending_withdrawal: string | null
+          user_address: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
-      [_ in never]: never
+      json_matches_schema: {
+        Args: { instance: Json; schema: Json }
+        Returns: boolean
+      }
+      jsonb_matches_schema: {
+        Args: { instance: Json; schema: Json }
+        Returns: boolean
+      }
+      jsonschema_is_valid: { Args: { schema: Json }; Returns: boolean }
+      jsonschema_validation_errors: {
+        Args: { instance: Json; schema: Json }
+        Returns: string[]
+      }
     }
     Enums: {
       [_ in never]: never
@@ -354,9 +310,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },

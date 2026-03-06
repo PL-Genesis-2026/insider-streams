@@ -1,0 +1,8 @@
+{
+  "platformEoaAddress": "0x6B789D957B87c12F30b48E9bFc58678c2f76f1c5",
+  "tokenAddress": "0xB308Ef20527c5215ec2B2B10F52b311f3AAc6EEB",
+  "privateTokenApiUrl": "https://convergence2026-token-api.cldev.cloud",
+  "supabaseUrl": "https://jeyudbkttazpifxvzqvq.supabase.co",
+  "transactionLimit": "100",
+  "chainSelectorName": "ethereum-testnet-sepolia"
+}
