@@ -1481,7 +1481,7 @@ export type AuctionDetailSubgraphQueryVariables = Exact<{
 }>;
 
 
-export type AuctionDetailSubgraphQuery = { __typename?: 'Query', createdAuction: Array<{ __typename?: 'AuctionCreated', auctionId: any, seller: any, reservePrice: any, endTime: any, externalMarketId: any, blockTimestamp: any }>, bids: Array<{ __typename?: 'BidPlaced', bidder: any, amount: any, blockTimestamp: any, transactionHash: any }>, closedAuction: Array<{ __typename?: 'AuctionClosed', buyer: any, winningBid: any, blockTimestamp: any }>, forceClosedAuction: Array<{ __typename?: 'AuctionForceClosed', refundedBidder: any, refundAmount: any, reputationDelta: number, blockTimestamp: any }>, tradeExecuted: Array<{ __typename?: 'TradeExecuted', buyer: any, amount: any, blockTimestamp: any }>, reputationUpdates: Array<{ __typename?: 'ReputationUpdated', delta: number, newScore: any, blockTimestamp: any }> };
+export type AuctionDetailSubgraphQuery = { __typename?: 'Query', createdAuction: Array<{ __typename?: 'AuctionCreated', auctionId: string, seller: string, reservePrice: string, endTime: string, externalMarketId: string, blockTimestamp: string }>, bids: Array<{ __typename?: 'BidPlaced', bidder: string, amount: string, blockTimestamp: string, transactionHash: string }>, closedAuction: Array<{ __typename?: 'AuctionClosed', buyer: string, winningBid: string, blockTimestamp: string }>, forceClosedAuction: Array<{ __typename?: 'AuctionForceClosed', refundedBidder: string, refundAmount: string, reputationDelta: number, blockTimestamp: string }>, tradeExecuted: Array<{ __typename?: 'TradeExecuted', buyer: string, amount: string, blockTimestamp: string }>, reputationUpdates: Array<{ __typename?: 'ReputationUpdated', delta: number, newScore: string, blockTimestamp: string }> };
 
 export type RecentAuctionsQueryVariables = Exact<{ [key: string]: never; }>;
 
@@ -1495,21 +1495,21 @@ export type HomepageAuctionListsQueryVariables = Exact<{
 }>;
 
 
-export type HomepageAuctionListsQuery = { __typename?: 'Query', openAuctions: Array<{ __typename?: 'AuctionCreated', id: any, auctionId: any, seller: any, reservePrice: any, endTime: any, externalMarketId: any, blockTimestamp: any, transactionHash: any }>, closedAuctions: Array<{ __typename?: 'AuctionClosed', id: any, auctionId: any, seller: any, buyer: any, winningBid: any, externalMarketId: any, blockTimestamp: any, transactionHash: any }> };
+export type HomepageAuctionListsQuery = { __typename?: 'Query', openAuctions: Array<{ __typename?: 'AuctionCreated', id: string, auctionId: string, seller: string, reservePrice: string, endTime: string, externalMarketId: string, blockTimestamp: string, transactionHash: string }>, closedAuctions: Array<{ __typename?: 'AuctionClosed', id: string, auctionId: string, seller: string, buyer: string, winningBid: string, externalMarketId: string, blockTimestamp: string, transactionHash: string }> };
 
 export type HomepageClosedAuctionReferencesQueryVariables = Exact<{
   auctionIds?: InputMaybe<Array<Scalars['BigInt']['input']> | Scalars['BigInt']['input']>;
 }>;
 
 
-export type HomepageClosedAuctionReferencesQuery = { __typename?: 'Query', referenceAuctions: Array<{ __typename?: 'AuctionCreated', id: any, auctionId: any, seller: any, reservePrice: any, endTime: any, externalMarketId: any, blockTimestamp: any, transactionHash: any }> };
+export type HomepageClosedAuctionReferencesQuery = { __typename?: 'Query', referenceAuctions: Array<{ __typename?: 'AuctionCreated', id: string, auctionId: string, seller: string, reservePrice: string, endTime: string, externalMarketId: string, blockTimestamp: string, transactionHash: string }> };
 
 export type HomepageLatestBidQueryVariables = Exact<{
   auctionId: Scalars['BigInt']['input'];
 }>;
 
 
-export type HomepageLatestBidQuery = { __typename?: 'Query', bidPlaceds: Array<{ __typename?: 'BidPlaced', id: any, auctionId: any, amount: any }> };
+export type HomepageLatestBidQuery = { __typename?: 'Query', bidPlaceds: Array<{ __typename?: 'BidPlaced', id: string, auctionId: string, amount: string }> };
 
 
 export const AuctionDetailSubgraphDocument = gql`
