@@ -43,7 +43,7 @@ echo "  Done."
 echo ""
 echo "▶ Step 4: Copying ABIs to frontend apps..."
 
-CONTRACTS=("SecretMarketplace.sol/SecretMarketplace.json" "SimpleMarket.sol/SimpleMarket.json" "MockUSDC.sol/MockUSDC.json")
+CONTRACTS=("SecretMarketplace.sol/SecretMarketplace.json" "ExamplePredictionMarket.sol/ExamplePredictionMarket.json" "MockUSDC.sol/MockUSDC.json")
 FRONTENDS=("insider-streams-frontend" "prediction-market-frontend")
 
 for frontend in "${FRONTENDS[@]}"; do

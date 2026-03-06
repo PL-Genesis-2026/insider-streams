@@ -2,9 +2,9 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
-import {SimpleMarket} from "../src/SimpleMarket.sol";
+import {ExamplePredictionMarket} from "../src/ExamplePredictionMarket.sol";
 
-contract DeploySimpleMarket is Script {
+contract DeployExamplePredictionMarket is Script {
     function run() external {
         address token = vm.envAddress("PAYMENT_TOKEN");
         address forwarder = vm.envAddress("CRE_FORWARDER_ADDRESS");
@@ -12,8 +12,8 @@ contract DeploySimpleMarket is Script {
 
         vm.startBroadcast(deployerPk);
 
-        SimpleMarket market = new SimpleMarket(token, forwarder);
-        console.log("SimpleMarket deployed at:", address(market));
+        ExamplePredictionMarket market = new ExamplePredictionMarket(token, forwarder);
+        console.log("ExamplePredictionMarket deployed at:", address(market));
 
         vm.stopBroadcast();
     }

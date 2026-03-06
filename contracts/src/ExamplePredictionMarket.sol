@@ -4,12 +4,12 @@ pragma solidity ^0.8.20;
 import {ReceiverTemplate} from "./interfaces/ReceiverTemplate.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {ShareToken} from "./ShareToken.sol";
+import {ExamplePredictionMarketShareToken} from "./ExamplePredictionMarketShareToken.sol";
 
-/// @title SimpleMarket
+/// @title ExamplePredictionMarket
 /// @notice Binary prediction market with constant-product AMM and YES/NO ERC-20 share tokens.
 /// @dev Integrates with Chainlink Runtime Environment (CRE) through ReceiverTemplate.
-contract SimpleMarket is ReceiverTemplate {
+contract ExamplePredictionMarket is ReceiverTemplate {
     using SafeERC20 for IERC20;
 
     // ===========================
@@ -94,8 +94,8 @@ contract SimpleMarket is ReceiverTemplate {
         uint256 settledAt;
         string evidenceURI;
         uint16 confidenceBps;
-        ShareToken yesToken;
-        ShareToken noToken;
+        ExamplePredictionMarketShareToken yesToken;
+        ExamplePredictionMarketShareToken noToken;
         uint256 yesReserve;
         uint256 noReserve;
         bool liquidityWithdrawn;
@@ -136,11 +136,11 @@ contract SimpleMarket is ReceiverTemplate {
 
         // Deploy YES/NO share tokens
         string memory idStr = _uint2str(marketId);
-        m.yesToken = new ShareToken(
+        m.yesToken = new ExamplePredictionMarketShareToken(
             string.concat("YES-", idStr),
             string.concat("YES-", idStr)
         );
-        m.noToken = new ShareToken(
+        m.noToken = new ExamplePredictionMarketShareToken(
             string.concat("NO-", idStr),
             string.concat("NO-", idStr)
         );
@@ -219,7 +219,7 @@ contract SimpleMarket is ReceiverTemplate {
         if (m.status != Status.Settled) revert NotSettledYet(m.status);
         if (amount == 0) revert AmountZero();
 
-        ShareToken winningToken = m.outcome == Outcome.Yes ? m.yesToken : m.noToken;
+        ExamplePredictionMarketShareToken winningToken = m.outcome == Outcome.Yes ? m.yesToken : m.noToken;
         winningToken.burn(msg.sender, amount);
         paymentToken.safeTransfer(msg.sender, amount);
 
@@ -238,7 +238,7 @@ contract SimpleMarket is ReceiverTemplate {
 
         // The pool holds both YES and NO reserve tokens. After settlement only the
         // winning side's tokens have value (1 winning token = 1 USDC).
-        ShareToken winningToken = m.outcome == Outcome.Yes ? m.yesToken : m.noToken;
+        ExamplePredictionMarketShareToken winningToken = m.outcome == Outcome.Yes ? m.yesToken : m.noToken;
         uint256 poolWinningBalance = winningToken.balanceOf(address(this));
 
         if (poolWinningBalance > 0) {
