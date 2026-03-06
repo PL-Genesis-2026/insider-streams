@@ -1475,12 +1475,111 @@ export enum _SubgraphErrorPolicy_ {
   Deny = 'deny'
 }
 
+export type AuctionDetailSubgraphQueryVariables = Exact<{
+  auctionId: Scalars['BigInt']['input'];
+  bidLimit: Scalars['Int']['input'];
+}>;
+
+
+export type AuctionDetailSubgraphQuery = { __typename?: 'Query', createdAuction: Array<{ __typename?: 'AuctionCreated', auctionId: any, seller: any, reservePrice: any, endTime: any, externalMarketId: any, blockTimestamp: any }>, bids: Array<{ __typename?: 'BidPlaced', bidder: any, amount: any, blockTimestamp: any, transactionHash: any }>, closedAuction: Array<{ __typename?: 'AuctionClosed', buyer: any, winningBid: any, blockTimestamp: any }>, forceClosedAuction: Array<{ __typename?: 'AuctionForceClosed', refundedBidder: any, refundAmount: any, reputationDelta: number, blockTimestamp: any }>, tradeExecuted: Array<{ __typename?: 'TradeExecuted', buyer: any, amount: any, blockTimestamp: any }>, reputationUpdates: Array<{ __typename?: 'ReputationUpdated', delta: number, newScore: any, blockTimestamp: any }> };
+
 export type RecentAuctionsQueryVariables = Exact<{ [key: string]: never; }>;
 
 
 export type RecentAuctionsQuery = { __typename?: 'Query', auctionCreateds: Array<{ __typename?: 'AuctionCreated', id: any, auctionId: any, seller: any, reservePrice: any, endTime: any, blockTimestamp: any, transactionHash: any }>, bidPlaceds: Array<{ __typename?: 'BidPlaced', id: any, auctionId: any, bidder: any, amount: any, blockTimestamp: any }> };
 
+export type HomepageAuctionListsQueryVariables = Exact<{
+  currentTimestamp: Scalars['BigInt']['input'];
+  openLimit: Scalars['Int']['input'];
+  closedLimit: Scalars['Int']['input'];
+}>;
 
+
+export type HomepageAuctionListsQuery = { __typename?: 'Query', openAuctions: Array<{ __typename?: 'AuctionCreated', id: any, auctionId: any, seller: any, reservePrice: any, endTime: any, externalMarketId: any, blockTimestamp: any, transactionHash: any }>, closedAuctions: Array<{ __typename?: 'AuctionClosed', id: any, auctionId: any, seller: any, buyer: any, winningBid: any, externalMarketId: any, blockTimestamp: any, transactionHash: any }> };
+
+export type HomepageClosedAuctionReferencesQueryVariables = Exact<{
+  auctionIds?: InputMaybe<Array<Scalars['BigInt']['input']> | Scalars['BigInt']['input']>;
+}>;
+
+
+export type HomepageClosedAuctionReferencesQuery = { __typename?: 'Query', referenceAuctions: Array<{ __typename?: 'AuctionCreated', id: any, auctionId: any, seller: any, reservePrice: any, endTime: any, externalMarketId: any, blockTimestamp: any, transactionHash: any }> };
+
+export type HomepageLatestBidQueryVariables = Exact<{
+  auctionId: Scalars['BigInt']['input'];
+}>;
+
+
+export type HomepageLatestBidQuery = { __typename?: 'Query', bidPlaceds: Array<{ __typename?: 'BidPlaced', id: any, auctionId: any, amount: any }> };
+
+
+export const AuctionDetailSubgraphDocument = gql`
+    query AuctionDetailSubgraph($auctionId: BigInt!, $bidLimit: Int!) {
+  createdAuction: auctionCreateds(
+    first: 1
+    orderBy: blockTimestamp
+    orderDirection: desc
+    where: {auctionId: $auctionId}
+  ) {
+    auctionId
+    seller
+    reservePrice
+    endTime
+    externalMarketId
+    blockTimestamp
+  }
+  bids: bidPlaceds(
+    first: $bidLimit
+    orderBy: blockTimestamp
+    orderDirection: desc
+    where: {auctionId: $auctionId}
+  ) {
+    bidder
+    amount
+    blockTimestamp
+    transactionHash
+  }
+  closedAuction: auctionCloseds(
+    first: 1
+    orderBy: blockTimestamp
+    orderDirection: desc
+    where: {auctionId: $auctionId}
+  ) {
+    buyer
+    winningBid
+    blockTimestamp
+  }
+  forceClosedAuction: auctionForceCloseds(
+    first: 1
+    orderBy: blockTimestamp
+    orderDirection: desc
+    where: {auctionId: $auctionId}
+  ) {
+    refundedBidder
+    refundAmount
+    reputationDelta
+    blockTimestamp
+  }
+  tradeExecuted: tradeExecuteds(
+    first: 1
+    orderBy: blockTimestamp
+    orderDirection: desc
+    where: {auctionId: $auctionId}
+  ) {
+    buyer
+    amount
+    blockTimestamp
+  }
+  reputationUpdates: reputationUpdateds(
+    orderBy: blockTimestamp
+    orderDirection: desc
+    where: {auctionId: $auctionId}
+  ) {
+    delta
+    newScore
+    blockTimestamp
+  }
+}
+    `;
 export const RecentAuctionsDocument = gql`
     query RecentAuctions {
   auctionCreateds(first: 5, orderBy: blockTimestamp, orderDirection: desc) {
@@ -1501,6 +1600,67 @@ export const RecentAuctionsDocument = gql`
   }
 }
     `;
+export const HomepageAuctionListsDocument = gql`
+    query HomepageAuctionLists($currentTimestamp: BigInt!, $openLimit: Int!, $closedLimit: Int!) {
+  openAuctions: auctionCreateds(
+    first: $openLimit
+    orderBy: endTime
+    orderDirection: asc
+    where: {endTime_gt: $currentTimestamp}
+  ) {
+    id
+    auctionId
+    seller
+    reservePrice
+    endTime
+    externalMarketId
+    blockTimestamp
+    transactionHash
+  }
+  closedAuctions: auctionCloseds(
+    first: $closedLimit
+    orderBy: blockTimestamp
+    orderDirection: desc
+  ) {
+    id
+    auctionId
+    seller
+    buyer
+    winningBid
+    externalMarketId
+    blockTimestamp
+    transactionHash
+  }
+}
+    `;
+export const HomepageClosedAuctionReferencesDocument = gql`
+    query HomepageClosedAuctionReferences($auctionIds: [BigInt!]) {
+  referenceAuctions: auctionCreateds(where: {auctionId_in: $auctionIds}) {
+    id
+    auctionId
+    seller
+    reservePrice
+    endTime
+    externalMarketId
+    blockTimestamp
+    transactionHash
+  }
+}
+    `;
+export const HomepageLatestBidDocument = gql`
+    query HomepageLatestBid($auctionId: BigInt!) {
+  bidPlaceds(
+    first: 1
+    orderBy: blockTimestamp
+    orderDirection: desc
+    where: {auctionId: $auctionId}
+  ) {
+    id
+    auctionId
+    amount
+  }
+}
+    `;
 
 export type SdkFunctionWrapper = <T>(action: (requestHeaders?:Record<string, string>) => Promise<T>, operationName: string, operationType?: string, variables?: any) => Promise<T>;
 
@@ -1509,8 +1669,20 @@ const defaultWrapper: SdkFunctionWrapper = (action, _operationName, _operationTy
 
 export function getSdk(client: GraphQLClient, withWrapper: SdkFunctionWrapper = defaultWrapper) {
   return {
+    AuctionDetailSubgraph(variables: AuctionDetailSubgraphQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<AuctionDetailSubgraphQuery> {
+      return withWrapper((wrappedRequestHeaders) => client.request<AuctionDetailSubgraphQuery>({ document: AuctionDetailSubgraphDocument, variables, requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders }, signal }), 'AuctionDetailSubgraph', 'query', variables);
+    },
     RecentAuctions(variables?: RecentAuctionsQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<RecentAuctionsQuery> {
       return withWrapper((wrappedRequestHeaders) => client.request<RecentAuctionsQuery>({ document: RecentAuctionsDocument, variables, requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders }, signal }), 'RecentAuctions', 'query', variables);
+    },
+    HomepageAuctionLists(variables: HomepageAuctionListsQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<HomepageAuctionListsQuery> {
+      return withWrapper((wrappedRequestHeaders) => client.request<HomepageAuctionListsQuery>({ document: HomepageAuctionListsDocument, variables, requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders }, signal }), 'HomepageAuctionLists', 'query', variables);
+    },
+    HomepageClosedAuctionReferences(variables?: HomepageClosedAuctionReferencesQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<HomepageClosedAuctionReferencesQuery> {
+      return withWrapper((wrappedRequestHeaders) => client.request<HomepageClosedAuctionReferencesQuery>({ document: HomepageClosedAuctionReferencesDocument, variables, requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders }, signal }), 'HomepageClosedAuctionReferences', 'query', variables);
+    },
+    HomepageLatestBid(variables: HomepageLatestBidQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<HomepageLatestBidQuery> {
+      return withWrapper((wrappedRequestHeaders) => client.request<HomepageLatestBidQuery>({ document: HomepageLatestBidDocument, variables, requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders }, signal }), 'HomepageLatestBid', 'query', variables);
     }
   };
 }
