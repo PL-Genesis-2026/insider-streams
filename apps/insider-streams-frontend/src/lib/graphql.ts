@@ -8,7 +8,7 @@ import { GraphQLClient } from "graphql-request";
 
 const SUBGRAPH_URL =
   process.env.NEXT_PUBLIC_SUBGRAPH_URL ??
-  "https://gateway.thegraph.com/api/subgraphs/id/GiEXREmvxbqNfQ3VxnhjKypYRNvEaeVjtAWncPHzPiuj";
+  "https://api.studio.thegraph.com/query/1743303/insider-streams/version/latest";
 
 // Apollo Client — for React Server Components (query, PreloadQuery)
 export const { getClient, query, PreloadQuery } = registerApolloClient(() => {

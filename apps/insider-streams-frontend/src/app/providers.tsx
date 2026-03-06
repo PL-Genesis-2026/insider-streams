@@ -9,7 +9,7 @@ import {
 
 const SUBGRAPH_URL =
   process.env.NEXT_PUBLIC_SUBGRAPH_URL ??
-  "https://gateway.thegraph.com/api/subgraphs/id/GiEXREmvxbqNfQ3VxnhjKypYRNvEaeVjtAWncPHzPiuj";
+  "https://api.studio.thegraph.com/query/1743303/insider-streams/version/latest";
 
 function makeClient() {
   return new ApolloClient({
