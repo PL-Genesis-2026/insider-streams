@@ -3,7 +3,7 @@ import {
   type Runtime,
   getNetwork,
   encodeCallMsg,
-  LAST_FINALIZED_BLOCK_NUMBER,
+  LATEST_BLOCK_NUMBER,
   bytesToHex,
 } from "@chainlink/cre-sdk";
 import { encodeFunctionData, decodeFunctionResult } from "viem";
@@ -51,7 +51,7 @@ export function findExpiredAuctions(
         to: cfg.secretMarketplaceAddress as `0x${string}`,
         data: openAuctionsCallData,
       }),
-      blockNumber: LAST_FINALIZED_BLOCK_NUMBER,
+      blockNumber: LATEST_BLOCK_NUMBER,
     })
     .result();
 
@@ -82,7 +82,7 @@ export function findExpiredAuctions(
           to: cfg.secretMarketplaceAddress as `0x${string}`,
           data: auctionCallData,
         }),
-        blockNumber: LAST_FINALIZED_BLOCK_NUMBER,
+        blockNumber: LATEST_BLOCK_NUMBER,
       })
       .result();
 
