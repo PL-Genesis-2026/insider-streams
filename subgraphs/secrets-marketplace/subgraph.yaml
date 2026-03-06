@@ -8,7 +8,7 @@ dataSources:
     name: SecretMarketplace
     network: sepolia
     source:
-      address: "0xda55F6bc945CCA8A92e938c05bba58B934892a3c"
+      address: "0x197D1150858Ce0c125B69E02D80790D7e7b017f1"
       abi: SecretMarketplace
       startBlock: 10391293
 
