@@ -6,10 +6,12 @@ import {
   ExpectedAuthorUpdated as ExpectedAuthorUpdatedEvent,
   ExpectedWorkflowIdUpdated as ExpectedWorkflowIdUpdatedEvent,
   ExpectedWorkflowNameUpdated as ExpectedWorkflowNameUpdatedEvent,
+  ExternalMarketResolved as ExternalMarketResolvedEvent,
   ForwarderAddressUpdated as ForwarderAddressUpdatedEvent,
   OwnershipTransferred as OwnershipTransferredEvent,
   ReputationUpdated as ReputationUpdatedEvent,
   SecurityWarning as SecurityWarningEvent,
+  SellerRegistered as SellerRegisteredEvent,
   TradeExecuted as TradeExecutedEvent
 } from "../generated/SecretMarketplace/SecretMarketplace"
 import {
@@ -20,10 +22,12 @@ import {
   ExpectedAuthorUpdated,
   ExpectedWorkflowIdUpdated,
   ExpectedWorkflowNameUpdated,
+  ExternalMarketResolved,
   ForwarderAddressUpdated,
   OwnershipTransferred,
   ReputationUpdated,
   SecurityWarning,
+  SellerRegistered,
   TradeExecuted
 } from "../generated/schema"
 
@@ -53,6 +57,7 @@ export function handleAuctionCreated(event: AuctionCreatedEvent): void {
   entity.externalMarketId = event.params.externalMarketId
   entity.reservePrice = event.params.reservePrice
   entity.endTime = event.params.endTime
+  entity.betOnYes = event.params.betOnYes
 
   entity.blockNumber = event.block.number
   entity.blockTimestamp = event.block.timestamp
@@ -85,7 +90,8 @@ export function handleBidPlaced(event: BidPlacedEvent): void {
   )
   entity.auctionId = event.params.auctionId
   entity.bidder = event.params.bidder
-  entity.amount = event.params.amount
+  entity.bidAmount = event.params.bidAmount
+  entity.automaticBetAmount = event.params.automaticBetAmount
   entity.previousBidder = event.params.previousBidder
   entity.previousBid = event.params.previousBid
 
@@ -136,6 +142,23 @@ export function handleExpectedWorkflowNameUpdated(
   )
   entity.previousName = event.params.previousName
   entity.newName = event.params.newName
+
+  entity.blockNumber = event.block.number
+  entity.blockTimestamp = event.block.timestamp
+  entity.transactionHash = event.transaction.hash
+
+  entity.save()
+}
+
+export function handleExternalMarketResolved(
+  event: ExternalMarketResolvedEvent
+): void {
+  let entity = new ExternalMarketResolved(
+    event.transaction.hash.concatI32(event.logIndex.toI32())
+  )
+  entity.externalMarketId = event.params.externalMarketId
+  entity.outcome = event.params.outcome
+  entity.auctionsAffected = event.params.auctionsAffected
 
   entity.blockNumber = event.block.number
   entity.blockTimestamp = event.block.timestamp
@@ -205,6 +228,20 @@ export function handleSecurityWarning(event: SecurityWarningEvent): void {
   entity.save()
 }
 
+export function handleSellerRegistered(event: SellerRegisteredEvent): void {
+  let entity = new SellerRegistered(
+    event.transaction.hash.concatI32(event.logIndex.toI32())
+  )
+  entity.seller = event.params.seller
+  entity.name = event.params.name
+
+  entity.blockNumber = event.block.number
+  entity.blockTimestamp = event.block.timestamp
+  entity.transactionHash = event.transaction.hash
+
+  entity.save()
+}
+
 export function handleTradeExecuted(event: TradeExecutedEvent): void {
   let entity = new TradeExecuted(
     event.transaction.hash.concatI32(event.logIndex.toI32())
@@ -212,7 +249,8 @@ export function handleTradeExecuted(event: TradeExecutedEvent): void {
   entity.auctionId = event.params.auctionId
   entity.externalMarketId = event.params.externalMarketId
   entity.buyer = event.params.buyer
-  entity.amount = event.params.amount
+  entity.automaticBetAmount = event.params.automaticBetAmount
+  entity.betOnYes = event.params.betOnYes
 
   entity.blockNumber = event.block.number
   entity.blockTimestamp = event.block.timestamp

@@ -19,7 +19,7 @@ query AuctionDetailSubgraph($auctionId: BigInt!, $bidLimit: Int!) {
     where: { auctionId: $auctionId }
   ) {
     bidder
-    amount
+    bidAmount
     blockTimestamp
     transactionHash
   }
@@ -55,7 +55,7 @@ query AuctionDetailSubgraph($auctionId: BigInt!, $bidLimit: Int!) {
     where: { auctionId: $auctionId }
   ) {
     buyer
-    amount
+    automaticBetAmount
     blockTimestamp
   }
   reputationUpdates: reputationUpdateds(

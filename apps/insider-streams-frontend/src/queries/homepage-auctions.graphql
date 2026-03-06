@@ -56,6 +56,6 @@ query HomepageLatestBid($auctionId: BigInt!) {
   ) {
     id
     auctionId
-    amount
+    bidAmount
   }
 }

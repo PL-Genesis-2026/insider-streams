@@ -31,7 +31,7 @@ echo "════════════════════════�
 echo ""
 echo "▶ Step 1: Compiling contracts..."
 cd "$SCRIPT_DIR/contracts"
-forge build --via-ir
+forge build --via-ir --skip SetupAll DeployPolicyEngine
 echo "  Done."
 
 # ─── Step 2: Generate TypeScript types via wagmi ──────────────────────────────
@@ -39,7 +39,7 @@ echo ""
 echo "▶ Step 2: Generating TypeScript types (wagmi)..."
 cd "$SCRIPT_DIR"
 pnpm wagmi
-echo "  Done. Output: packages/common/src/generated.ts"
+echo "  Done. Output: packages/common/src/__generated__/contract-types.ts"
 
 # ─── Step 3: pnpm install ────────────────────────────────────────────────────
 echo ""
@@ -121,7 +121,7 @@ echo ""
 echo "═══════════════════════════════════════════════════════"
 echo "  Done — Contract types regenerated"
 echo "═══════════════════════════════════════════════════════"
-echo "  TypeScript:  packages/common/src/generated.ts"
+echo "  TypeScript:  packages/common/src/__generated__/contract-types.ts"
 echo "  Subgraph:    subgraphs/secrets-marketplace/abis/"
 echo "  Frontends:   apps/*/src/abis/"
 echo "═══════════════════════════════════════════════════════"
