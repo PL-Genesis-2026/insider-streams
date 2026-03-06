@@ -16,10 +16,12 @@ importers:
       '@apollo/client-integration-nextjs':
         specifier: ^0.14.4
         version: 0.14.4(@apollo/client@4.1.6(graphql-ws@6.0.7(graphql@16.13.1)(ws@8.18.3))(graphql@16.13.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(rxjs@7.8.2))(@types/react@19.2.14)(graphql@16.13.1)(next@16.1.6(@babel/core@7.29.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(rxjs@7.8.2)
-<<<<<<< HEAD
       '@base-ui/react':
         specifier: ^1.2.0
         version: 1.2.0(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@graphql-typed-document-node/core':
+        specifier: ^3.2.0
+        version: 3.2.0(graphql@16.13.1)
       '@hookform/resolvers':
         specifier: ^5.2.2
         version: 5.2.2(react-hook-form@7.71.2(react@19.2.4))
@@ -47,29 +49,21 @@ importers:
       embla-carousel-react:
         specifier: ^8.6.0
         version: 8.6.0(react@19.2.4)
-=======
-      '@graphql-typed-document-node/core':
-        specifier: ^3.2.0
-        version: 3.2.0(graphql@16.13.1)
->>>>>>> main
       graphql:
         specifier: ^16.13.1
         version: 16.13.1
       graphql-request:
         specifier: ^7.4.0
         version: 7.4.0(graphql@16.13.1)
-<<<<<<< HEAD
+      graphql-tag:
+        specifier: ^2.12.6
+        version: 2.12.6(graphql@16.13.1)
       input-otp:
         specifier: ^1.4.2
         version: 1.4.2(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       lucide-react:
         specifier: ^0.577.0
         version: 0.577.0(react@19.2.4)
-=======
-      graphql-tag:
-        specifier: ^2.12.6
-        version: 2.12.6(graphql@16.13.1)
->>>>>>> main
       next:
         specifier: 16.1.6
         version: 16.1.6(@babel/core@7.29.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
