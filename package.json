@@ -2,17 +2,25 @@
   "name": "private-streams",
   "private": true,
   "scripts": {
-    "dev:prediction-market": "pnpm --filter prediction-market-frontend dev",
-    "build:prediction-market": "pnpm --filter prediction-market-frontend build",
-    "dev:insider-streams": "pnpm --filter insider-streams-frontend dev",
-    "build:insider-streams": "pnpm --filter insider-streams-frontend build",
-    "codegen:insider-streams": "pnpm --filter insider-streams-frontend codegen",
+    "postinstall": "npx next telemetry disable || true; npx turbo telemetry disable || true",
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "codegen": "turbo run codegen",
+    "codegen:insider-streams": "turbo run codegen --filter=insider-streams-frontend",
+    "wagmi": "turbo run wagmi",
+    "e2e": "turbo run e2e",
+    "dev:prediction-market": "turbo run dev --filter=prediction-market-frontend",
+    "dev:insider-streams": "turbo run dev --filter=insider-streams-frontend",
+    "build:prediction-market": "turbo run build --filter=prediction-market-frontend",
+    "build:insider-streams": "turbo run build --filter=insider-streams-frontend",
     "build:contracts": "cd contracts && forge build --via-ir --skip SetupAll DeployPolicyEngine",
-    "test:contracts": "cd contracts && forge test --via-ir --skip SetupAll DeployPolicyEngine",
-    "e2e": "pnpm --filter @private-streams/scripts e2e",
-    "wagmi": "pnpm --filter @private-streams/common wagmi",
-    "postinstall": "pnpm codegen:insider-streams"
+    "test:contracts": "cd contracts && forge test --via-ir --skip SetupAll DeployPolicyEngine"
   },
+  "devDependencies": {
+    "turbo": "^2.8.14"
+  },
+  "packageManager": "pnpm@10.28.1",
   "engines": {
     "node": ">=20.0.0",
     "pnpm": ">=10.0.0"
