@@ -140,6 +140,7 @@ export enum AuctionClosed_OrderBy {
 export type AuctionCreated = {
   __typename?: 'AuctionCreated';
   auctionId: Scalars['BigInt']['output'];
+  betOnYes: Scalars['Boolean']['output'];
   blockNumber: Scalars['BigInt']['output'];
   blockTimestamp: Scalars['BigInt']['output'];
   endTime: Scalars['BigInt']['output'];
@@ -162,6 +163,10 @@ export type AuctionCreated_Filter = {
   auctionId_lte?: InputMaybe<Scalars['BigInt']['input']>;
   auctionId_not?: InputMaybe<Scalars['BigInt']['input']>;
   auctionId_not_in?: InputMaybe<Array<Scalars['BigInt']['input']>>;
+  betOnYes?: InputMaybe<Scalars['Boolean']['input']>;
+  betOnYes_in?: InputMaybe<Array<Scalars['Boolean']['input']>>;
+  betOnYes_not?: InputMaybe<Scalars['Boolean']['input']>;
+  betOnYes_not_in?: InputMaybe<Array<Scalars['Boolean']['input']>>;
   blockNumber?: InputMaybe<Scalars['BigInt']['input']>;
   blockNumber_gt?: InputMaybe<Scalars['BigInt']['input']>;
   blockNumber_gte?: InputMaybe<Scalars['BigInt']['input']>;
@@ -237,6 +242,7 @@ export type AuctionCreated_Filter = {
 
 export enum AuctionCreated_OrderBy {
   AuctionId = 'auctionId',
+  BetOnYes = 'betOnYes',
   BlockNumber = 'blockNumber',
   BlockTimestamp = 'blockTimestamp',
   EndTime = 'endTime',
@@ -371,8 +377,9 @@ export enum AuctionForceClosed_OrderBy {
 
 export type BidPlaced = {
   __typename?: 'BidPlaced';
-  amount: Scalars['BigInt']['output'];
   auctionId: Scalars['BigInt']['output'];
+  automaticBetAmount: Scalars['BigInt']['output'];
+  bidAmount: Scalars['BigInt']['output'];
   bidder: Scalars['Bytes']['output'];
   blockNumber: Scalars['BigInt']['output'];
   blockTimestamp: Scalars['BigInt']['output'];
@@ -385,14 +392,6 @@ export type BidPlaced = {
 export type BidPlaced_Filter = {
   /** Filter for the block changed event. */
   _change_block?: InputMaybe<BlockChangedFilter>;
-  amount?: InputMaybe<Scalars['BigInt']['input']>;
-  amount_gt?: InputMaybe<Scalars['BigInt']['input']>;
-  amount_gte?: InputMaybe<Scalars['BigInt']['input']>;
-  amount_in?: InputMaybe<Array<Scalars['BigInt']['input']>>;
-  amount_lt?: InputMaybe<Scalars['BigInt']['input']>;
-  amount_lte?: InputMaybe<Scalars['BigInt']['input']>;
-  amount_not?: InputMaybe<Scalars['BigInt']['input']>;
-  amount_not_in?: InputMaybe<Array<Scalars['BigInt']['input']>>;
   and?: InputMaybe<Array<InputMaybe<BidPlaced_Filter>>>;
   auctionId?: InputMaybe<Scalars['BigInt']['input']>;
   auctionId_gt?: InputMaybe<Scalars['BigInt']['input']>;
@@ -402,6 +401,22 @@ export type BidPlaced_Filter = {
   auctionId_lte?: InputMaybe<Scalars['BigInt']['input']>;
   auctionId_not?: InputMaybe<Scalars['BigInt']['input']>;
   auctionId_not_in?: InputMaybe<Array<Scalars['BigInt']['input']>>;
+  automaticBetAmount?: InputMaybe<Scalars['BigInt']['input']>;
+  automaticBetAmount_gt?: InputMaybe<Scalars['BigInt']['input']>;
+  automaticBetAmount_gte?: InputMaybe<Scalars['BigInt']['input']>;
+  automaticBetAmount_in?: InputMaybe<Array<Scalars['BigInt']['input']>>;
+  automaticBetAmount_lt?: InputMaybe<Scalars['BigInt']['input']>;
+  automaticBetAmount_lte?: InputMaybe<Scalars['BigInt']['input']>;
+  automaticBetAmount_not?: InputMaybe<Scalars['BigInt']['input']>;
+  automaticBetAmount_not_in?: InputMaybe<Array<Scalars['BigInt']['input']>>;
+  bidAmount?: InputMaybe<Scalars['BigInt']['input']>;
+  bidAmount_gt?: InputMaybe<Scalars['BigInt']['input']>;
+  bidAmount_gte?: InputMaybe<Scalars['BigInt']['input']>;
+  bidAmount_in?: InputMaybe<Array<Scalars['BigInt']['input']>>;
+  bidAmount_lt?: InputMaybe<Scalars['BigInt']['input']>;
+  bidAmount_lte?: InputMaybe<Scalars['BigInt']['input']>;
+  bidAmount_not?: InputMaybe<Scalars['BigInt']['input']>;
+  bidAmount_not_in?: InputMaybe<Array<Scalars['BigInt']['input']>>;
   bidder?: InputMaybe<Scalars['Bytes']['input']>;
   bidder_contains?: InputMaybe<Scalars['Bytes']['input']>;
   bidder_gt?: InputMaybe<Scalars['Bytes']['input']>;
@@ -470,8 +485,9 @@ export type BidPlaced_Filter = {
 };
 
 export enum BidPlaced_OrderBy {
-  Amount = 'amount',
   AuctionId = 'auctionId',
+  AutomaticBetAmount = 'automaticBetAmount',
+  BidAmount = 'bidAmount',
   Bidder = 'bidder',
   BlockNumber = 'blockNumber',
   BlockTimestamp = 'blockTimestamp',
@@ -737,6 +753,94 @@ export enum ExpectedWorkflowNameUpdated_OrderBy {
   TransactionHash = 'transactionHash'
 }
 
+export type ExternalMarketResolved = {
+  __typename?: 'ExternalMarketResolved';
+  auctionsAffected: Scalars['BigInt']['output'];
+  blockNumber: Scalars['BigInt']['output'];
+  blockTimestamp: Scalars['BigInt']['output'];
+  externalMarketId: Scalars['BigInt']['output'];
+  id: Scalars['Bytes']['output'];
+  outcome: Scalars['Int']['output'];
+  transactionHash: Scalars['Bytes']['output'];
+};
+
+export type ExternalMarketResolved_Filter = {
+  /** Filter for the block changed event. */
+  _change_block?: InputMaybe<BlockChangedFilter>;
+  and?: InputMaybe<Array<InputMaybe<ExternalMarketResolved_Filter>>>;
+  auctionsAffected?: InputMaybe<Scalars['BigInt']['input']>;
+  auctionsAffected_gt?: InputMaybe<Scalars['BigInt']['input']>;
+  auctionsAffected_gte?: InputMaybe<Scalars['BigInt']['input']>;
+  auctionsAffected_in?: InputMaybe<Array<Scalars['BigInt']['input']>>;
+  auctionsAffected_lt?: InputMaybe<Scalars['BigInt']['input']>;
+  auctionsAffected_lte?: InputMaybe<Scalars['BigInt']['input']>;
+  auctionsAffected_not?: InputMaybe<Scalars['BigInt']['input']>;
+  auctionsAffected_not_in?: InputMaybe<Array<Scalars['BigInt']['input']>>;
+  blockNumber?: InputMaybe<Scalars['BigInt']['input']>;
+  blockNumber_gt?: InputMaybe<Scalars['BigInt']['input']>;
+  blockNumber_gte?: InputMaybe<Scalars['BigInt']['input']>;
+  blockNumber_in?: InputMaybe<Array<Scalars['BigInt']['input']>>;
+  blockNumber_lt?: InputMaybe<Scalars['BigInt']['input']>;
+  blockNumber_lte?: InputMaybe<Scalars['BigInt']['input']>;
+  blockNumber_not?: InputMaybe<Scalars['BigInt']['input']>;
+  blockNumber_not_in?: InputMaybe<Array<Scalars['BigInt']['input']>>;
+  blockTimestamp?: InputMaybe<Scalars['BigInt']['input']>;
+  blockTimestamp_gt?: InputMaybe<Scalars['BigInt']['input']>;
+  blockTimestamp_gte?: InputMaybe<Scalars['BigInt']['input']>;
+  blockTimestamp_in?: InputMaybe<Array<Scalars['BigInt']['input']>>;
+  blockTimestamp_lt?: InputMaybe<Scalars['BigInt']['input']>;
+  blockTimestamp_lte?: InputMaybe<Scalars['BigInt']['input']>;
+  blockTimestamp_not?: InputMaybe<Scalars['BigInt']['input']>;
+  blockTimestamp_not_in?: InputMaybe<Array<Scalars['BigInt']['input']>>;
+  externalMarketId?: InputMaybe<Scalars['BigInt']['input']>;
+  externalMarketId_gt?: InputMaybe<Scalars['BigInt']['input']>;
+  externalMarketId_gte?: InputMaybe<Scalars['BigInt']['input']>;
+  externalMarketId_in?: InputMaybe<Array<Scalars['BigInt']['input']>>;
+  externalMarketId_lt?: InputMaybe<Scalars['BigInt']['input']>;
+  externalMarketId_lte?: InputMaybe<Scalars['BigInt']['input']>;
+  externalMarketId_not?: InputMaybe<Scalars['BigInt']['input']>;
+  externalMarketId_not_in?: InputMaybe<Array<Scalars['BigInt']['input']>>;
+  id?: InputMaybe<Scalars['Bytes']['input']>;
+  id_contains?: InputMaybe<Scalars['Bytes']['input']>;
+  id_gt?: InputMaybe<Scalars['Bytes']['input']>;
+  id_gte?: InputMaybe<Scalars['Bytes']['input']>;
+  id_in?: InputMaybe<Array<Scalars['Bytes']['input']>>;
+  id_lt?: InputMaybe<Scalars['Bytes']['input']>;
+  id_lte?: InputMaybe<Scalars['Bytes']['input']>;
+  id_not?: InputMaybe<Scalars['Bytes']['input']>;
+  id_not_contains?: InputMaybe<Scalars['Bytes']['input']>;
+  id_not_in?: InputMaybe<Array<Scalars['Bytes']['input']>>;
+  or?: InputMaybe<Array<InputMaybe<ExternalMarketResolved_Filter>>>;
+  outcome?: InputMaybe<Scalars['Int']['input']>;
+  outcome_gt?: InputMaybe<Scalars['Int']['input']>;
+  outcome_gte?: InputMaybe<Scalars['Int']['input']>;
+  outcome_in?: InputMaybe<Array<Scalars['Int']['input']>>;
+  outcome_lt?: InputMaybe<Scalars['Int']['input']>;
+  outcome_lte?: InputMaybe<Scalars['Int']['input']>;
+  outcome_not?: InputMaybe<Scalars['Int']['input']>;
+  outcome_not_in?: InputMaybe<Array<Scalars['Int']['input']>>;
+  transactionHash?: InputMaybe<Scalars['Bytes']['input']>;
+  transactionHash_contains?: InputMaybe<Scalars['Bytes']['input']>;
+  transactionHash_gt?: InputMaybe<Scalars['Bytes']['input']>;
+  transactionHash_gte?: InputMaybe<Scalars['Bytes']['input']>;
+  transactionHash_in?: InputMaybe<Array<Scalars['Bytes']['input']>>;
+  transactionHash_lt?: InputMaybe<Scalars['Bytes']['input']>;
+  transactionHash_lte?: InputMaybe<Scalars['Bytes']['input']>;
+  transactionHash_not?: InputMaybe<Scalars['Bytes']['input']>;
+  transactionHash_not_contains?: InputMaybe<Scalars['Bytes']['input']>;
+  transactionHash_not_in?: InputMaybe<Array<Scalars['Bytes']['input']>>;
+};
+
+export enum ExternalMarketResolved_OrderBy {
+  AuctionsAffected = 'auctionsAffected',
+  BlockNumber = 'blockNumber',
+  BlockTimestamp = 'blockTimestamp',
+  ExternalMarketId = 'externalMarketId',
+  Id = 'id',
+  Outcome = 'outcome',
+  TransactionHash = 'transactionHash'
+}
+
 export type ForwarderAddressUpdated = {
   __typename?: 'ForwarderAddressUpdated';
   blockNumber: Scalars['BigInt']['output'];
@@ -925,6 +1029,8 @@ export type Query = {
   expectedWorkflowIdUpdateds: Array<ExpectedWorkflowIdUpdated>;
   expectedWorkflowNameUpdated?: Maybe<ExpectedWorkflowNameUpdated>;
   expectedWorkflowNameUpdateds: Array<ExpectedWorkflowNameUpdated>;
+  externalMarketResolved?: Maybe<ExternalMarketResolved>;
+  externalMarketResolveds: Array<ExternalMarketResolved>;
   forwarderAddressUpdated?: Maybe<ForwarderAddressUpdated>;
   forwarderAddressUpdateds: Array<ForwarderAddressUpdated>;
   ownershipTransferred?: Maybe<OwnershipTransferred>;
@@ -933,6 +1039,8 @@ export type Query = {
   reputationUpdateds: Array<ReputationUpdated>;
   securityWarning?: Maybe<SecurityWarning>;
   securityWarnings: Array<SecurityWarning>;
+  sellerRegistered?: Maybe<SellerRegistered>;
+  sellerRegistereds: Array<SellerRegistered>;
   tradeExecuted?: Maybe<TradeExecuted>;
   tradeExecuteds: Array<TradeExecuted>;
 };
@@ -1069,6 +1177,24 @@ export type QueryExpectedWorkflowNameUpdatedsArgs = {
 };
 
 
+export type QueryExternalMarketResolvedArgs = {
+  block?: InputMaybe<Block_Height>;
+  id: Scalars['ID']['input'];
+  subgraphError?: _SubgraphErrorPolicy_;
+};
+
+
+export type QueryExternalMarketResolvedsArgs = {
+  block?: InputMaybe<Block_Height>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<ExternalMarketResolved_OrderBy>;
+  orderDirection?: InputMaybe<OrderDirection>;
+  skip?: InputMaybe<Scalars['Int']['input']>;
+  subgraphError?: _SubgraphErrorPolicy_;
+  where?: InputMaybe<ExternalMarketResolved_Filter>;
+};
+
+
 export type QueryForwarderAddressUpdatedArgs = {
   block?: InputMaybe<Block_Height>;
   id: Scalars['ID']['input'];
@@ -1138,6 +1264,24 @@ export type QuerySecurityWarningsArgs = {
   skip?: InputMaybe<Scalars['Int']['input']>;
   subgraphError?: _SubgraphErrorPolicy_;
   where?: InputMaybe<SecurityWarning_Filter>;
+};
+
+
+export type QuerySellerRegisteredArgs = {
+  block?: InputMaybe<Block_Height>;
+  id: Scalars['ID']['input'];
+  subgraphError?: _SubgraphErrorPolicy_;
+};
+
+
+export type QuerySellerRegisteredsArgs = {
+  block?: InputMaybe<Block_Height>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<SellerRegistered_OrderBy>;
+  orderDirection?: InputMaybe<OrderDirection>;
+  skip?: InputMaybe<Scalars['Int']['input']>;
+  subgraphError?: _SubgraphErrorPolicy_;
+  where?: InputMaybe<SellerRegistered_Filter>;
 };
 
 
@@ -1338,10 +1482,103 @@ export enum SecurityWarning_OrderBy {
   TransactionHash = 'transactionHash'
 }
 
+export type SellerRegistered = {
+  __typename?: 'SellerRegistered';
+  blockNumber: Scalars['BigInt']['output'];
+  blockTimestamp: Scalars['BigInt']['output'];
+  id: Scalars['Bytes']['output'];
+  name: Scalars['String']['output'];
+  seller: Scalars['Bytes']['output'];
+  transactionHash: Scalars['Bytes']['output'];
+};
+
+export type SellerRegistered_Filter = {
+  /** Filter for the block changed event. */
+  _change_block?: InputMaybe<BlockChangedFilter>;
+  and?: InputMaybe<Array<InputMaybe<SellerRegistered_Filter>>>;
+  blockNumber?: InputMaybe<Scalars['BigInt']['input']>;
+  blockNumber_gt?: InputMaybe<Scalars['BigInt']['input']>;
+  blockNumber_gte?: InputMaybe<Scalars['BigInt']['input']>;
+  blockNumber_in?: InputMaybe<Array<Scalars['BigInt']['input']>>;
+  blockNumber_lt?: InputMaybe<Scalars['BigInt']['input']>;
+  blockNumber_lte?: InputMaybe<Scalars['BigInt']['input']>;
+  blockNumber_not?: InputMaybe<Scalars['BigInt']['input']>;
+  blockNumber_not_in?: InputMaybe<Array<Scalars['BigInt']['input']>>;
+  blockTimestamp?: InputMaybe<Scalars['BigInt']['input']>;
+  blockTimestamp_gt?: InputMaybe<Scalars['BigInt']['input']>;
+  blockTimestamp_gte?: InputMaybe<Scalars['BigInt']['input']>;
+  blockTimestamp_in?: InputMaybe<Array<Scalars['BigInt']['input']>>;
+  blockTimestamp_lt?: InputMaybe<Scalars['BigInt']['input']>;
+  blockTimestamp_lte?: InputMaybe<Scalars['BigInt']['input']>;
+  blockTimestamp_not?: InputMaybe<Scalars['BigInt']['input']>;
+  blockTimestamp_not_in?: InputMaybe<Array<Scalars['BigInt']['input']>>;
+  id?: InputMaybe<Scalars['Bytes']['input']>;
+  id_contains?: InputMaybe<Scalars['Bytes']['input']>;
+  id_gt?: InputMaybe<Scalars['Bytes']['input']>;
+  id_gte?: InputMaybe<Scalars['Bytes']['input']>;
+  id_in?: InputMaybe<Array<Scalars['Bytes']['input']>>;
+  id_lt?: InputMaybe<Scalars['Bytes']['input']>;
+  id_lte?: InputMaybe<Scalars['Bytes']['input']>;
+  id_not?: InputMaybe<Scalars['Bytes']['input']>;
+  id_not_contains?: InputMaybe<Scalars['Bytes']['input']>;
+  id_not_in?: InputMaybe<Array<Scalars['Bytes']['input']>>;
+  name?: InputMaybe<Scalars['String']['input']>;
+  name_contains?: InputMaybe<Scalars['String']['input']>;
+  name_contains_nocase?: InputMaybe<Scalars['String']['input']>;
+  name_ends_with?: InputMaybe<Scalars['String']['input']>;
+  name_ends_with_nocase?: InputMaybe<Scalars['String']['input']>;
+  name_gt?: InputMaybe<Scalars['String']['input']>;
+  name_gte?: InputMaybe<Scalars['String']['input']>;
+  name_in?: InputMaybe<Array<Scalars['String']['input']>>;
+  name_lt?: InputMaybe<Scalars['String']['input']>;
+  name_lte?: InputMaybe<Scalars['String']['input']>;
+  name_not?: InputMaybe<Scalars['String']['input']>;
+  name_not_contains?: InputMaybe<Scalars['String']['input']>;
+  name_not_contains_nocase?: InputMaybe<Scalars['String']['input']>;
+  name_not_ends_with?: InputMaybe<Scalars['String']['input']>;
+  name_not_ends_with_nocase?: InputMaybe<Scalars['String']['input']>;
+  name_not_in?: InputMaybe<Array<Scalars['String']['input']>>;
+  name_not_starts_with?: InputMaybe<Scalars['String']['input']>;
+  name_not_starts_with_nocase?: InputMaybe<Scalars['String']['input']>;
+  name_starts_with?: InputMaybe<Scalars['String']['input']>;
+  name_starts_with_nocase?: InputMaybe<Scalars['String']['input']>;
+  or?: InputMaybe<Array<InputMaybe<SellerRegistered_Filter>>>;
+  seller?: InputMaybe<Scalars['Bytes']['input']>;
+  seller_contains?: InputMaybe<Scalars['Bytes']['input']>;
+  seller_gt?: InputMaybe<Scalars['Bytes']['input']>;
+  seller_gte?: InputMaybe<Scalars['Bytes']['input']>;
+  seller_in?: InputMaybe<Array<Scalars['Bytes']['input']>>;
+  seller_lt?: InputMaybe<Scalars['Bytes']['input']>;
+  seller_lte?: InputMaybe<Scalars['Bytes']['input']>;
+  seller_not?: InputMaybe<Scalars['Bytes']['input']>;
+  seller_not_contains?: InputMaybe<Scalars['Bytes']['input']>;
+  seller_not_in?: InputMaybe<Array<Scalars['Bytes']['input']>>;
+  transactionHash?: InputMaybe<Scalars['Bytes']['input']>;
+  transactionHash_contains?: InputMaybe<Scalars['Bytes']['input']>;
+  transactionHash_gt?: InputMaybe<Scalars['Bytes']['input']>;
+  transactionHash_gte?: InputMaybe<Scalars['Bytes']['input']>;
+  transactionHash_in?: InputMaybe<Array<Scalars['Bytes']['input']>>;
+  transactionHash_lt?: InputMaybe<Scalars['Bytes']['input']>;
+  transactionHash_lte?: InputMaybe<Scalars['Bytes']['input']>;
+  transactionHash_not?: InputMaybe<Scalars['Bytes']['input']>;
+  transactionHash_not_contains?: InputMaybe<Scalars['Bytes']['input']>;
+  transactionHash_not_in?: InputMaybe<Array<Scalars['Bytes']['input']>>;
+};
+
+export enum SellerRegistered_OrderBy {
+  BlockNumber = 'blockNumber',
+  BlockTimestamp = 'blockTimestamp',
+  Id = 'id',
+  Name = 'name',
+  Seller = 'seller',
+  TransactionHash = 'transactionHash'
+}
+
 export type TradeExecuted = {
   __typename?: 'TradeExecuted';
-  amount: Scalars['BigInt']['output'];
   auctionId: Scalars['BigInt']['output'];
+  automaticBetAmount: Scalars['BigInt']['output'];
+  betOnYes: Scalars['Boolean']['output'];
   blockNumber: Scalars['BigInt']['output'];
   blockTimestamp: Scalars['BigInt']['output'];
   buyer: Scalars['Bytes']['output'];
@@ -1353,14 +1590,6 @@ export type TradeExecuted = {
 export type TradeExecuted_Filter = {
   /** Filter for the block changed event. */
   _change_block?: InputMaybe<BlockChangedFilter>;
-  amount?: InputMaybe<Scalars['BigInt']['input']>;
-  amount_gt?: InputMaybe<Scalars['BigInt']['input']>;
-  amount_gte?: InputMaybe<Scalars['BigInt']['input']>;
-  amount_in?: InputMaybe<Array<Scalars['BigInt']['input']>>;
-  amount_lt?: InputMaybe<Scalars['BigInt']['input']>;
-  amount_lte?: InputMaybe<Scalars['BigInt']['input']>;
-  amount_not?: InputMaybe<Scalars['BigInt']['input']>;
-  amount_not_in?: InputMaybe<Array<Scalars['BigInt']['input']>>;
   and?: InputMaybe<Array<InputMaybe<TradeExecuted_Filter>>>;
   auctionId?: InputMaybe<Scalars['BigInt']['input']>;
   auctionId_gt?: InputMaybe<Scalars['BigInt']['input']>;
@@ -1370,6 +1599,18 @@ export type TradeExecuted_Filter = {
   auctionId_lte?: InputMaybe<Scalars['BigInt']['input']>;
   auctionId_not?: InputMaybe<Scalars['BigInt']['input']>;
   auctionId_not_in?: InputMaybe<Array<Scalars['BigInt']['input']>>;
+  automaticBetAmount?: InputMaybe<Scalars['BigInt']['input']>;
+  automaticBetAmount_gt?: InputMaybe<Scalars['BigInt']['input']>;
+  automaticBetAmount_gte?: InputMaybe<Scalars['BigInt']['input']>;
+  automaticBetAmount_in?: InputMaybe<Array<Scalars['BigInt']['input']>>;
+  automaticBetAmount_lt?: InputMaybe<Scalars['BigInt']['input']>;
+  automaticBetAmount_lte?: InputMaybe<Scalars['BigInt']['input']>;
+  automaticBetAmount_not?: InputMaybe<Scalars['BigInt']['input']>;
+  automaticBetAmount_not_in?: InputMaybe<Array<Scalars['BigInt']['input']>>;
+  betOnYes?: InputMaybe<Scalars['Boolean']['input']>;
+  betOnYes_in?: InputMaybe<Array<Scalars['Boolean']['input']>>;
+  betOnYes_not?: InputMaybe<Scalars['Boolean']['input']>;
+  betOnYes_not_in?: InputMaybe<Array<Scalars['Boolean']['input']>>;
   blockNumber?: InputMaybe<Scalars['BigInt']['input']>;
   blockNumber_gt?: InputMaybe<Scalars['BigInt']['input']>;
   blockNumber_gte?: InputMaybe<Scalars['BigInt']['input']>;
@@ -1428,8 +1669,9 @@ export type TradeExecuted_Filter = {
 };
 
 export enum TradeExecuted_OrderBy {
-  Amount = 'amount',
   AuctionId = 'auctionId',
+  AutomaticBetAmount = 'automaticBetAmount',
+  BetOnYes = 'betOnYes',
   BlockNumber = 'blockNumber',
   BlockTimestamp = 'blockTimestamp',
   Buyer = 'buyer',
@@ -1479,12 +1721,27 @@ export type AuctionDetailSubgraphQueryVariables = Exact<{
 }>;
 
 
-export type AuctionDetailSubgraphQuery = { __typename?: 'Query', createdAuction: Array<{ __typename?: 'AuctionCreated', auctionId: string, seller: string, reservePrice: string, endTime: string, externalMarketId: string, blockTimestamp: string }>, bids: Array<{ __typename?: 'BidPlaced', bidder: string, amount: string, blockTimestamp: string, transactionHash: string }>, closedAuction: Array<{ __typename?: 'AuctionClosed', seller: string, buyer: string, winningBid: string, externalMarketId: string, blockTimestamp: string }>, forceClosedAuction: Array<{ __typename?: 'AuctionForceClosed', seller: string, refundedBidder: string, refundAmount: string, externalMarketId: string, reputationDelta: number, blockTimestamp: string }>, tradeExecuted: Array<{ __typename?: 'TradeExecuted', buyer: string, amount: string, blockTimestamp: string }>, reputationUpdates: Array<{ __typename?: 'ReputationUpdated', delta: number, newScore: string, blockTimestamp: string }> };
+export type AuctionDetailSubgraphQuery = { __typename?: 'Query', createdAuction: Array<{ __typename?: 'AuctionCreated', auctionId: string, seller: string, reservePrice: string, endTime: string, externalMarketId: string, blockTimestamp: string }>, bids: Array<{ __typename?: 'BidPlaced', bidder: string, bidAmount: string, blockTimestamp: string, transactionHash: string }>, closedAuction: Array<{ __typename?: 'AuctionClosed', seller: string, buyer: string, winningBid: string, externalMarketId: string, blockTimestamp: string }>, forceClosedAuction: Array<{ __typename?: 'AuctionForceClosed', seller: string, refundedBidder: string, refundAmount: string, externalMarketId: string, reputationDelta: number, blockTimestamp: string }>, tradeExecuted: Array<{ __typename?: 'TradeExecuted', buyer: string, automaticBetAmount: string, blockTimestamp: string }>, reputationUpdates: Array<{ __typename?: 'ReputationUpdated', delta: number, newScore: string, blockTimestamp: string }> };
 
 export type RecentAuctionsQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type RecentAuctionsQuery = { __typename?: 'Query', auctionCreateds: Array<{ __typename?: 'AuctionCreated', id: string, auctionId: string, seller: string, reservePrice: string, endTime: string, blockTimestamp: string, transactionHash: string }>, bidPlaceds: Array<{ __typename?: 'BidPlaced', id: string, auctionId: string, bidder: string, amount: string, blockTimestamp: string }> };
+export type RecentAuctionsQuery = { __typename?: 'Query', auctionCreateds: Array<{ __typename?: 'AuctionCreated', id: string, auctionId: string, seller: string, reservePrice: string, endTime: string, blockTimestamp: string, transactionHash: string }> };
+
+export type RecentBidsQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type RecentBidsQuery = { __typename?: 'Query', bidPlaceds: Array<{ __typename?: 'BidPlaced', id: string, auctionId: string, bidder: string, bidAmount: string, blockTimestamp: string, transactionHash: string }> };
+
+export type RecentClosedAuctionsQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type RecentClosedAuctionsQuery = { __typename?: 'Query', auctionCloseds: Array<{ __typename?: 'AuctionClosed', id: string, auctionId: string, buyer: string, seller: string, winningBid: string, externalMarketId: string, blockTimestamp: string, transactionHash: string }> };
+
+export type RecentForceClosedAuctionsQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type RecentForceClosedAuctionsQuery = { __typename?: 'Query', auctionForceCloseds: Array<{ __typename?: 'AuctionForceClosed', id: string, auctionId: string, seller: string, refundedBidder: string, refundAmount: string, reputationDelta: number, blockTimestamp: string, transactionHash: string }> };
 
 export type HomepageAuctionListsQueryVariables = Exact<{
   currentTimestamp: Scalars['BigInt']['input'];
@@ -1507,11 +1764,14 @@ export type HomepageLatestBidQueryVariables = Exact<{
 }>;
 
 
-export type HomepageLatestBidQuery = { __typename?: 'Query', bidPlaceds: Array<{ __typename?: 'BidPlaced', id: string, auctionId: string, amount: string }> };
+export type HomepageLatestBidQuery = { __typename?: 'Query', bidPlaceds: Array<{ __typename?: 'BidPlaced', id: string, auctionId: string, bidAmount: string }> };
 
 
-export const AuctionDetailSubgraphDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"AuctionDetailSubgraph"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"auctionId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"BigInt"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"bidLimit"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","alias":{"kind":"Name","value":"createdAuction"},"name":{"kind":"Name","value":"auctionCreateds"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1"}},{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"EnumValue","value":"blockTimestamp"}},{"kind":"Argument","name":{"kind":"Name","value":"orderDirection"},"value":{"kind":"EnumValue","value":"desc"}},{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"auctionId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"auctionId"}}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"auctionId"}},{"kind":"Field","name":{"kind":"Name","value":"seller"}},{"kind":"Field","name":{"kind":"Name","value":"reservePrice"}},{"kind":"Field","name":{"kind":"Name","value":"endTime"}},{"kind":"Field","name":{"kind":"Name","value":"externalMarketId"}},{"kind":"Field","name":{"kind":"Name","value":"blockTimestamp"}}]}},{"kind":"Field","alias":{"kind":"Name","value":"bids"},"name":{"kind":"Name","value":"bidPlaceds"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"Variable","name":{"kind":"Name","value":"bidLimit"}}},{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"EnumValue","value":"blockTimestamp"}},{"kind":"Argument","name":{"kind":"Name","value":"orderDirection"},"value":{"kind":"EnumValue","value":"desc"}},{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"auctionId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"auctionId"}}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"bidder"}},{"kind":"Field","name":{"kind":"Name","value":"amount"}},{"kind":"Field","name":{"kind":"Name","value":"blockTimestamp"}},{"kind":"Field","name":{"kind":"Name","value":"transactionHash"}}]}},{"kind":"Field","alias":{"kind":"Name","value":"closedAuction"},"name":{"kind":"Name","value":"auctionCloseds"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1"}},{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"EnumValue","value":"blockTimestamp"}},{"kind":"Argument","name":{"kind":"Name","value":"orderDirection"},"value":{"kind":"EnumValue","value":"desc"}},{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"auctionId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"auctionId"}}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"seller"}},{"kind":"Field","name":{"kind":"Name","value":"buyer"}},{"kind":"Field","name":{"kind":"Name","value":"winningBid"}},{"kind":"Field","name":{"kind":"Name","value":"externalMarketId"}},{"kind":"Field","name":{"kind":"Name","value":"blockTimestamp"}}]}},{"kind":"Field","alias":{"kind":"Name","value":"forceClosedAuction"},"name":{"kind":"Name","value":"auctionForceCloseds"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1"}},{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"EnumValue","value":"blockTimestamp"}},{"kind":"Argument","name":{"kind":"Name","value":"orderDirection"},"value":{"kind":"EnumValue","value":"desc"}},{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"auctionId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"auctionId"}}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"seller"}},{"kind":"Field","name":{"kind":"Name","value":"refundedBidder"}},{"kind":"Field","name":{"kind":"Name","value":"refundAmount"}},{"kind":"Field","name":{"kind":"Name","value":"externalMarketId"}},{"kind":"Field","name":{"kind":"Name","value":"reputationDelta"}},{"kind":"Field","name":{"kind":"Name","value":"blockTimestamp"}}]}},{"kind":"Field","alias":{"kind":"Name","value":"tradeExecuted"},"name":{"kind":"Name","value":"tradeExecuteds"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1"}},{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"EnumValue","value":"blockTimestamp"}},{"kind":"Argument","name":{"kind":"Name","value":"orderDirection"},"value":{"kind":"EnumValue","value":"desc"}},{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"auctionId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"auctionId"}}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"buyer"}},{"kind":"Field","name":{"kind":"Name","value":"amount"}},{"kind":"Field","name":{"kind":"Name","value":"blockTimestamp"}}]}},{"kind":"Field","alias":{"kind":"Name","value":"reputationUpdates"},"name":{"kind":"Name","value":"reputationUpdateds"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"EnumValue","value":"blockTimestamp"}},{"kind":"Argument","name":{"kind":"Name","value":"orderDirection"},"value":{"kind":"EnumValue","value":"desc"}},{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"auctionId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"auctionId"}}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"delta"}},{"kind":"Field","name":{"kind":"Name","value":"newScore"}},{"kind":"Field","name":{"kind":"Name","value":"blockTimestamp"}}]}}]}}]} as unknown as DocumentNode<AuctionDetailSubgraphQuery, AuctionDetailSubgraphQueryVariables>;
-export const RecentAuctionsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"RecentAuctions"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"auctionCreateds"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"5"}},{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"EnumValue","value":"blockTimestamp"}},{"kind":"Argument","name":{"kind":"Name","value":"orderDirection"},"value":{"kind":"EnumValue","value":"desc"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"auctionId"}},{"kind":"Field","name":{"kind":"Name","value":"seller"}},{"kind":"Field","name":{"kind":"Name","value":"reservePrice"}},{"kind":"Field","name":{"kind":"Name","value":"endTime"}},{"kind":"Field","name":{"kind":"Name","value":"blockTimestamp"}},{"kind":"Field","name":{"kind":"Name","value":"transactionHash"}}]}},{"kind":"Field","name":{"kind":"Name","value":"bidPlaceds"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"5"}},{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"EnumValue","value":"blockTimestamp"}},{"kind":"Argument","name":{"kind":"Name","value":"orderDirection"},"value":{"kind":"EnumValue","value":"desc"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"auctionId"}},{"kind":"Field","name":{"kind":"Name","value":"bidder"}},{"kind":"Field","name":{"kind":"Name","value":"amount"}},{"kind":"Field","name":{"kind":"Name","value":"blockTimestamp"}}]}}]}}]} as unknown as DocumentNode<RecentAuctionsQuery, RecentAuctionsQueryVariables>;
+export const AuctionDetailSubgraphDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"AuctionDetailSubgraph"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"auctionId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"BigInt"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"bidLimit"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","alias":{"kind":"Name","value":"createdAuction"},"name":{"kind":"Name","value":"auctionCreateds"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1"}},{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"EnumValue","value":"blockTimestamp"}},{"kind":"Argument","name":{"kind":"Name","value":"orderDirection"},"value":{"kind":"EnumValue","value":"desc"}},{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"auctionId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"auctionId"}}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"auctionId"}},{"kind":"Field","name":{"kind":"Name","value":"seller"}},{"kind":"Field","name":{"kind":"Name","value":"reservePrice"}},{"kind":"Field","name":{"kind":"Name","value":"endTime"}},{"kind":"Field","name":{"kind":"Name","value":"externalMarketId"}},{"kind":"Field","name":{"kind":"Name","value":"blockTimestamp"}}]}},{"kind":"Field","alias":{"kind":"Name","value":"bids"},"name":{"kind":"Name","value":"bidPlaceds"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"Variable","name":{"kind":"Name","value":"bidLimit"}}},{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"EnumValue","value":"blockTimestamp"}},{"kind":"Argument","name":{"kind":"Name","value":"orderDirection"},"value":{"kind":"EnumValue","value":"desc"}},{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"auctionId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"auctionId"}}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"bidder"}},{"kind":"Field","name":{"kind":"Name","value":"bidAmount"}},{"kind":"Field","name":{"kind":"Name","value":"blockTimestamp"}},{"kind":"Field","name":{"kind":"Name","value":"transactionHash"}}]}},{"kind":"Field","alias":{"kind":"Name","value":"closedAuction"},"name":{"kind":"Name","value":"auctionCloseds"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1"}},{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"EnumValue","value":"blockTimestamp"}},{"kind":"Argument","name":{"kind":"Name","value":"orderDirection"},"value":{"kind":"EnumValue","value":"desc"}},{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"auctionId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"auctionId"}}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"seller"}},{"kind":"Field","name":{"kind":"Name","value":"buyer"}},{"kind":"Field","name":{"kind":"Name","value":"winningBid"}},{"kind":"Field","name":{"kind":"Name","value":"externalMarketId"}},{"kind":"Field","name":{"kind":"Name","value":"blockTimestamp"}}]}},{"kind":"Field","alias":{"kind":"Name","value":"forceClosedAuction"},"name":{"kind":"Name","value":"auctionForceCloseds"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1"}},{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"EnumValue","value":"blockTimestamp"}},{"kind":"Argument","name":{"kind":"Name","value":"orderDirection"},"value":{"kind":"EnumValue","value":"desc"}},{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"auctionId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"auctionId"}}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"seller"}},{"kind":"Field","name":{"kind":"Name","value":"refundedBidder"}},{"kind":"Field","name":{"kind":"Name","value":"refundAmount"}},{"kind":"Field","name":{"kind":"Name","value":"externalMarketId"}},{"kind":"Field","name":{"kind":"Name","value":"reputationDelta"}},{"kind":"Field","name":{"kind":"Name","value":"blockTimestamp"}}]}},{"kind":"Field","alias":{"kind":"Name","value":"tradeExecuted"},"name":{"kind":"Name","value":"tradeExecuteds"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1"}},{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"EnumValue","value":"blockTimestamp"}},{"kind":"Argument","name":{"kind":"Name","value":"orderDirection"},"value":{"kind":"EnumValue","value":"desc"}},{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"auctionId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"auctionId"}}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"buyer"}},{"kind":"Field","name":{"kind":"Name","value":"automaticBetAmount"}},{"kind":"Field","name":{"kind":"Name","value":"blockTimestamp"}}]}},{"kind":"Field","alias":{"kind":"Name","value":"reputationUpdates"},"name":{"kind":"Name","value":"reputationUpdateds"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"EnumValue","value":"blockTimestamp"}},{"kind":"Argument","name":{"kind":"Name","value":"orderDirection"},"value":{"kind":"EnumValue","value":"desc"}},{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"auctionId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"auctionId"}}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"delta"}},{"kind":"Field","name":{"kind":"Name","value":"newScore"}},{"kind":"Field","name":{"kind":"Name","value":"blockTimestamp"}}]}}]}}]} as unknown as DocumentNode<AuctionDetailSubgraphQuery, AuctionDetailSubgraphQueryVariables>;
+export const RecentAuctionsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"RecentAuctions"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"auctionCreateds"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"10"}},{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"EnumValue","value":"blockTimestamp"}},{"kind":"Argument","name":{"kind":"Name","value":"orderDirection"},"value":{"kind":"EnumValue","value":"desc"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"auctionId"}},{"kind":"Field","name":{"kind":"Name","value":"seller"}},{"kind":"Field","name":{"kind":"Name","value":"reservePrice"}},{"kind":"Field","name":{"kind":"Name","value":"endTime"}},{"kind":"Field","name":{"kind":"Name","value":"blockTimestamp"}},{"kind":"Field","name":{"kind":"Name","value":"transactionHash"}}]}}]}}]} as unknown as DocumentNode<RecentAuctionsQuery, RecentAuctionsQueryVariables>;
+export const RecentBidsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"RecentBids"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"bidPlaceds"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"10"}},{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"EnumValue","value":"blockTimestamp"}},{"kind":"Argument","name":{"kind":"Name","value":"orderDirection"},"value":{"kind":"EnumValue","value":"desc"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"auctionId"}},{"kind":"Field","name":{"kind":"Name","value":"bidder"}},{"kind":"Field","name":{"kind":"Name","value":"bidAmount"}},{"kind":"Field","name":{"kind":"Name","value":"blockTimestamp"}},{"kind":"Field","name":{"kind":"Name","value":"transactionHash"}}]}}]}}]} as unknown as DocumentNode<RecentBidsQuery, RecentBidsQueryVariables>;
+export const RecentClosedAuctionsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"RecentClosedAuctions"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"auctionCloseds"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"10"}},{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"EnumValue","value":"blockTimestamp"}},{"kind":"Argument","name":{"kind":"Name","value":"orderDirection"},"value":{"kind":"EnumValue","value":"desc"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"auctionId"}},{"kind":"Field","name":{"kind":"Name","value":"buyer"}},{"kind":"Field","name":{"kind":"Name","value":"seller"}},{"kind":"Field","name":{"kind":"Name","value":"winningBid"}},{"kind":"Field","name":{"kind":"Name","value":"externalMarketId"}},{"kind":"Field","name":{"kind":"Name","value":"blockTimestamp"}},{"kind":"Field","name":{"kind":"Name","value":"transactionHash"}}]}}]}}]} as unknown as DocumentNode<RecentClosedAuctionsQuery, RecentClosedAuctionsQueryVariables>;
+export const RecentForceClosedAuctionsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"RecentForceClosedAuctions"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"auctionForceCloseds"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"10"}},{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"EnumValue","value":"blockTimestamp"}},{"kind":"Argument","name":{"kind":"Name","value":"orderDirection"},"value":{"kind":"EnumValue","value":"desc"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"auctionId"}},{"kind":"Field","name":{"kind":"Name","value":"seller"}},{"kind":"Field","name":{"kind":"Name","value":"refundedBidder"}},{"kind":"Field","name":{"kind":"Name","value":"refundAmount"}},{"kind":"Field","name":{"kind":"Name","value":"reputationDelta"}},{"kind":"Field","name":{"kind":"Name","value":"blockTimestamp"}},{"kind":"Field","name":{"kind":"Name","value":"transactionHash"}}]}}]}}]} as unknown as DocumentNode<RecentForceClosedAuctionsQuery, RecentForceClosedAuctionsQueryVariables>;
 export const HomepageAuctionListsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"HomepageAuctionLists"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"currentTimestamp"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"BigInt"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"openLimit"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"closedLimit"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","alias":{"kind":"Name","value":"openAuctions"},"name":{"kind":"Name","value":"auctionCreateds"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"Variable","name":{"kind":"Name","value":"openLimit"}}},{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"EnumValue","value":"endTime"}},{"kind":"Argument","name":{"kind":"Name","value":"orderDirection"},"value":{"kind":"EnumValue","value":"asc"}},{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"endTime_gt"},"value":{"kind":"Variable","name":{"kind":"Name","value":"currentTimestamp"}}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"auctionId"}},{"kind":"Field","name":{"kind":"Name","value":"seller"}},{"kind":"Field","name":{"kind":"Name","value":"reservePrice"}},{"kind":"Field","name":{"kind":"Name","value":"endTime"}},{"kind":"Field","name":{"kind":"Name","value":"externalMarketId"}},{"kind":"Field","name":{"kind":"Name","value":"blockTimestamp"}},{"kind":"Field","name":{"kind":"Name","value":"transactionHash"}}]}},{"kind":"Field","alias":{"kind":"Name","value":"closedAuctions"},"name":{"kind":"Name","value":"auctionCloseds"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"Variable","name":{"kind":"Name","value":"closedLimit"}}},{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"EnumValue","value":"blockTimestamp"}},{"kind":"Argument","name":{"kind":"Name","value":"orderDirection"},"value":{"kind":"EnumValue","value":"desc"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"auctionId"}},{"kind":"Field","name":{"kind":"Name","value":"seller"}},{"kind":"Field","name":{"kind":"Name","value":"buyer"}},{"kind":"Field","name":{"kind":"Name","value":"winningBid"}},{"kind":"Field","name":{"kind":"Name","value":"externalMarketId"}},{"kind":"Field","name":{"kind":"Name","value":"blockTimestamp"}},{"kind":"Field","name":{"kind":"Name","value":"transactionHash"}}]}}]}}]} as unknown as DocumentNode<HomepageAuctionListsQuery, HomepageAuctionListsQueryVariables>;
 export const HomepageClosedAuctionReferencesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"HomepageClosedAuctionReferences"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"auctionIds"}},"type":{"kind":"ListType","type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"BigInt"}}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","alias":{"kind":"Name","value":"referenceAuctions"},"name":{"kind":"Name","value":"auctionCreateds"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"auctionId_in"},"value":{"kind":"Variable","name":{"kind":"Name","value":"auctionIds"}}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"auctionId"}},{"kind":"Field","name":{"kind":"Name","value":"seller"}},{"kind":"Field","name":{"kind":"Name","value":"reservePrice"}},{"kind":"Field","name":{"kind":"Name","value":"endTime"}},{"kind":"Field","name":{"kind":"Name","value":"externalMarketId"}},{"kind":"Field","name":{"kind":"Name","value":"blockTimestamp"}},{"kind":"Field","name":{"kind":"Name","value":"transactionHash"}}]}}]}}]} as unknown as DocumentNode<HomepageClosedAuctionReferencesQuery, HomepageClosedAuctionReferencesQueryVariables>;
-export const HomepageLatestBidDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"HomepageLatestBid"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"auctionId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"BigInt"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"bidPlaceds"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1"}},{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"EnumValue","value":"blockTimestamp"}},{"kind":"Argument","name":{"kind":"Name","value":"orderDirection"},"value":{"kind":"EnumValue","value":"desc"}},{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"auctionId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"auctionId"}}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"auctionId"}},{"kind":"Field","name":{"kind":"Name","value":"amount"}}]}}]}}]} as unknown as DocumentNode<HomepageLatestBidQuery, HomepageLatestBidQueryVariables>;
+export const HomepageLatestBidDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"HomepageLatestBid"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"auctionId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"BigInt"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"bidPlaceds"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1"}},{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"EnumValue","value":"blockTimestamp"}},{"kind":"Argument","name":{"kind":"Name","value":"orderDirection"},"value":{"kind":"EnumValue","value":"desc"}},{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"auctionId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"auctionId"}}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"auctionId"}},{"kind":"Field","name":{"kind":"Name","value":"bidAmount"}}]}}]}}]} as unknown as DocumentNode<HomepageLatestBidQuery, HomepageLatestBidQueryVariables>;

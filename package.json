@@ -7,8 +7,8 @@
     "dev:insider-streams": "pnpm --filter insider-streams-frontend dev",
     "build:insider-streams": "pnpm --filter insider-streams-frontend build",
     "codegen:insider-streams": "pnpm --filter insider-streams-frontend codegen",
-    "build:contracts": "cd contracts && forge build --via-ir",
-    "test:contracts": "cd contracts && forge test --via-ir",
+    "build:contracts": "cd contracts && forge build --via-ir --skip SetupAll DeployPolicyEngine",
+    "test:contracts": "cd contracts && forge test --via-ir --skip SetupAll DeployPolicyEngine",
     "e2e": "pnpm --filter @private-streams/scripts e2e",
     "wagmi": "pnpm --filter @private-streams/common wagmi",
     "postinstall": "pnpm codegen:insider-streams"

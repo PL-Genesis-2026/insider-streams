@@ -223,6 +223,9 @@ importers:
       '@private-streams/common':
         specifier: workspace:*
         version: link:../packages/common
+      '@supabase/supabase-js':
+        specifier: ^2.98.0
+        version: 2.98.0
       graphql:
         specifier: ^16.13.1
         version: 16.13.1

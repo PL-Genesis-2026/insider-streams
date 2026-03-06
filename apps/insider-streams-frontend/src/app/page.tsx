@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import Image from "next/image";
 import { AuctionCard } from "@/components/auction-card";
 import { Badge } from "@/components/ui/badge";

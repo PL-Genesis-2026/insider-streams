@@ -90,7 +90,7 @@ function scalarToIso(value: unknown) {
 function mapBid(record: BidRecord): AuctionDetailBid {
   return {
     bidderAddress: getAddress(String(record.bidder)),
-    amountUsdc: bigintToUsdc(scalarToBigInt(record.amount)),
+    amountUsdc: bigintToUsdc(scalarToBigInt(record.bidAmount)),
     timestamp: scalarToIso(record.blockTimestamp),
     transactionHash: String(record.transactionHash),
   };
@@ -118,7 +118,7 @@ function mapForceClosedAuction(
 function mapTradeExecuted(record: TradeExecutedRecord): AuctionDetailTrade {
   return {
     buyerAddress: getAddress(String(record.buyer)),
-    amountUsdc: bigintToUsdc(scalarToBigInt(record.amount)),
+    amountUsdc: bigintToUsdc(scalarToBigInt(record.automaticBetAmount)),
     timestamp: scalarToIso(record.blockTimestamp),
   };
 }
@@ -233,7 +233,7 @@ export async function getAuctionDetail({
     currentBidUsdc: closedAuction
       ? bigintToUsdc(scalarToBigInt(closedAuction.winningBid))
       : latestBid
-        ? bigintToUsdc(scalarToBigInt(latestBid.amount))
+        ? bigintToUsdc(scalarToBigInt(latestBid.bidAmount))
         : undefined,
     currentBidderAddress: closedAuction
       ? getAddress(String(closedAuction.buyer))

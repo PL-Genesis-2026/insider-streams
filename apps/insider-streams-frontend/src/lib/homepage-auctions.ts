@@ -65,7 +65,7 @@ export async function getHomepageAuctions({
       status: "Open",
       currentBidUsdc: latestBid
         ? Number(
-            formatUnits(BigInt(String(latestBid.amount)), MOCK_USDC_DECIMALS),
+            formatUnits(BigInt(String(latestBid.bidAmount)), MOCK_USDC_DECIMALS),
           )
         : undefined,
       reserveUsdc: Number(
