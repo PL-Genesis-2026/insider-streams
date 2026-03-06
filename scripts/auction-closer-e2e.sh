@@ -41,11 +41,11 @@ fi
 
 # Contract addresses — update defaults when redeployed
 MOCK_USDC_ADDRESS="${MOCK_USDC_ADDRESS:-0xA75c910D441C99bA651a70451D3bE1d690c1DD85}"
-SECRET_MARKETPLACE_ADDRESS="${SECRET_MARKETPLACE_ADDRESS:-0xda55F6bc945CCA8A92e938c05bba58B934892a3c}"
+SECRET_MARKETPLACE_ADDRESS="${SECRET_MARKETPLACE_ADDRESS:-0x197D1150858Ce0c125B69E02D80790D7e7b017f1}"
 
 BID_AMOUNT=2000000        # 2 USDC (6 decimals)
-RESERVE_PRICE=1000000     # 1 USDC reserve
 AUCTION_DURATION=120      # 2 minutes (short for testing)
+SELLER_NAME="TestSeller"
 
 # Helper: parse field N from a cast tuple like "(addr, 0, 1000000 [1e6], ...)"
 parse_tuple_field() {
@@ -77,17 +77,17 @@ fi
 echo ""
 echo "▶ Step 1: Creating auction (duration=${AUCTION_DURATION}s)..."
 
-# Approve USDC for SecretMarketplace from tester (for bidding later)
+# Approve USDC for SecretMarketplace from owner (admin places all bids)
 cast send "$MOCK_USDC_ADDRESS" "approve(address,uint256)" "$SECRET_MARKETPLACE_ADDRESS" "$BID_AMOUNT" \
-  --rpc-url "$RPC_URL" --private-key "$TESTER_PK" --json | jq -r '"  Tester USDC approval tx: " + .transactionHash'
+  --rpc-url "$RPC_URL" --private-key "$OWNER_PK" --json | jq -r '"  Owner USDC approval tx: " + .transactionHash'
 
-# First create a market on SimpleMarket (needed for createAuction validation)
+# First create a market on ExamplePredictionMarket (needed for createAuction validation)
 SIMPLE_MARKET_ADDRESS=$(cast call "$SECRET_MARKETPLACE_ADDRESS" "simpleMarket()" --rpc-url "$RPC_URL" | cast --to-address)
-echo "  SimpleMarket: $SIMPLE_MARKET_ADDRESS"
+echo "  ExamplePredictionMarket: $SIMPLE_MARKET_ADDRESS"
 
 # Approve + create market (requires 10 USDC initial liquidity)
 cast send "$MOCK_USDC_ADDRESS" "approve(address,uint256)" "$SIMPLE_MARKET_ADDRESS" 10000000 \
-  --rpc-url "$RPC_URL" --private-key "$OWNER_PK" --json | jq -r '"  Owner USDC approval tx: " + .transactionHash'
+  --rpc-url "$RPC_URL" --private-key "$OWNER_PK" --json | jq -r '"  Owner USDC approval for market tx: " + .transactionHash'
 cast send "$SIMPLE_MARKET_ADDRESS" "newMarket(string)" "Test auction market" \
   --rpc-url "$RPC_URL" --private-key "$OWNER_PK" --json | jq -r '"  Market created tx: " + .transactionHash'
 
@@ -95,11 +95,10 @@ MARKET_ID_HEX=$(cast call "$SIMPLE_MARKET_ADDRESS" "nextMarketId()" --rpc-url "$
 MARKET_ID=$((16#$(echo "$MARKET_ID_HEX" | sed 's/0x//') - 1))
 echo "  Market ID: $MARKET_ID"
 
-# createAuction(uint256 externalMarketId, uint256 reservePrice, uint256 endTime, address yesToken, address noToken, bool betOnYes)
+# createAuction(string seller, uint256 eventId, string eventTitle, uint256 endTime)
 END_TIME=$(( $(date +%s) + AUCTION_DURATION ))
-ZERO_ADDR="0x0000000000000000000000000000000000000000"
 TX_CREATE=$(cast send "$SECRET_MARKETPLACE_ADDRESS" \
-  "createAuction(uint256,uint256,uint256,address,address,bool)" "$MARKET_ID" "$RESERVE_PRICE" "$END_TIME" "$ZERO_ADDR" "$ZERO_ADDR" true \
+  "createAuction(string,uint256,string,uint256)" "$SELLER_NAME" "$MARKET_ID" "Test auction market" "$END_TIME" \
   --rpc-url "$RPC_URL" --private-key "$OWNER_PK" --json 2>&1)
 
 if echo "$TX_CREATE" | jq -e '.status == "0x1"' &>/dev/null; then
@@ -123,11 +122,10 @@ echo "  Open auctions: $OPEN"
 
 # ─── Step 2: Tester places a bid ─────────────────────────────────────────────
 echo ""
-echo "▶ Step 2: Tester placing bid of $BID_AMOUNT..."
-AUTOMATIC_BET_AMOUNT=1000000  # 1 USDC
+echo "▶ Step 2: Admin placing bid of $BID_AMOUNT..."
 TX_BID=$(cast send "$SECRET_MARKETPLACE_ADDRESS" \
-  "placeBid(uint256,uint256,uint256)" "$AUCTION_ID" "$BID_AMOUNT" "$AUTOMATIC_BET_AMOUNT" \
-  --rpc-url "$RPC_URL" --private-key "$TESTER_PK" --json 2>&1)
+  "placeBid(uint256,uint256)" "$AUCTION_ID" "$BID_AMOUNT" \
+  --rpc-url "$RPC_URL" --private-key "$OWNER_PK" --json 2>&1)
 
 if echo "$TX_BID" | jq -e '.status == "0x1"' &>/dev/null; then
   BID_HASH=$(echo "$TX_BID" | jq -r '.transactionHash')

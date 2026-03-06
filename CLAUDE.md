@@ -116,7 +116,7 @@ Private keys are in `.env` files (never committed).
 
 ## Deployed Contracts (Eth Sepolia — SecretMarketplace / Auctions)
 
-- **SecretMarketplace**: `0xda55F6bc945CCA8A92e938c05bba58B934892a3c`
+- **SecretMarketplace**: `0x197D1150858Ce0c125B69E02D80790D7e7b017f1`
   - Uses MockUSDC as payment token, linked to ExamplePredictionMarket
   - `simpleMarket` address is updatable via `setSimpleMarket()` (admin only)
   - CRE Forwarder: `0x15fc6ae953e024d975e77382eeec56a9101f9f88`
