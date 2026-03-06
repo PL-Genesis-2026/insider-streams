@@ -15,7 +15,7 @@ pnpm dev:insider-streams
 | Contract | Address |
 |----------|---------|
 | MockUSDC | `0xA75c910D441C99bA651a70451D3bE1d690c1DD85` |
-| SimpleMarket | `0xF9EDB9268E01301eE5Ccc985cDb3D825f05a4079` |
+| SimpleMarket | `0x89F02f5a5162570F1a79C5C505b6CA78D13229e7` |
 | SecretMarketplace | `0xED53f1AE2Ee56ca0fDAA79f0e050E873FCF86616` |
 
 ## Create a Prediction Market

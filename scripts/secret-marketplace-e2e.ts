@@ -158,12 +158,18 @@ async function main() {
     console.log(`  ok Bidder has ${formatUnits(bidderBalance, USDC_DECIMALS)} USDC`);
   }
 
-  // Approve SecretMarketplace for both users
-  const approveOwner = await ownerClient.writeContract({
+  // Approve SecretMarketplace and SimpleMarket for both users
+  const approveOwnerSM = await ownerClient.writeContract({
     address: MOCK_USDC, abi: mockUsdcAbi, functionName: "approve",
     args: [SECRET_MARKETPLACE, APPROVAL_AMOUNT],
   });
-  await waitForTx(approveOwner, "Owner approved SecretMarketplace");
+  await waitForTx(approveOwnerSM, "Owner approved SecretMarketplace");
+
+  const approveOwnerMarket = await ownerClient.writeContract({
+    address: MOCK_USDC, abi: mockUsdcAbi, functionName: "approve",
+    args: [SIMPLE_MARKET, APPROVAL_AMOUNT],
+  });
+  await waitForTx(approveOwnerMarket, "Owner approved SimpleMarket");
 
   const approveBidder = await bidderClient.writeContract({
     address: MOCK_USDC, abi: mockUsdcAbi, functionName: "approve",

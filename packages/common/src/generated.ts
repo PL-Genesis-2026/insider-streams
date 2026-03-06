@@ -1120,8 +1120,23 @@ export const simpleMarketAbi = [
   },
   {
     type: 'function',
-    inputs: [{ name: 'marketId', internalType: 'uint256', type: 'uint256' }],
-    name: 'claimPrediction',
+    inputs: [],
+    name: 'INITIAL_LIQUIDITY',
+    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'marketId', internalType: 'uint256', type: 'uint256' },
+      {
+        name: 'outcome',
+        internalType: 'enum SimpleMarket.Outcome',
+        type: 'uint8',
+      },
+      { name: 'usdcAmount', internalType: 'uint256', type: 'uint256' },
+    ],
+    name: 'buyShares',
     outputs: [],
     stateMutability: 'nonpayable',
   },
@@ -1164,6 +1179,7 @@ export const simpleMarketAbi = [
         type: 'tuple',
         components: [
           { name: 'question', internalType: 'string', type: 'string' },
+          { name: 'creator', internalType: 'address', type: 'address' },
           { name: 'marketOpen', internalType: 'uint256', type: 'uint256' },
           { name: 'marketClose', internalType: 'uint256', type: 'uint256' },
           {
@@ -1180,15 +1196,18 @@ export const simpleMarketAbi = [
           { name: 'evidenceURI', internalType: 'string', type: 'string' },
           { name: 'confidenceBps', internalType: 'uint16', type: 'uint16' },
           {
-            name: 'predCounts',
-            internalType: 'uint256[2]',
-            type: 'uint256[2]',
+            name: 'yesToken',
+            internalType: 'contract ShareToken',
+            type: 'address',
           },
           {
-            name: 'predTotals',
-            internalType: 'uint256[2]',
-            type: 'uint256[2]',
+            name: 'noToken',
+            internalType: 'contract ShareToken',
+            type: 'address',
           },
+          { name: 'yesReserve', internalType: 'uint256', type: 'uint256' },
+          { name: 'noReserve', internalType: 'uint256', type: 'uint256' },
+          { name: 'liquidityWithdrawn', internalType: 'bool', type: 'bool' },
         ],
       },
     ],
@@ -1197,23 +1216,8 @@ export const simpleMarketAbi = [
   {
     type: 'function',
     inputs: [{ name: 'marketId', internalType: 'uint256', type: 'uint256' }],
-    name: 'getPrediction',
-    outputs: [
-      {
-        name: '',
-        internalType: 'struct SimpleMarket.Prediction',
-        type: 'tuple',
-        components: [
-          { name: 'amount', internalType: 'uint256', type: 'uint256' },
-          {
-            name: 'pred',
-            internalType: 'enum SimpleMarket.Outcome',
-            type: 'uint8',
-          },
-          { name: 'claimed', internalType: 'bool', type: 'bool' },
-        ],
-      },
-    ],
+    name: 'getNoPrice',
+    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
     stateMutability: 'view',
   },
   {
@@ -1225,18 +1229,10 @@ export const simpleMarketAbi = [
   },
   {
     type: 'function',
-    inputs: [
-      { name: 'marketId', internalType: 'uint256', type: 'uint256' },
-      {
-        name: 'outcome',
-        internalType: 'enum SimpleMarket.Outcome',
-        type: 'uint8',
-      },
-      { name: 'amount', internalType: 'uint256', type: 'uint256' },
-    ],
-    name: 'makePrediction',
-    outputs: [],
-    stateMutability: 'nonpayable',
+    inputs: [{ name: 'marketId', internalType: 'uint256', type: 'uint256' }],
+    name: 'getYesPrice',
+    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
+    stateMutability: 'view',
   },
   {
     type: 'function',
@@ -1244,6 +1240,7 @@ export const simpleMarketAbi = [
     name: 'markets',
     outputs: [
       { name: 'question', internalType: 'string', type: 'string' },
+      { name: 'creator', internalType: 'address', type: 'address' },
       { name: 'marketOpen', internalType: 'uint256', type: 'uint256' },
       { name: 'marketClose', internalType: 'uint256', type: 'uint256' },
       {
@@ -1259,6 +1256,15 @@ export const simpleMarketAbi = [
       { name: 'settledAt', internalType: 'uint256', type: 'uint256' },
       { name: 'evidenceURI', internalType: 'string', type: 'string' },
       { name: 'confidenceBps', internalType: 'uint16', type: 'uint16' },
+      {
+        name: 'yesToken',
+        internalType: 'contract ShareToken',
+        type: 'address',
+      },
+      { name: 'noToken', internalType: 'contract ShareToken', type: 'address' },
+      { name: 'yesReserve', internalType: 'uint256', type: 'uint256' },
+      { name: 'noReserve', internalType: 'uint256', type: 'uint256' },
+      { name: 'liquidityWithdrawn', internalType: 'bool', type: 'bool' },
     ],
     stateMutability: 'view',
   },
@@ -1299,6 +1305,16 @@ export const simpleMarketAbi = [
     name: 'paymentToken',
     outputs: [{ name: '', internalType: 'contract IERC20', type: 'address' }],
     stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [
+      { name: 'marketId', internalType: 'uint256', type: 'uint256' },
+      { name: 'amount', internalType: 'uint256', type: 'uint256' },
+    ],
+    name: 'redeemShares',
+    outputs: [],
+    stateMutability: 'nonpayable',
   },
   {
     type: 'function',
@@ -1367,6 +1383,13 @@ export const simpleMarketAbi = [
     type: 'function',
     inputs: [{ name: 'newOwner', internalType: 'address', type: 'address' }],
     name: 'transferOwnership',
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    inputs: [{ name: 'marketId', internalType: 'uint256', type: 'uint256' }],
+    name: 'withdrawLiquidity',
     outputs: [],
     stateMutability: 'nonpayable',
   },
@@ -1463,6 +1486,31 @@ export const simpleMarketAbi = [
         indexed: true,
       },
       {
+        name: 'usdcOut',
+        internalType: 'uint256',
+        type: 'uint256',
+        indexed: false,
+      },
+    ],
+    name: 'LiquidityWithdrawn',
+  },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      {
+        name: 'marketId',
+        internalType: 'uint256',
+        type: 'uint256',
+        indexed: true,
+      },
+      {
+        name: 'creator',
+        internalType: 'address',
+        type: 'address',
+        indexed: true,
+      },
+      {
         name: 'question',
         internalType: 'string',
         type: 'string',
@@ -1478,6 +1526,18 @@ export const simpleMarketAbi = [
         name: 'marketClose',
         internalType: 'uint256',
         type: 'uint256',
+        indexed: false,
+      },
+      {
+        name: 'yesToken',
+        internalType: 'address',
+        type: 'address',
+        indexed: false,
+      },
+      {
+        name: 'noToken',
+        internalType: 'address',
+        type: 'address',
         indexed: false,
       },
     ],
@@ -1501,61 +1561,6 @@ export const simpleMarketAbi = [
       },
     ],
     name: 'OwnershipTransferred',
-  },
-  {
-    type: 'event',
-    anonymous: false,
-    inputs: [
-      {
-        name: 'marketId',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: true,
-      },
-      {
-        name: 'predictor',
-        internalType: 'address',
-        type: 'address',
-        indexed: true,
-      },
-      {
-        name: 'outcome',
-        internalType: 'enum SimpleMarket.Outcome',
-        type: 'uint8',
-        indexed: true,
-      },
-      {
-        name: 'amount',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: false,
-      },
-      {
-        name: 'predCountNo',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: false,
-      },
-      {
-        name: 'predCountYes',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: false,
-      },
-      {
-        name: 'predTotalNo',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: false,
-      },
-      {
-        name: 'predTotalYes',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: false,
-      },
-    ],
-    name: 'PredictionMade',
   },
   {
     type: 'event',
@@ -1614,10 +1619,75 @@ export const simpleMarketAbi = [
     ],
     name: 'SettlementResponse',
   },
-  { type: 'error', inputs: [], name: 'AlreadyClaimed' },
-  { type: 'error', inputs: [], name: 'AlreadyPredicted' },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      {
+        name: 'marketId',
+        internalType: 'uint256',
+        type: 'uint256',
+        indexed: true,
+      },
+      {
+        name: 'buyer',
+        internalType: 'address',
+        type: 'address',
+        indexed: true,
+      },
+      {
+        name: 'outcome',
+        internalType: 'enum SimpleMarket.Outcome',
+        type: 'uint8',
+        indexed: true,
+      },
+      {
+        name: 'usdcIn',
+        internalType: 'uint256',
+        type: 'uint256',
+        indexed: false,
+      },
+      {
+        name: 'sharesOut',
+        internalType: 'uint256',
+        type: 'uint256',
+        indexed: false,
+      },
+    ],
+    name: 'SharesPurchased',
+  },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      {
+        name: 'marketId',
+        internalType: 'uint256',
+        type: 'uint256',
+        indexed: true,
+      },
+      {
+        name: 'redeemer',
+        internalType: 'address',
+        type: 'address',
+        indexed: true,
+      },
+      {
+        name: 'sharesIn',
+        internalType: 'uint256',
+        type: 'uint256',
+        indexed: false,
+      },
+      {
+        name: 'usdcOut',
+        internalType: 'uint256',
+        type: 'uint256',
+        indexed: false,
+      },
+    ],
+    name: 'SharesRedeemed',
+  },
   { type: 'error', inputs: [], name: 'AmountZero' },
-  { type: 'error', inputs: [], name: 'IncorrectPrediction' },
   {
     type: 'error',
     inputs: [
@@ -1652,6 +1722,7 @@ export const simpleMarketAbi = [
     ],
     name: 'InvalidWorkflowName',
   },
+  { type: 'error', inputs: [], name: 'LiquidityAlreadyWithdrawn' },
   {
     type: 'error',
     inputs: [
@@ -1679,7 +1750,7 @@ export const simpleMarketAbi = [
     ],
     name: 'MarketNotOpen',
   },
-  { type: 'error', inputs: [], name: 'NoWinners' },
+  { type: 'error', inputs: [], name: 'NotCreator' },
   {
     type: 'error',
     inputs: [

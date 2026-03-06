@@ -41,6 +41,10 @@ contract SecretMarketplaceTest is Test {
         // Grant CRE role
         sm.grantRole(sm.CRE_ROLE(), creAddress);
 
+        // newMarket now requires 10 USDC initial liquidity
+        usdc.mint(address(this), 100e6);
+        usdc.approve(address(market), type(uint256).max);
+
         // Create markets on SimpleMarket so createAuction validation passes
         market.newMarket("Test market 0");  // marketId=0
         market.newMarket("Test market 1");  // marketId=1
