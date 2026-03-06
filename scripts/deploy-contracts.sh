@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # deploy-contracts.sh — Interactively deploy contracts and update hardcoded addresses
 #
-# Prompts which contracts to redeploy (MockUSDC, SimpleMarket, SecretMarketplace),
+# Prompts which contracts to redeploy (MockUSDC, ExamplePredictionMarket, SecretMarketplace),
 # deploys them via Foundry, then does a best-effort find-and-replace of the old
 # addresses across the codebase (source files, configs, scripts, .env files).
 #
@@ -9,7 +9,7 @@
 #
 # Requires:
 #   - contracts/.env with PRIVATE_KEY and RPC_URL
-#   - For SimpleMarket: PAYMENT_TOKEN and CRE_FORWARDER_ADDRESS in contracts/.env
+#   - For ExamplePredictionMarket: PAYMENT_TOKEN and CRE_FORWARDER_ADDRESS in contracts/.env
 #   - For SecretMarketplace: PAYMENT_TOKEN, SIMPLE_MARKET_ADDRESS, CRE_FORWARDER_ADDRESS in contracts/.env
 
 set -euo pipefail
@@ -104,6 +104,7 @@ deploy_contract() {
     --rpc-url "$RPC_URL" \
     --broadcast \
     --via-ir \
+    --skip SetupAll DeployPolicyEngine \
     2>&1) || {
     echo -e "  ${RED}ERROR: Deployment failed for $CONTRACT_LABEL${NC}" >&2
     echo "$OUTPUT" | tail -20 >&2
@@ -155,9 +156,9 @@ echo "  Deploy Contracts"
 echo "═══════════════════════════════════════════════════════"
 echo ""
 echo "  Current addresses (from packages/common/src/index.ts):"
-echo "    MockUSDC:           $CURRENT_MOCK_USDC"
-echo "    SimpleMarket:       $CURRENT_SIMPLE_MARKET"
-echo "    SecretMarketplace:  $CURRENT_SECRET_MARKETPLACE"
+echo "    MockUSDC:                  $CURRENT_MOCK_USDC"
+echo "    ExamplePredictionMarket:  $CURRENT_SIMPLE_MARKET"
+echo "    SecretMarketplace:        $CURRENT_SECRET_MARKETPLACE"
 echo ""
 echo "  RPC: $RPC_URL"
 
@@ -173,7 +174,7 @@ DEPLOY_MARKETPLACE=false
 read -rp "  Deploy MockUSDC? [y/N]: " ans
 [[ "$ans" =~ ^[Yy]$ ]] && DEPLOY_USDC=true
 
-read -rp "  Deploy SimpleMarket? [y/N]: " ans
+read -rp "  Deploy ExamplePredictionMarket? [y/N]: " ans
 [[ "$ans" =~ ^[Yy]$ ]] && DEPLOY_MARKET=true
 
 read -rp "  Deploy SecretMarketplace? [y/N]: " ans
@@ -191,7 +192,7 @@ if [ "$DEPLOY_MARKET" = true ] || [ "$DEPLOY_MARKETPLACE" = true ]; then
   if ! grep -q '^PAYMENT_TOKEN=' "$CONTRACTS_DIR/.env" 2>/dev/null; then
     echo ""
     echo -e "  ${YELLOW}PAYMENT_TOKEN not found in contracts/.env${NC}"
-    echo "  SimpleMarket and SecretMarketplace need this."
+    echo "  ExamplePredictionMarket and SecretMarketplace need this."
     echo ""
     if [ "$DEPLOY_USDC" = true ]; then
       echo "  It will be set automatically after MockUSDC is deployed."
@@ -258,9 +259,9 @@ if [ "$DEPLOY_USDC" = true ]; then
   fi
 fi
 
-# Deploy SimpleMarket
+# Deploy ExamplePredictionMarket
 if [ "$DEPLOY_MARKET" = true ]; then
-  NEW_MARKET=$(deploy_contract "DeploySimpleMarket.s.sol:DeploySimpleMarket" "SimpleMarket")
+  NEW_MARKET=$(deploy_contract "DeployExamplePredictionMarket.s.sol:DeployExamplePredictionMarket" "ExamplePredictionMarket")
 
   # Update SIMPLE_MARKET_ADDRESS in contracts/.env for SecretMarketplace deploy
   if [ "$DEPLOY_MARKETPLACE" = true ]; then
@@ -295,9 +296,9 @@ if [ -n "$NEW_USDC" ]; then
 fi
 
 if [ -n "$NEW_MARKET" ]; then
-  replace_address "$CURRENT_SIMPLE_MARKET" "$NEW_MARKET" "SimpleMarket"
+  replace_address "$CURRENT_SIMPLE_MARKET" "$NEW_MARKET" "ExamplePredictionMarket"
   if [ -n "$ALT_SIMPLE_MARKET" ] && [ "$ALT_SIMPLE_MARKET" != "$CURRENT_SIMPLE_MARKET" ]; then
-    replace_address "$ALT_SIMPLE_MARKET" "$NEW_MARKET" "SimpleMarket (.env variant)"
+    replace_address "$ALT_SIMPLE_MARKET" "$NEW_MARKET" "ExamplePredictionMarket (.env variant)"
   fi
 fi
 
@@ -355,10 +356,10 @@ EXPECTED_MARKET="${NEW_MARKET:-$CURRENT_SIMPLE_MARKET}"
 EXPECTED_MARKETPLACE="${NEW_MARKETPLACE:-$CURRENT_SECRET_MARKETPLACE}"
 
 fix_env_address "$ROOT_DIR/.env" "MOCK_USDC_ADDRESS" "$EXPECTED_USDC" "MockUSDC"
-fix_env_address "$ROOT_DIR/.env" "SIMPLE_MARKET_ADDRESS" "$EXPECTED_MARKET" "SimpleMarket"
+fix_env_address "$ROOT_DIR/.env" "SIMPLE_MARKET_ADDRESS" "$EXPECTED_MARKET" "ExamplePredictionMarket"
 fix_env_address "$ROOT_DIR/.env" "SECRET_MARKETPLACE_ADDRESS" "$EXPECTED_MARKETPLACE" "SecretMarketplace"
 fix_env_address "$ROOT_DIR/scripts/.env" "MOCK_USDC_ADDRESS" "$EXPECTED_USDC" "MockUSDC"
-fix_env_address "$ROOT_DIR/scripts/.env" "SIMPLE_MARKET_ADDRESS" "$EXPECTED_MARKET" "SimpleMarket"
+fix_env_address "$ROOT_DIR/scripts/.env" "SIMPLE_MARKET_ADDRESS" "$EXPECTED_MARKET" "ExamplePredictionMarket"
 fix_env_address "$ROOT_DIR/scripts/.env" "SECRET_MARKETPLACE_ADDRESS" "$EXPECTED_MARKETPLACE" "SecretMarketplace"
 
 # ─── Summary ─────────────────────────────────────────────────────────────────
@@ -372,7 +373,7 @@ if [ -n "$NEW_USDC" ]; then
   echo -e "  MockUSDC:           ${GREEN}$NEW_USDC${NC}"
 fi
 if [ -n "$NEW_MARKET" ]; then
-  echo -e "  SimpleMarket:       ${GREEN}$NEW_MARKET${NC}"
+  echo -e "  ExamplePredictionMarket: ${GREEN}$NEW_MARKET${NC}"
 fi
 if [ -n "$NEW_MARKETPLACE" ]; then
   echo -e "  SecretMarketplace:  ${GREEN}$NEW_MARKETPLACE${NC}"

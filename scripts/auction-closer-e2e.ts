@@ -23,7 +23,7 @@ import {
   SECRET_MARKETPLACE_ADDRESS,
   mockUsdcAbi,
   secretMarketplaceAbi,
-  simpleMarketAbi,
+  examplePredictionMarketAbi,
 } from "@private-streams/common";
 import { parseEventLogs, type Address, type Hex } from "viem";
 import {
@@ -57,11 +57,9 @@ const { publicClient, ownerClient, ownerAccount, bidderClient, bidderAccount } =
 const MIN_BALANCE = 10_000_000n; // 10 USDC
 const MINT_AMOUNT = 10_000_000_000n; // 10,000 USDC
 const APPROVAL_AMOUNT = 100_000_000_000n; // 100,000 USDC blanket
-const RESERVE_PRICE = 1_000_000n; // 1 USDC
 const BID_AMOUNT = 2_000_000n; // 2 USDC
-const AUTOMATIC_BET_AMOUNT = 5_000_000n; // 5 USDC
 const AUCTION_DURATION = 120; // 2 minutes
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address;
+const SELLER_NAME = "TestSeller";
 
 // ─── E2E Flow ────────────────────────────────────────────────────────────────
 
@@ -81,31 +79,40 @@ async function main() {
   console.log(`  SecretMarketplace: ${SECRET_MARKETPLACE}`);
 
   // ── Step 1: Ensure USDC balances ────────────────────────────────────────────
-  step("Ensuring bidder has USDC...");
+  step("Ensuring owner has USDC...");
   await ensureUsdcBalance(
     publicClient,
     ownerClient,
     MOCK_USDC,
-    bidderAccount!.address,
+    ownerAccount.address,
     MIN_BALANCE,
     MINT_AMOUNT,
   );
 
   // ── Step 2: Approve USDC ────────────────────────────────────────────────────
-  step("Bidder approving USDC for SecretMarketplace...");
-  const approveHash = await bidderClient!.writeContract({
+  step("Owner approving USDC for SecretMarketplace...");
+  const approveHash = await ownerClient.writeContract({
     address: MOCK_USDC,
     abi: mockUsdcAbi,
     functionName: "approve",
     args: [SECRET_MARKETPLACE, APPROVAL_AMOUNT],
   });
-  await waitForTx(publicClient, approveHash, "Bidder USDC approval");
+  await waitForTx(publicClient, approveHash, "Owner USDC approval");
+
+  step("Owner approving USDC for ExamplePredictionMarket...");
+  const approveMarketHash = await ownerClient.writeContract({
+    address: MOCK_USDC,
+    abi: mockUsdcAbi,
+    functionName: "approve",
+    args: [SIMPLE_MARKET, APPROVAL_AMOUNT],
+  });
+  await waitForTx(publicClient, approveMarketHash, "Owner USDC approval for market");
 
   // ── Step 3: Create market ───────────────────────────────────────────────────
-  step("Owner creating SimpleMarket market...");
+  step("Owner creating ExamplePredictionMarket market...");
   const createMarketHash = await ownerClient.writeContract({
     address: SIMPLE_MARKET,
-    abi: simpleMarketAbi,
+    abi: examplePredictionMarketAbi,
     functionName: "newMarket",
     args: ["Auction closer E2E test"],
   });
@@ -115,14 +122,14 @@ async function main() {
     "Market created",
   );
   const marketLogs = parseEventLogs({
-    abi: simpleMarketAbi,
+    abi: examplePredictionMarketAbi,
     logs: marketReceipt.logs,
     eventName: "MarketCreated",
   });
   const marketId = marketLogs[0].args.marketId;
   console.log(`  Market ID: ${marketId}`);
 
-  // ── Step 4: Create auction (6 args) ─────────────────────────────────────────
+  // ── Step 4: Create auction (admin-only, 4 args) ────────────────────────────
   step("Owner creating auction...");
   const now = BigInt(Math.floor(Date.now() / 1000));
   const endTime = now + BigInt(AUCTION_DURATION);
@@ -131,7 +138,7 @@ async function main() {
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
     functionName: "createAuction",
-    args: [marketId, RESERVE_PRICE, endTime, ZERO_ADDRESS, ZERO_ADDRESS, true],
+    args: [SELLER_NAME, marketId, "Auction closer E2E test", endTime],
   });
   const auctionReceipt = await waitForTx(
     publicClient,
@@ -158,13 +165,13 @@ async function main() {
     `Auction ${auctionId} not in open auctions`,
   );
 
-  // ── Step 5: Bidder places bid (3 args) ──────────────────────────────────────
-  step("Bidder placing bid...");
-  const bidHash = await bidderClient!.writeContract({
+  // ── Step 5: Owner places bid (admin-only, 2 args) ──────────────────────────
+  step("Owner placing bid...");
+  const bidHash = await ownerClient.writeContract({
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
     functionName: "placeBid",
-    args: [auctionId, BID_AMOUNT, AUTOMATIC_BET_AMOUNT],
+    args: [auctionId, BID_AMOUNT],
   });
   await waitForTx(publicClient, bidHash, "Bid placed");
 
