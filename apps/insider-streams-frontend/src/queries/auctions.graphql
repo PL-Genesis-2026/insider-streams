@@ -15,7 +15,7 @@ query RecentBids {
     id
     auctionId
     bidder
-    amount
+    bidAmount
     blockTimestamp
     transactionHash
   }
