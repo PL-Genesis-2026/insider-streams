@@ -8,7 +8,7 @@ dataSources:
     name: SecretMarketplace
     network: sepolia
     source:
-      address: "0xED53f1AE2Ee56ca0fDAA79f0e050E873FCF86616"
+      address: "0x2B77E46F13c4f5B11B1df6C1aD0b37E0396EF736"
       abi: SecretMarketplace
       startBlock: 10391293
 
@@ -35,11 +35,11 @@ dataSources:
       eventHandlers:
         - event: AuctionClosed(indexed uint256,indexed address,uint256,address,uint256)
           handler: handleAuctionClosed
-        - event: AuctionCreated(indexed uint256,indexed address,uint256,uint256,uint256)
+        - event: AuctionCreated(indexed uint256,indexed address,indexed uint256,uint256,uint256,bool)
           handler: handleAuctionCreated
         - event: AuctionForceClosed(indexed uint256,indexed address,uint256,address,uint256,int8)
           handler: handleAuctionForceClosed
-        - event: BidPlaced(indexed uint256,indexed address,uint256,address,uint256)
+        - event: BidPlaced(indexed uint256,indexed address,uint256,uint256,address,uint256)
           handler: handleBidPlaced
         - event: ExpectedAuthorUpdated(indexed address,indexed address)
           handler: handleExpectedAuthorUpdated
@@ -55,6 +55,6 @@ dataSources:
           handler: handleReputationUpdated
         - event: SecurityWarning(string)
           handler: handleSecurityWarning
-        - event: TradeExecuted(indexed uint256,indexed uint256,indexed address,uint256)
+        - event: TradeExecuted(indexed uint256,indexed uint256,indexed address,uint256,bool)
           handler: handleTradeExecuted
       file: ./src/secret-marketplace.ts

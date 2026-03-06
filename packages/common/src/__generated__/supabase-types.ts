@@ -34,39 +34,9 @@ export type Database = {
   }
   public: {
     Tables: {
-      balances: {
-        Row: {
-          available_balance: string
-          created_at: string
-          id: string
-          locked_balance: string
-          pending_withdrawal: string
-          updated_at: string
-          user_address: string
-        }
-        Insert: {
-          available_balance?: string
-          created_at?: string
-          id?: string
-          locked_balance?: string
-          pending_withdrawal?: string
-          updated_at?: string
-          user_address: string
-        }
-        Update: {
-          available_balance?: string
-          created_at?: string
-          id?: string
-          locked_balance?: string
-          pending_withdrawal?: string
-          updated_at?: string
-          user_address?: string
-        }
-        Relationships: []
-      }
       deposits: {
         Row: {
-          amount: string
+          amount: number
           created_at: string
           credited_at: string | null
           id: string
@@ -79,7 +49,7 @@ export type Database = {
           user_address: string | null
         }
         Insert: {
-          amount: string
+          amount: number
           created_at?: string
           credited_at?: string | null
           id?: string
@@ -92,7 +62,7 @@ export type Database = {
           user_address?: string | null
         }
         Update: {
-          amount?: string
+          amount?: number
           created_at?: string
           credited_at?: string | null
           id?: string
@@ -108,7 +78,7 @@ export type Database = {
       }
       private_bids: {
         Row: {
-          amount: string
+          amount: number
           auction_id: string
           bidder_address: string
           created_at: string
@@ -120,7 +90,7 @@ export type Database = {
           won_at: string | null
         }
         Insert: {
-          amount: string
+          amount: number
           auction_id: string
           bidder_address: string
           created_at?: string
@@ -132,7 +102,7 @@ export type Database = {
           won_at?: string | null
         }
         Update: {
-          amount?: string
+          amount?: number
           auction_id?: string
           bidder_address?: string
           created_at?: string
@@ -142,48 +112,6 @@ export type Database = {
           status?: string
           updated_at?: string
           won_at?: string | null
-        }
-        Relationships: []
-      }
-      private_withdrawals: {
-        Row: {
-          amount: string
-          completed_at: string | null
-          created_at: string
-          failed_reason: string | null
-          id: string
-          recipient_address: string | null
-          status: string
-          token_address: string
-          transfer_tx_id: string | null
-          updated_at: string
-          user_address: string
-        }
-        Insert: {
-          amount: string
-          completed_at?: string | null
-          created_at?: string
-          failed_reason?: string | null
-          id?: string
-          recipient_address?: string | null
-          status?: string
-          token_address?: string
-          transfer_tx_id?: string | null
-          updated_at?: string
-          user_address: string
-        }
-        Update: {
-          amount?: string
-          completed_at?: string | null
-          created_at?: string
-          failed_reason?: string | null
-          id?: string
-          recipient_address?: string | null
-          status?: string
-          token_address?: string
-          transfer_tx_id?: string | null
-          updated_at?: string
-          user_address?: string
         }
         Relationships: []
       }
@@ -220,9 +148,83 @@ export type Database = {
         }
         Relationships: []
       }
+      sellers: {
+        Row: {
+          address: string
+          created_at: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          address: string
+          created_at?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string
+          created_at?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      transfers: {
+        Row: {
+          amount: number
+          completed_at: string | null
+          created_at: string
+          failed_reason: string | null
+          id: string
+          recipient_address: string | null
+          status: string
+          token_address: string
+          transaction_id: string | null
+          type: string
+          updated_at: string
+          user_address: string
+        }
+        Insert: {
+          amount: number
+          completed_at?: string | null
+          created_at?: string
+          failed_reason?: string | null
+          id?: string
+          recipient_address?: string | null
+          status?: string
+          token_address?: string
+          transaction_id?: string | null
+          type?: string
+          updated_at?: string
+          user_address: string
+        }
+        Update: {
+          amount?: number
+          completed_at?: string | null
+          created_at?: string
+          failed_reason?: string | null
+          id?: string
+          recipient_address?: string | null
+          status?: string
+          token_address?: string
+          transaction_id?: string | null
+          type?: string
+          updated_at?: string
+          user_address?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
-      [_ in never]: never
+      balances: {
+        Row: {
+          available_balance: string | null
+          locked_balance: string | null
+          pending_withdrawal: string | null
+          user_address: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       [_ in never]: never
