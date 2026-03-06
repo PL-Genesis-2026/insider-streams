@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { ReceiverTemplate } from "./interfaces/ReceiverTemplate.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {ReceiverTemplate} from "./interfaces/ReceiverTemplate.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {ShareToken} from "./ShareToken.sol";
 
 /// @title SimpleMarket
-/// @notice A basic binary prediction market allowing users to stake ERC-20 tokens on Yes/No outcomes.
-/// @dev Integrates with Chainlink Runtime Environment (CRE) through ReceiverTemplate. Used in pair with demo workflow to settle markets with Gemini.
+/// @notice Binary prediction market with constant-product AMM and YES/NO ERC-20 share tokens.
+/// @dev Integrates with Chainlink Runtime Environment (CRE) through ReceiverTemplate.
 contract SimpleMarket is ReceiverTemplate {
     using SafeERC20 for IERC20;
 
@@ -15,52 +16,42 @@ contract SimpleMarket is ReceiverTemplate {
     // ======== EVENTS ===========
     // ===========================
 
-    /// @notice Emitted when a new market is created.
-    /// @param marketId The ID of the newly created market.
-    /// @param creator The address that created the market.
-    /// @param question The market's question string.
-    /// @param marketOpen Timestamp when the market opened.
-    /// @param marketClose Timestamp when the market closes for predictions.
     event MarketCreated(
         uint256 indexed marketId,
         address indexed creator,
         string question,
         uint256 marketOpen,
-        uint256 marketClose
+        uint256 marketClose,
+        address yesToken,
+        address noToken
     );
 
-    /// @notice Emitted when a user places a prediction on a market.
-    /// @param marketId The ID of the market.
-    /// @param predictor The address that made the prediction.
-    /// @param outcome The predicted outcome (Yes or No).
-    /// @param amount The amount of tokens staked.
-    /// @param predCountNo Total NO prediction count after this prediction.
-    /// @param predCountYes Total YES prediction count after this prediction.
-    /// @param predTotalNo Total NO tokens staked after this prediction.
-    /// @param predTotalYes Total YES tokens staked after this prediction.
-    event PredictionMade(
+    event SharesPurchased(
         uint256 indexed marketId,
-        address indexed predictor,
+        address indexed buyer,
         Outcome indexed outcome,
-        uint256 amount,
-        uint256 predCountNo,
-        uint256 predCountYes,
-        uint256 predTotalNo,
-        uint256 predTotalYes
+        uint256 usdcIn,
+        uint256 sharesOut
     );
 
-    /// @notice Emitted when a settlement is requested for a market.
-    /// @param marketId The ID of the market to settle.
-    /// @param question The market's question string.
+    event SharesRedeemed(
+        uint256 indexed marketId,
+        address indexed redeemer,
+        uint256 sharesIn,
+        uint256 usdcOut
+    );
+
+    event LiquidityWithdrawn(
+        uint256 indexed marketId,
+        address indexed creator,
+        uint256 usdcOut
+    );
+
     event SettlementRequested(
         uint256 indexed marketId,
         string question
     );
 
-    /// @notice Emitted when a settlement response is received and processed.
-    /// @param marketId The ID of the settled market.
-    /// @param status The new status of the market after settlement.
-    /// @param outcome The resolved outcome of the market.
     event SettlementResponse(
         uint256 indexed marketId,
         Status indexed status,
@@ -71,12 +62,7 @@ contract SimpleMarket is ReceiverTemplate {
     // ======== ENUMS ============
     // ===========================
 
-    /// @notice Possible outcomes for a market. Also serves as a user's chosen prediction.
-    /// @dev `None` indicates no outcome yet or no prediction made, `Inconclusive` is used when AI response/confidence is insufficient. Users may only pass No or Yes.
     enum Outcome { None, No, Yes, Inconclusive }
-
-    /// @notice Lifecycle status of a market.
-    /// @dev Transitions: Open → SettlementRequested → Settled/NeedsManual
     enum Status { Open, SettlementRequested, Settled, NeedsManual }
 
     // ===========================
@@ -88,64 +74,47 @@ contract SimpleMarket is ReceiverTemplate {
     error SettlementNotRequested(Status current);
     error InvalidOutcome();
     error ManualSettlementNotAllowed(Status current);
-
     error MarketNotOpen(uint256 nowTs, uint256 closeTs);
-    error AlreadyPredicted();
     error AmountZero();
-
     error NotSettledYet(Status current);
-    error AlreadyClaimed();
-    error IncorrectPrediction();
-    error NoWinners();
+    error NotCreator();
+    error LiquidityAlreadyWithdrawn();
 
     // ===========================
     // ======== STRUCTS ==========
     // ===========================
 
-    /// @notice Represents a single prediction market instance.
     struct Market {
-        string question;            // Market question (e.g. "The New York Yankees will win the 2009 world series.")
-        uint256 marketOpen;         // Timestamp when the market opened
-        uint256 marketClose;        // Timestamp when the market closes for predictions
-        Status status;              // Current market status (Open, Settled, etc.)
-        Outcome outcome;            // Final outcome of the market
-        uint256 settledAt;          // Timestamp when settlement occurred
-        string evidenceURI;         // Response ID of the Gemini request
-        uint16 confidenceBps;       // Confidence level from Gemini (in basis points: 0–10000)
-        uint256[2] predCounts;      // Count of predictions per side: [0]=NO, [1]=YES
-        uint256[2] predTotals;      // Total token amount staked per side: [0]=NO, [1]=YES
-    }
-
-    /// @notice Represents a user's prediction in a given market.
-    struct Prediction {
-        uint256 amount;             // Amount of tokens staked
-        Outcome pred;               // Chosen outcome (No/Yes)
-        bool claimed;               // Whether the user has claimed their winnings
+        string question;
+        address creator;
+        uint256 marketOpen;
+        uint256 marketClose;
+        Status status;
+        Outcome outcome;
+        uint256 settledAt;
+        string evidenceURI;
+        uint16 confidenceBps;
+        ShareToken yesToken;
+        ShareToken noToken;
+        uint256 yesReserve;
+        uint256 noReserve;
+        bool liquidityWithdrawn;
     }
 
     // ===========================
     // ======= STATE VARS ========
     // ===========================
 
-    /// @notice Counter tracking the next market ID to assign.
     uint256 public nextMarketId;
-
-    /// @notice Mapping from market ID to its Market data.
-    mapping (uint256 => Market) public markets;
-
-    /// @notice Mapping of predictions: marketId → user → Prediction struct.
-    mapping (uint256 => mapping (address => Prediction)) predictions;
-
-    /// @notice ERC-20 token used for staking and payouts.
-    /// @dev Set at deployment and immutable thereafter.
+    mapping(uint256 => Market) public markets;
     IERC20 public immutable paymentToken;
+
+    uint256 public constant INITIAL_LIQUIDITY = 10_000_000; // 10 USDC (6 decimals)
 
     // ===========================
     // ======== CONSTRUCTOR ======
     // ===========================
 
-    /// @param token The address of the ERC-20 token used for market participation.
-    /// @param forwarderAddress The address of the CRE forwarder contract that will call onReport().
     constructor(address token, address forwarderAddress) ReceiverTemplate(forwarderAddress) {
         paymentToken = IERC20(token);
     }
@@ -154,29 +123,161 @@ contract SimpleMarket is ReceiverTemplate {
     // ======== FUNCTIONS ========
     // ===========================
 
-    /// @notice Create a new market with a 1 minute prediction window.
-    /// @param question The question describing the market.
-    /// @return The ID of the newly created market.
+    /// @notice Create a new market. Caller deposits 10 USDC as initial AMM liquidity.
     function newMarket(string calldata question) public returns (uint256) {
+        paymentToken.safeTransferFrom(msg.sender, address(this), INITIAL_LIQUIDITY);
+
         uint256 marketId = nextMarketId++;
         Market storage m = markets[marketId];
         m.question = question;
+        m.creator = msg.sender;
         m.marketOpen = block.timestamp;
         m.marketClose = block.timestamp + 3 minutes;
-        emit MarketCreated(marketId, msg.sender, question, m.marketOpen, m.marketClose);
+
+        // Deploy YES/NO share tokens
+        string memory idStr = _uint2str(marketId);
+        m.yesToken = new ShareToken(
+            string.concat("YES-", idStr),
+            string.concat("YES-", idStr)
+        );
+        m.noToken = new ShareToken(
+            string.concat("NO-", idStr),
+            string.concat("NO-", idStr)
+        );
+
+        // Mint initial shares into pool reserves (10 each for 50/50 odds)
+        m.yesToken.mint(address(this), INITIAL_LIQUIDITY);
+        m.noToken.mint(address(this), INITIAL_LIQUIDITY);
+        m.yesReserve = INITIAL_LIQUIDITY;
+        m.noReserve = INITIAL_LIQUIDITY;
+
+        emit MarketCreated(
+            marketId, msg.sender, question,
+            m.marketOpen, m.marketClose,
+            address(m.yesToken), address(m.noToken)
+        );
         return marketId;
     }
 
-    /// @notice View details of a market.
-    /// @param marketId The ID of the market to view.
-    /// @return The full Market struct for the given ID.
+    /// @notice Buy YES or NO shares using USDC via constant-product AMM.
+    /// @dev Mints complete sets (1 YES + 1 NO per USDC), adds unwanted side to pool,
+    ///      and computes wanted shares out using x*y=k.
+    function buyShares(uint256 marketId, Outcome outcome, uint256 usdcAmount) public {
+        Market storage m = markets[marketId];
+        if (m.marketClose < block.timestamp) revert MarketNotOpen(block.timestamp, m.marketClose);
+        if (m.status != Status.Open) revert StatusNotOpen(m.status);
+        if (outcome != Outcome.No && outcome != Outcome.Yes) revert InvalidOutcome();
+        if (usdcAmount == 0) revert AmountZero();
+
+        // Pull USDC from buyer
+        paymentToken.safeTransferFrom(msg.sender, address(this), usdcAmount);
+
+        // Mint complete sets: 1 USDC → 1 YES + 1 NO (held by this contract)
+        m.yesToken.mint(address(this), usdcAmount);
+        m.noToken.mint(address(this), usdcAmount);
+
+        uint256 sharesOut;
+
+        if (outcome == Outcome.Yes) {
+            // Add NO tokens to pool, take YES tokens out
+            // k = yesReserve * noReserve (before)
+            // New noReserve = noReserve + usdcAmount
+            // New yesReserve = k / newNoReserve
+            // sharesOut = oldYesReserve - newYesReserve + usdcAmount (minted)
+            uint256 k = m.yesReserve * m.noReserve;
+            uint256 newNoReserve = m.noReserve + usdcAmount;
+            uint256 newYesReserve = k / newNoReserve;
+            uint256 yesFromPool = m.yesReserve - newYesReserve;
+            sharesOut = yesFromPool + usdcAmount;
+
+            m.yesReserve = newYesReserve;
+            m.noReserve = newNoReserve + usdcAmount; // pool gets the minted NO tokens too
+
+            // Transfer YES shares to buyer
+            m.yesToken.transfer(msg.sender, sharesOut);
+        } else {
+            // Add YES tokens to pool, take NO tokens out
+            uint256 k = m.yesReserve * m.noReserve;
+            uint256 newYesReserve = m.yesReserve + usdcAmount;
+            uint256 newNoReserve = k / newYesReserve;
+            uint256 noFromPool = m.noReserve - newNoReserve;
+            sharesOut = noFromPool + usdcAmount;
+
+            m.noReserve = newNoReserve;
+            m.yesReserve = newYesReserve + usdcAmount; // pool gets the minted YES tokens too
+
+            // Transfer NO shares to buyer
+            m.noToken.transfer(msg.sender, sharesOut);
+        }
+
+        emit SharesPurchased(marketId, msg.sender, outcome, usdcAmount, sharesOut);
+    }
+
+    /// @notice Redeem winning shares for USDC after market settlement. 1 winning share = 1 USDC.
+    function redeemShares(uint256 marketId, uint256 amount) public {
+        Market storage m = markets[marketId];
+        if (m.status != Status.Settled) revert NotSettledYet(m.status);
+        if (amount == 0) revert AmountZero();
+
+        ShareToken winningToken = m.outcome == Outcome.Yes ? m.yesToken : m.noToken;
+        winningToken.burn(msg.sender, amount);
+        paymentToken.safeTransfer(msg.sender, amount);
+
+        emit SharesRedeemed(marketId, msg.sender, amount, amount);
+    }
+
+    /// @notice Creator withdraws remaining pool liquidity after settlement.
+    /// @dev Burns pool's winning-side reserve tokens and sends equivalent USDC.
+    function withdrawLiquidity(uint256 marketId) public {
+        Market storage m = markets[marketId];
+        if (m.status != Status.Settled) revert NotSettledYet(m.status);
+        if (msg.sender != m.creator) revert NotCreator();
+        if (m.liquidityWithdrawn) revert LiquidityAlreadyWithdrawn();
+
+        m.liquidityWithdrawn = true;
+
+        // The pool holds both YES and NO reserve tokens. After settlement only the
+        // winning side's tokens have value (1 winning token = 1 USDC).
+        ShareToken winningToken = m.outcome == Outcome.Yes ? m.yesToken : m.noToken;
+        uint256 poolWinningBalance = winningToken.balanceOf(address(this));
+
+        if (poolWinningBalance > 0) {
+            winningToken.burn(address(this), poolWinningBalance);
+            paymentToken.safeTransfer(msg.sender, poolWinningBalance);
+        }
+
+        emit LiquidityWithdrawn(marketId, msg.sender, poolWinningBalance);
+    }
+
+    // ===========================
+    // ======== VIEWS ============
+    // ===========================
+
     function getMarket(uint256 marketId) public view returns (Market memory) {
         return markets[marketId];
     }
 
-    /// @notice Request (CRE) to settle a market.
-    /// @dev Emits a SettlementRequested event for monitoring.
-    /// @param marketId The ID of the market to settle.
+    /// @notice Get the current price of YES shares in USDC terms (scaled by 1e6).
+    function getYesPrice(uint256 marketId) public view returns (uint256) {
+        Market storage m = markets[marketId];
+        // price_yes = noReserve / (yesReserve + noReserve)
+        return (m.noReserve * 1e6) / (m.yesReserve + m.noReserve);
+    }
+
+    /// @notice Get the current price of NO shares in USDC terms (scaled by 1e6).
+    function getNoPrice(uint256 marketId) public view returns (uint256) {
+        Market storage m = markets[marketId];
+        return (m.yesReserve * 1e6) / (m.yesReserve + m.noReserve);
+    }
+
+    function getUri(uint256 marketId) public view returns (string memory) {
+        return string.concat("http://localhost:3000/", markets[marketId].evidenceURI);
+    }
+
+    // ===========================
+    // ======== SETTLEMENT =======
+    // ===========================
+
     function requestSettlement(uint256 marketId) public {
         Market storage m = markets[marketId];
         if (m.marketClose > block.timestamp) revert MarketNotClosed(block.timestamp, m.marketClose);
@@ -186,11 +287,6 @@ contract SimpleMarket is ReceiverTemplate {
         emit SettlementRequested(marketId, m.question);
     }
 
-    /// @notice Helper function invoked by _processReport.
-    /// @param marketId The ID of the market being settled.
-    /// @param outcome The resolved market outcome.
-    /// @param confidenceBps Gemini confidence score in basis points (0–10000).
-    /// @param evidenceURI responseId from Gemini request
     function settleMarket(
         uint256 marketId,
         Outcome outcome,
@@ -214,13 +310,7 @@ contract SimpleMarket is ReceiverTemplate {
         emit SettlementResponse(marketId, m.status, m.outcome);
     }
 
-    /// @notice Used to manually settle markets that were set to NeedsManual due to inconclusive Gemini response.
-    /// @param marketId The ID of the market being settled.
-    /// @param outcome The resolved market outcome.
-    function settleMarketManually(
-        uint256 marketId,
-        Outcome outcome
-    ) public {
+    function settleMarketManually(uint256 marketId, Outcome outcome) public {
         Market storage m = markets[marketId];
         if (outcome != Outcome.No && outcome != Outcome.Yes) revert InvalidOutcome();
         if (m.status != Status.NeedsManual) revert ManualSettlementNotAllowed(m.status);
@@ -232,86 +322,27 @@ contract SimpleMarket is ReceiverTemplate {
         emit SettlementResponse(marketId, m.status, m.outcome);
     }
 
-    /// @notice Internal hook to process settlement reports from the receiver template.
-    /// @dev Decodes ABI-encoded data and calls settleMarket().
-    /// @param report ABI-encoded (marketId, outcome(uint8), confidenceBps, responseId).
     function _processReport(bytes calldata report) internal override {
         (uint256 marketId, uint8 outcome, uint16 confidenceBps, string memory responseId) =
             abi.decode(report, (uint256, uint8, uint16, string));
         settleMarket(marketId, Outcome(outcome), confidenceBps, responseId);
     }
 
-    /// @notice Returns the evidence URI for a given market.
-    /// @param marketId The ID of the market.
-    /// @return The constructed URI string.
-    function getUri(uint256 marketId) public view returns (string memory) {
-        return string.concat("http://localhost:3000/", markets[marketId].evidenceURI);
-    }
+    // ===========================
+    // ======== INTERNAL =========
+    // ===========================
 
-    /// @notice Place a prediction on an open market.
-    /// @param marketId The ID of the market.
-    /// @param outcome The prediction (Yes or No).
-    /// @param amount The amount of tokens to wager.
-    function makePrediction(uint256 marketId, Outcome outcome, uint256 amount) public {
-        Market storage m = markets[marketId];
-
-        if (m.marketClose < block.timestamp) revert MarketNotOpen(block.timestamp, m.marketClose);
-        if (m.status != Status.Open) revert StatusNotOpen(m.status);
-        if (predictions[marketId][msg.sender].pred != Outcome.None) revert AlreadyPredicted();
-        if (outcome != Outcome.No && outcome != Outcome.Yes) revert InvalidOutcome();
-        if (amount == 0) revert AmountZero();
-
-        // Pull tokens from the user (must be approved beforehand)
-        paymentToken.safeTransferFrom(msg.sender, address(this), amount);
-
-        predictions[marketId][msg.sender] = Prediction({
-            amount: amount,
-            pred: outcome,
-            claimed: false
-        });
-
-        markets[marketId].predTotals[uint8(outcome) - 1] += amount;
-        markets[marketId].predCounts[uint8(outcome) - 1]++;
-
-        emit PredictionMade(
-            marketId,
-            msg.sender,
-            outcome,
-            amount,
-            markets[marketId].predCounts[0],
-            markets[marketId].predCounts[1],
-            markets[marketId].predTotals[0],
-            markets[marketId].predTotals[1]
-        );
-    }
-
-    /// @notice View the caller’s prediction for a given market.
-    /// @param marketId The ID of the market.
-    /// @return The Prediction struct belonging to the caller.
-    function getPrediction(uint256 marketId) public view returns (Prediction memory) {
-        return predictions[marketId][msg.sender];
-    }
-
-    /// @notice Claim winnings after a market is settled.
-    /// @dev Distributes the total pool proportionally among correct predictors.
-    /// @param marketId The ID of the settled market.
-    function claimPrediction(uint256 marketId) public {
-        Market storage m = markets[marketId];
-        Prediction storage p = predictions[marketId][msg.sender];
-
-        if (m.status != Status.Settled) revert NotSettledYet(m.status);
-        if (p.claimed) revert AlreadyClaimed();
-        if (m.outcome != p.pred) revert IncorrectPrediction();
-
-        uint8 outcomeIndex = uint8(m.outcome);
-        uint256 userStake = p.amount;
-        uint256 totalPool = m.predTotals[0] + m.predTotals[1];
-        uint256 winningTotal = m.predTotals[outcomeIndex - 1];
-        if (winningTotal == 0) revert NoWinners();
-
-        uint256 payoutAmount = (userStake * totalPool) / winningTotal;
-
-        p.claimed = true;
-        paymentToken.safeTransfer(msg.sender, payoutAmount);
+    function _uint2str(uint256 value) internal pure returns (string memory) {
+        if (value == 0) return "0";
+        uint256 temp = value;
+        uint256 digits;
+        while (temp != 0) { digits++; temp /= 10; }
+        bytes memory buffer = new bytes(digits);
+        while (value != 0) {
+            digits--;
+            buffer[digits] = bytes1(uint8(48 + (value % 10)));
+            value /= 10;
+        }
+        return string(buffer);
     }
 }

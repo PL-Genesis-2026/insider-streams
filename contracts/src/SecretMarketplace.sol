@@ -11,7 +11,7 @@ import {IERC165} from "./interfaces/IERC165.sol";
 
 interface ISimpleMarket {
     enum Outcome { None, No, Yes, Inconclusive }
-    function makePrediction(uint256 marketId, Outcome outcome, uint256 amount) external;
+    function buyShares(uint256 marketId, Outcome outcome, uint256 usdcAmount) external;
     function nextMarketId() external view returns (uint256);
 }
 
