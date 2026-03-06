@@ -29,7 +29,7 @@ interface BatchInsertResponse {
  *
  * Both directions come from API `type: "transfer"` transactions:
  * - incoming (is_incoming: true) → type: "deposit", user_address = sender (the depositor)
- * - outgoing (is_incoming: false) → type: "user_withdrawal", user_address = sender (platform EOA debited)
+ * - outgoing (is_incoming: false) → type: "user_withdrawal", user_address = recipient (the user being debited)
  */
 export function recordTransactions(
   runtime: Runtime<Config>,

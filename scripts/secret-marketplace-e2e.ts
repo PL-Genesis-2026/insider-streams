@@ -585,7 +585,7 @@ async function main() {
       marketplace: "SimpleMarket",
       event: QUESTION_2,
       marketId: Number(marketId2),
-      leg: "yes",
+      outcome: "yes",
     },
     seller: ownerAddr,
   });
@@ -819,7 +819,6 @@ async function main() {
     .update({
       status: "completed",
       completed_at: new Date().toISOString(),
-      transaction_id: "simulated-tx-id",
     })
     .eq("id", withdrawalRow!.id);
   if (withdrawCompleteErr)
