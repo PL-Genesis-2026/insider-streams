@@ -13,7 +13,8 @@ private-streams/
 ├── contracts/                       # Foundry — MockUSDC + SimpleMarket + SecretMarketplace
 ├── cre-workflows/                   # CRE TypeScript workflows (Bun-managed)
 │   ├── prediction-market-demo/      # Gemini AI settlement workflow
-│   └── auction-closer/             # Cron-based auction closer workflow
+│   ├── auction-closer/             # Cron-based auction closer workflow
+│   └── deposit-reconciler/         # Cron-based deposit + transfer reconciler
 ├── subgraphs/secrets-marketplace/   # The Graph subgraph
 ├── scripts/                         # E2E test scripts and utilities
 │   ├── simple-market-e2e.sh         # SimpleMarket + CRE settlement E2E
@@ -61,10 +62,14 @@ cre workflow simulate prediction-market-demo --target local-simulation \
 cre workflow simulate auction-closer --target local-simulation --non-interactive --trigger-index 0
 cre workflow simulate auction-closer --target local-simulation --non-interactive --trigger-index 0 --broadcast
 
+# CRE Deposit Reconciler (cron-triggered, non-interactive)
+cre workflow simulate deposit-reconciler --target local-simulation --non-interactive --trigger-index 0
+
 # E2E Tests
 ./scripts/simple-market-e2e.sh    # SimpleMarket + CRE settlement lifecycle
 ./scripts/auction-closer-e2e.sh   # Auction create → bid → expire → CRE close
 pnpm e2e                          # SecretMarketplace full event lifecycle (TypeScript)
+pnpm --filter @private-streams/scripts e2e:deposits  # Deposit reconciler lifecycle E2E
 ```
 
 ## Chain & Network
@@ -97,17 +102,17 @@ Private keys are in `.env` files (never committed).
 
 ## Deployed Contracts (Eth Sepolia — SecretMarketplace / Auctions)
 
-- **SecretMarketplace**: `0xED53f1AE2Ee56ca0fDAA79f0e050E873FCF86616`
+- **SecretMarketplace**: `0x2B77E46F13c4f5B11B1df6C1aD0b37E0396EF736`
   - Uses MockUSDC as payment token, linked to SimpleMarket
   - CRE Forwarder: `0x15fc6ae953e024d975e77382eeec56a9101f9f88`
   - CRE report actions: `0x00` = closeAuction, `0x01` = forceCloseAuction, `0x02` = updateReputation
 
 ### SecretMarketplace Events
 
-- `AuctionCreated(uint256 indexed auctionId, address indexed seller, uint256 externalMarketId, uint256 reservePrice, uint256 endTime)`
-- `BidPlaced(uint256 indexed auctionId, address indexed bidder, uint256 amount)`
+- `AuctionCreated(uint256 indexed auctionId, address indexed seller, uint256 indexed externalMarketId, uint256 reservePrice, uint256 endTime, bool betOnYes)`
+- `BidPlaced(uint256 indexed auctionId, address indexed bidder, uint256 bidAmount, uint256 automaticBetAmount, address previousBidder, uint256 previousBid)`
 - `AuctionClosed(uint256 indexed auctionId, address winner, uint256 winningBid, address seller, uint256 externalMarketId)`
-- `TradeExecuted(uint256 indexed auctionId, uint256 indexed externalMarketId, address indexed buyer, uint256 amount)`
+- `TradeExecuted(uint256 indexed auctionId, uint256 indexed externalMarketId, address indexed buyer, uint256 automaticBetAmount, bool betOnYes)`
 
 ## Deployed Contracts (Eth Sepolia — Compliant Private Transfer)
 

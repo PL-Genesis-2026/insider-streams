@@ -53,6 +53,7 @@ export function handleAuctionCreated(event: AuctionCreatedEvent): void {
   entity.externalMarketId = event.params.externalMarketId
   entity.reservePrice = event.params.reservePrice
   entity.endTime = event.params.endTime
+  entity.betOnYes = event.params.betOnYes
 
   entity.blockNumber = event.block.number
   entity.blockTimestamp = event.block.timestamp
@@ -85,7 +86,8 @@ export function handleBidPlaced(event: BidPlacedEvent): void {
   )
   entity.auctionId = event.params.auctionId
   entity.bidder = event.params.bidder
-  entity.amount = event.params.amount
+  entity.bidAmount = event.params.bidAmount
+  entity.automaticBetAmount = event.params.automaticBetAmount
   entity.previousBidder = event.params.previousBidder
   entity.previousBid = event.params.previousBid
 
@@ -212,7 +214,8 @@ export function handleTradeExecuted(event: TradeExecutedEvent): void {
   entity.auctionId = event.params.auctionId
   entity.externalMarketId = event.params.externalMarketId
   entity.buyer = event.params.buyer
-  entity.amount = event.params.amount
+  entity.automaticBetAmount = event.params.automaticBetAmount
+  entity.betOnYes = event.params.betOnYes
 
   entity.blockNumber = event.block.number
   entity.blockTimestamp = event.block.timestamp

@@ -1,5 +1,5 @@
 import { cre, type Runtime, Runner, getNetwork, type CronPayload } from "@chainlink/cre-sdk";
-import { configSchema, type Config } from "./types";
+import { configSchema, CRON_SCHEDULE, type Config } from "./types";
 import { findExpiredAuctions } from "./monitor";
 import { closeAuction } from "./close";
 
@@ -59,7 +59,7 @@ const initWorkflow = (config: Config) => {
 
   return [
     cre.handler(
-      cronCap.trigger({ schedule: "*/30 * * * * *" }),
+      cronCap.trigger({ schedule: CRON_SCHEDULE }),
       onCronTrigger
     ),
   ];
