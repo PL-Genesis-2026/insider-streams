@@ -17,10 +17,33 @@
   },
   {
     "type": "function",
-    "name": "claimPrediction",
+    "name": "INITIAL_LIQUIDITY",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "buyShares",
     "inputs": [
       {
         "name": "marketId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "outcome",
+        "type": "uint8",
+        "internalType": "enum SimpleMarket.Outcome"
+      },
+      {
+        "name": "usdcAmount",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -102,6 +125,11 @@
             "internalType": "string"
           },
           {
+            "name": "creator",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
             "name": "marketOpen",
             "type": "uint256",
             "internalType": "uint256"
@@ -137,14 +165,29 @@
             "internalType": "uint16"
           },
           {
-            "name": "predCounts",
-            "type": "uint256[2]",
-            "internalType": "uint256[2]"
+            "name": "yesToken",
+            "type": "address",
+            "internalType": "contract ShareToken"
           },
           {
-            "name": "predTotals",
-            "type": "uint256[2]",
-            "internalType": "uint256[2]"
+            "name": "noToken",
+            "type": "address",
+            "internalType": "contract ShareToken"
+          },
+          {
+            "name": "yesReserve",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "noReserve",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "liquidityWithdrawn",
+            "type": "bool",
+            "internalType": "bool"
           }
         ]
       }
@@ -153,7 +196,7 @@
   },
   {
     "type": "function",
-    "name": "getPrediction",
+    "name": "getNoPrice",
     "inputs": [
       {
         "name": "marketId",
@@ -164,25 +207,8 @@
     "outputs": [
       {
         "name": "",
-        "type": "tuple",
-        "internalType": "struct SimpleMarket.Prediction",
-        "components": [
-          {
-            "name": "amount",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "pred",
-            "type": "uint8",
-            "internalType": "enum SimpleMarket.Outcome"
-          },
-          {
-            "name": "claimed",
-            "type": "bool",
-            "internalType": "bool"
-          }
-        ]
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -208,26 +234,22 @@
   },
   {
     "type": "function",
-    "name": "makePrediction",
+    "name": "getYesPrice",
     "inputs": [
       {
         "name": "marketId",
         "type": "uint256",
         "internalType": "uint256"
-      },
+      }
+    ],
+    "outputs": [
       {
-        "name": "outcome",
-        "type": "uint8",
-        "internalType": "enum SimpleMarket.Outcome"
-      },
-      {
-        "name": "amount",
+        "name": "",
         "type": "uint256",
         "internalType": "uint256"
       }
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -244,6 +266,11 @@
         "name": "question",
         "type": "string",
         "internalType": "string"
+      },
+      {
+        "name": "creator",
+        "type": "address",
+        "internalType": "address"
       },
       {
         "name": "marketOpen",
@@ -279,6 +306,31 @@
         "name": "confidenceBps",
         "type": "uint16",
         "internalType": "uint16"
+      },
+      {
+        "name": "yesToken",
+        "type": "address",
+        "internalType": "contract ShareToken"
+      },
+      {
+        "name": "noToken",
+        "type": "address",
+        "internalType": "contract ShareToken"
+      },
+      {
+        "name": "yesReserve",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "noReserve",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "liquidityWithdrawn",
+        "type": "bool",
+        "internalType": "bool"
       }
     ],
     "stateMutability": "view"
@@ -358,6 +410,24 @@
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "redeemShares",
+    "inputs": [
+      {
+        "name": "marketId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -482,6 +552,19 @@
     "stateMutability": "nonpayable"
   },
   {
+    "type": "function",
+    "name": "withdrawLiquidity",
+    "inputs": [
+      {
+        "name": "marketId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
     "type": "event",
     "name": "ExpectedAuthorUpdated",
     "inputs": [
@@ -559,6 +642,31 @@
   },
   {
     "type": "event",
+    "name": "LiquidityWithdrawn",
+    "inputs": [
+      {
+        "name": "marketId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "creator",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "usdcOut",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "MarketCreated",
     "inputs": [
       {
@@ -590,6 +698,18 @@
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
+      },
+      {
+        "name": "yesToken",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "noToken",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
       }
     ],
     "anonymous": false
@@ -609,61 +729,6 @@
         "type": "address",
         "indexed": true,
         "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "PredictionMade",
-    "inputs": [
-      {
-        "name": "marketId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "predictor",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "outcome",
-        "type": "uint8",
-        "indexed": true,
-        "internalType": "enum SimpleMarket.Outcome"
-      },
-      {
-        "name": "amount",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "predCountNo",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "predCountYes",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "predTotalNo",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "predTotalYes",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
       }
     ],
     "anonymous": false
@@ -726,23 +791,76 @@
     "anonymous": false
   },
   {
-    "type": "error",
-    "name": "AlreadyClaimed",
-    "inputs": []
+    "type": "event",
+    "name": "SharesPurchased",
+    "inputs": [
+      {
+        "name": "marketId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "buyer",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "outcome",
+        "type": "uint8",
+        "indexed": true,
+        "internalType": "enum SimpleMarket.Outcome"
+      },
+      {
+        "name": "usdcIn",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "sharesOut",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
   },
   {
-    "type": "error",
-    "name": "AlreadyPredicted",
-    "inputs": []
+    "type": "event",
+    "name": "SharesRedeemed",
+    "inputs": [
+      {
+        "name": "marketId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "redeemer",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "sharesIn",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "usdcOut",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
   },
   {
     "type": "error",
     "name": "AmountZero",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "IncorrectPrediction",
     "inputs": []
   },
   {
@@ -821,6 +939,11 @@
   },
   {
     "type": "error",
+    "name": "LiquidityAlreadyWithdrawn",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "ManualSettlementNotAllowed",
     "inputs": [
       {
@@ -864,7 +987,7 @@
   },
   {
     "type": "error",
-    "name": "NoWinners",
+    "name": "NotCreator",
     "inputs": []
   },
   {

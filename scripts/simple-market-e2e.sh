@@ -58,9 +58,13 @@ echo "  RPC:          $RPC_URL"
 echo "  Question:     $QUESTION"
 echo "═══════════════════════════════════════════════════════"
 
-# ─── Step 1: Owner creates a new market ─────────────────────────────────────
+# ─── Step 1: Owner creates a new market (requires 10 USDC initial liquidity) ─
 echo ""
 echo "▶ Step 1: Creating market..."
+# Approve SimpleMarket for initial liquidity (10 USDC)
+cast send "$MOCK_USDC_ADDRESS" "approve(address,uint256)" "$SIMPLE_MARKET_ADDRESS" 10000000 \
+  --rpc-url "$RPC_URL" --private-key "$OWNER_PK" --json | jq -r '"  Owner USDC approval tx: " + .transactionHash'
+
 TX_CREATE=$(cast send "$SIMPLE_MARKET_ADDRESS" "newMarket(string)" "$QUESTION" \
   --rpc-url "$RPC_URL" --private-key "$OWNER_PK" --json 2>&1)
 
@@ -91,15 +95,15 @@ else
   exit 1
 fi
 
-# outcome=2 (YES)
-TX_PREDICT=$(cast send "$SIMPLE_MARKET_ADDRESS" "makePrediction(uint256,uint8,uint256)" "$MARKET_ID" 2 "$PREDICTION_AMOUNT" \
+# outcome=2 (YES) — buyShares(uint256 marketId, uint8 outcome, uint256 usdcAmount)
+TX_BUY=$(cast send "$SIMPLE_MARKET_ADDRESS" "buyShares(uint256,uint8,uint256)" "$MARKET_ID" 2 "$PREDICTION_AMOUNT" \
   --rpc-url "$RPC_URL" --private-key "$TESTER_PK" --json 2>&1)
 
-if echo "$TX_PREDICT" | jq -e '.status == "0x1"' &>/dev/null; then
-  echo "  ✓ Prediction made (YES, $PREDICTION_AMOUNT units)"
+if echo "$TX_BUY" | jq -e '.status == "0x1"' &>/dev/null; then
+  echo "  ✓ Shares purchased (YES, $PREDICTION_AMOUNT units)"
 else
-  echo "  ✗ Prediction failed"
-  echo "$TX_PREDICT"
+  echo "  ✗ Share purchase failed"
+  echo "$TX_BUY"
   exit 1
 fi
 
