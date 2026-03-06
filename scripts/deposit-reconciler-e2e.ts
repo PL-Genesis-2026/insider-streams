@@ -357,7 +357,7 @@ async function main() {
   const { count: existingDepositCount } = await supabase
     .from("transfers")
     .select("*", { count: "exact", head: true })
-    .eq("type", "deposit")
+    .eq("status", "confirmed")
     .eq("user_address", bidderAddr.toLowerCase());
   console.log(`  Existing deposit count for bidder: ${existingDepositCount}`);
 
@@ -487,11 +487,10 @@ async function main() {
   const { data: dep } = await supabase
     .from("transfers")
     .select("*")
-    .eq("type", "deposit")
     .eq("transaction_id", depositTxId)
     .single();
   assert(!!dep, `Deposit (${depositTxId}) not found in Supabase`);
-  console.log(`  ✓ Deposit: amount=${dep!.amount}, status=${dep!.status}, type=${dep!.type}`);
+  console.log(`  ✓ Deposit: amount=${dep!.amount}, status=${dep!.status}`);
   console.log(`  ✓ sender_address=${dep!.sender_address}, user_address=${dep!.user_address}`);
 
   // ── Step 7: Check balances VIEW ────────────────────────────────────────────
@@ -516,7 +515,7 @@ async function main() {
   const { count: countBefore } = await supabase
     .from("transfers")
     .select("*", { count: "exact", head: true })
-    .eq("type", "deposit")
+    .eq("status", "confirmed")
     .eq("user_address", bidderAddr.toLowerCase());
 
   runCRESimulation();
@@ -524,7 +523,7 @@ async function main() {
   const { count: countAfter } = await supabase
     .from("transfers")
     .select("*", { count: "exact", head: true })
-    .eq("type", "deposit")
+    .eq("status", "confirmed")
     .eq("user_address", bidderAddr.toLowerCase());
   assert(countBefore === countAfter, `Deposit count changed: ${countBefore} → ${countAfter}`);
   console.log(`  ✓ Deposit count unchanged (${countAfter}) — idempotency works`);
@@ -569,8 +568,8 @@ async function main() {
     .eq("transaction_id", withdrawalTxId)
     .single();
   assert(!!transfer, `Withdrawal ${withdrawalTxId} not found in Supabase`);
-  assert(transfer!.type === "user_withdrawal", `Expected type=user_withdrawal, got ${transfer!.type}`);
-  console.log(`  ✓ Withdrawal: amount=${transfer!.amount}, status=${transfer!.status}, type=${transfer!.type}`);
+  assert(transfer!.status === "completed", `Expected status=completed, got ${transfer!.status}`);
+  console.log(`  ✓ Withdrawal: amount=${transfer!.amount}, status=${transfer!.status}`);
 
   // ── Step 13: Check balances VIEW — available decreased ─────────────────────
   step("Check balances VIEW after withdrawal");
