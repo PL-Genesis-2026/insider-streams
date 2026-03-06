@@ -31,7 +31,7 @@ echo "════════════════════════�
 echo ""
 echo "▶ Step 1: Compiling contracts..."
 cd "$SCRIPT_DIR/contracts"
-forge build --via-ir
+forge build --via-ir --skip SetupAll DeployPolicyEngine
 echo "  Done."
 
 # ─── Step 2: Generate TypeScript types via wagmi ──────────────────────────────
