@@ -266,33 +266,6 @@ function BidRow({
   );
 }
 
-function ReputationBar({ score }: { score: number | undefined }) {
-  const clampedScore =
-    score === undefined ? undefined : Math.min(100, Math.max(0, score));
-  const barColor =
-    clampedScore === undefined
-      ? "bg-border/60"
-      : clampedScore >= 90
-      ? "bg-accent"
-      : clampedScore >= 70
-        ? "bg-primary/60"
-        : "bg-destructive/60";
-
-  return (
-    <div className="flex items-center gap-3">
-      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted/60">
-        <div
-          className={cn("h-full rounded-full transition-all", barColor)}
-          style={{ width: `${clampedScore ?? 0}%` }}
-        />
-      </div>
-      <span className="text-sm font-medium tabular-nums text-foreground">
-        {score ?? "-"}
-      </span>
-    </div>
-  );
-}
-
 function JsonPreview({ value }: { value?: JsonValue }) {
   if (value === undefined || value === null) {
     return (
@@ -329,7 +302,9 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
         ? "outline"
         : "accent";
   const bidFill =
-    auction.currentBidUsdc !== undefined && auction.reservePriceUsdc > 0
+    auction.currentBidUsdc !== undefined &&
+    auction.reservePriceUsdc !== undefined &&
+    auction.reservePriceUsdc > 0
       ? Math.min(100, Math.round((auction.currentBidUsdc / auction.reservePriceUsdc) * 100))
       : undefined;
   const timeline = buildTimeline(auction);
@@ -356,10 +331,12 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
               <span>Market {auction.externalMarketId}</span>
             </div>
             <Badge variant={statusVariant}>{auction.status}</Badge>
-            <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-              <Clock className="size-3.5" />
-              Ends {formatTimestamp(auction.endTime)}
-            </span>
+            {auction.endTime ? (
+              <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                <Clock className="size-3.5" />
+                Ends {formatTimestamp(auction.endTime)}
+              </span>
+            ) : null}
           </div>
 
           <h1 className="max-w-4xl font-serif text-[3.4rem] leading-[0.88] font-medium tracking-[-0.055em] text-foreground sm:text-[4.6rem]">
@@ -500,43 +477,16 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
 
             <Card className="border-border/70 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_98%,transparent),color-mix(in_srgb,var(--secondary)_18%,transparent))]">
               <CardHeader className="gap-4 pb-0">
-                <Label>Seller profile</Label>
+                <Label>Seller</Label>
                 <div className="flex items-center gap-3">
                   <div className="flex size-10 items-center justify-center rounded-full bg-accent/15 text-accent">
                     <User className="size-4" />
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-base font-medium text-foreground">
-                      {auction.sellerProfile?.name ?? "No seller name set"}
-                    </p>
-                    <p className="truncate font-mono text-xs text-muted-foreground/70">
-                      {auction.sellerAddress}
-                    </p>
-                  </div>
+                  <p className="min-w-0 truncate font-mono text-xs text-muted-foreground/70">
+                    {auction.sellerAddress}
+                  </p>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Reputation</Label>
-                  <ReputationBar score={auction.sellerProfile?.reputationScore} />
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground/70">Registered</span>
-                  <span className="text-foreground">
-                    {auction.sellerProfile?.registered === undefined
-                      ? "Unavailable"
-                      : auction.sellerProfile.registered
-                        ? "Yes"
-                        : "No"}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground/70">Seller auctions</span>
-                  <span className="text-foreground">
-                    {auction.sellerProfile?.totalAuctions ?? "-"}
-                  </span>
-                </div>
-              </CardContent>
             </Card>
 
             <Card className="border-border/70 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_98%,transparent),color-mix(in_srgb,var(--secondary)_18%,transparent))]">
@@ -564,26 +514,14 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
                       {auction.createdAt ? formatTimestamp(auction.createdAt) : "Unavailable"}
                     </time>
                   </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground/70">Ends</span>
-                    <time className="text-foreground">{formatTimestamp(auction.endTime)}</time>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground/70">Direction</span>
-                    <Badge variant="outline" className="text-[10px]">
-                      {auction.betOnYes === undefined
-                        ? "Unavailable"
-                        : auction.betOnYes
-                          ? "Yes"
-                          : "No"}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground/70">Auto bet amount</span>
-                    <span className="text-foreground">
-                      {formatCurrency(auction.automaticBetAmountUsdc)}
-                    </span>
-                  </div>
+                  {auction.endTime ? (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground/70">Ends</span>
+                      <time className="text-foreground">
+                        {formatTimestamp(auction.endTime)}
+                      </time>
+                    </div>
+                  ) : null}
                 </div>
 
                 <Separator />

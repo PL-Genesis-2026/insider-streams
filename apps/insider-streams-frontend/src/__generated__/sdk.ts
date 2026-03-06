@@ -1481,7 +1481,7 @@ export type AuctionDetailSubgraphQueryVariables = Exact<{
 }>;
 
 
-export type AuctionDetailSubgraphQuery = { __typename?: 'Query', createdAuction: Array<{ __typename?: 'AuctionCreated', auctionId: string, seller: string, reservePrice: string, endTime: string, externalMarketId: string, blockTimestamp: string }>, bids: Array<{ __typename?: 'BidPlaced', bidder: string, amount: string, blockTimestamp: string, transactionHash: string }>, closedAuction: Array<{ __typename?: 'AuctionClosed', buyer: string, winningBid: string, blockTimestamp: string }>, forceClosedAuction: Array<{ __typename?: 'AuctionForceClosed', refundedBidder: string, refundAmount: string, reputationDelta: number, blockTimestamp: string }>, tradeExecuted: Array<{ __typename?: 'TradeExecuted', buyer: string, amount: string, blockTimestamp: string }>, reputationUpdates: Array<{ __typename?: 'ReputationUpdated', delta: number, newScore: string, blockTimestamp: string }> };
+export type AuctionDetailSubgraphQuery = { __typename?: 'Query', createdAuction: Array<{ __typename?: 'AuctionCreated', auctionId: string, seller: string, reservePrice: string, endTime: string, externalMarketId: string, blockTimestamp: string }>, bids: Array<{ __typename?: 'BidPlaced', bidder: string, amount: string, blockTimestamp: string, transactionHash: string }>, closedAuction: Array<{ __typename?: 'AuctionClosed', seller: string, buyer: string, winningBid: string, externalMarketId: string, blockTimestamp: string }>, forceClosedAuction: Array<{ __typename?: 'AuctionForceClosed', seller: string, refundedBidder: string, refundAmount: string, externalMarketId: string, reputationDelta: number, blockTimestamp: string }>, tradeExecuted: Array<{ __typename?: 'TradeExecuted', buyer: string, amount: string, blockTimestamp: string }>, reputationUpdates: Array<{ __typename?: 'ReputationUpdated', delta: number, newScore: string, blockTimestamp: string }> };
 
 export type RecentAuctionsQueryVariables = Exact<{ [key: string]: never; }>;
 
@@ -1544,8 +1544,10 @@ export const AuctionDetailSubgraphDocument = gql`
     orderDirection: desc
     where: {auctionId: $auctionId}
   ) {
+    seller
     buyer
     winningBid
+    externalMarketId
     blockTimestamp
   }
   forceClosedAuction: auctionForceCloseds(
@@ -1554,8 +1556,10 @@ export const AuctionDetailSubgraphDocument = gql`
     orderDirection: desc
     where: {auctionId: $auctionId}
   ) {
+    seller
     refundedBidder
     refundAmount
+    externalMarketId
     reputationDelta
     blockTimestamp
   }

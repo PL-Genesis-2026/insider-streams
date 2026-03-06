@@ -125,21 +125,13 @@ export function AuctionCard({ auction, className, href }: AuctionCardProps) {
   const titleLabel =
     auction.title ?? "TODO: title not available from live source";
 
-  return (
+  const cardContent = (
     <Card
       className={cn(
-        "group relative cursor-pointer border-border/90 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_98%,transparent),color-mix(in_srgb,var(--secondary)_22%,transparent))] transition-[border-color,box-shadow] duration-120 ease-out hover:border-primary/30 hover:shadow-[0_18px_48px_rgba(0,0,0,0.22)]",
+        "border-border/90 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_98%,transparent),color-mix(in_srgb,var(--secondary)_22%,transparent))] transition-[border-color,box-shadow] duration-120 ease-out hover:border-primary/30 hover:shadow-[0_18px_48px_rgba(0,0,0,0.22)]",
         className,
       )}
     >
-      {href ? (
-        <Link
-          href={href}
-          className="absolute inset-0 z-10 rounded-[inherit] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-          aria-label={`View ${titleLabel}`}
-        />
-      ) : null}
-
       <CardHeader className="gap-4 pb-5">
         <MetaRail auction={auction} />
 
@@ -170,5 +162,19 @@ export function AuctionCard({ auction, className, href }: AuctionCardProps) {
         </div>
       </CardContent>
     </Card>
+  );
+
+  if (!href) {
+    return cardContent;
+  }
+
+  return (
+    <Link
+      href={href}
+      className="group block rounded-[calc(var(--radius)+6px)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      aria-label={`View ${titleLabel}`}
+    >
+      {cardContent}
+    </Link>
   );
 }

@@ -1,33 +1,11 @@
-import {
-  MOCK_USDC_DECIMALS,
-  SECRET_MARKETPLACE_ADDRESS,
-  secretMarketplaceAbi,
-} from "@private-streams/common";
-import {
-  createPublicClient,
-  formatUnits,
-  getAddress,
-  http,
-  zeroAddress,
-  type Address,
-} from "viem";
-import { sepolia } from "viem/chains";
+import { MOCK_USDC_DECIMALS } from "@private-streams/common";
+import { formatUnits, getAddress } from "viem";
 import { graphqlClient } from "@/lib/graphql";
 import { getSecretByAuctionId, type JsonValue } from "@/lib/supabase/secrets";
 import type { AuctionDetailSubgraphQuery } from "../__generated__/sdk";
 import { getSdk } from "../__generated__/sdk";
 
 const sdk = getSdk(graphqlClient);
-const publicClient = createPublicClient({
-  chain: sepolia,
-  transport: http(),
-});
-
-const AUCTION_STATUS_BY_CODE = {
-  0: "Open",
-  1: "Closed",
-  2: "ForceClosed",
-} as const;
 
 type BidRecord = AuctionDetailSubgraphQuery["bids"][number];
 type ClosedAuctionRecord = AuctionDetailSubgraphQuery["closedAuction"][number];
@@ -69,13 +47,6 @@ export type AuctionDetailReputationUpdate = {
   timestamp: string;
 };
 
-export type AuctionDetailSellerProfile = {
-  name?: string;
-  reputationScore?: number;
-  registered?: boolean;
-  totalAuctions?: number;
-};
-
 export type AuctionDetailSecretRecord = {
   secretData: JsonValue;
   updatedAt: string;
@@ -85,15 +56,12 @@ export type AuctionDetailData = {
   auctionId: string;
   sellerAddress: string;
   externalMarketId: string;
-  reservePriceUsdc: number;
-  endTime: string;
+  reservePriceUsdc?: number;
+  endTime?: string;
   createdAt?: string;
   status: "Open" | "Closed" | "ForceClosed";
   currentBidUsdc?: number;
   currentBidderAddress?: string;
-  automaticBetAmountUsdc?: number;
-  betOnYes?: boolean;
-  sellerProfile?: AuctionDetailSellerProfile;
   bids: AuctionDetailBid[];
   closedAuction?: AuctionDetailClose;
   forceClosedAuction?: AuctionDetailForceClose;
@@ -107,19 +75,6 @@ type AuctionDetailOptions = {
   bidLimit: number;
 };
 
-type AuctionContractData = {
-  sellerAddress?: string;
-  externalMarketId?: string;
-  reservePriceUsdc?: number;
-  endTime?: string;
-  status: AuctionDetailData["status"];
-  currentBidUsdc?: number;
-  currentBidderAddress?: string;
-  automaticBetAmountUsdc?: number;
-  betOnYes?: boolean;
-  sellerProfile?: AuctionDetailSellerProfile;
-};
-
 function bigintToUsdc(value: bigint) {
   return Number(formatUnits(value, MOCK_USDC_DECIMALS));
 }
@@ -130,19 +85,6 @@ function scalarToBigInt(value: unknown) {
 
 function scalarToIso(value: unknown) {
   return new Date(Number(String(value)) * 1000).toISOString();
-}
-
-function maybeAddress(value: string) {
-  return value === zeroAddress ? undefined : getAddress(value);
-}
-
-function getAuctionStatus(code: number | bigint): AuctionDetailData["status"] {
-  const status = AUCTION_STATUS_BY_CODE[Number(code) as 0 | 1 | 2];
-  if (!status) {
-    throw new Error(`Unsupported auction status code: ${code.toString()}`);
-  }
-
-  return status;
 }
 
 function mapBid(record: BidRecord): AuctionDetailBid {
@@ -191,64 +133,6 @@ function mapReputationUpdate(
   };
 }
 
-async function getContractAuctionData(
-  auctionId: bigint,
-): Promise<AuctionContractData | undefined> {
-  try {
-    const zero = BigInt(0);
-    const auction = await publicClient.readContract({
-      address: SECRET_MARKETPLACE_ADDRESS,
-      abi: secretMarketplaceAbi,
-      functionName: "getAuction",
-      args: [auctionId],
-    });
-    const sellerAddress = maybeAddress(auction.seller);
-    const [seller, sellerAuctions] = sellerAddress
-      ? await Promise.all([
-          publicClient.readContract({
-            address: SECRET_MARKETPLACE_ADDRESS,
-            abi: secretMarketplaceAbi,
-            functionName: "getSeller",
-            args: [sellerAddress as Address],
-          }),
-          publicClient.readContract({
-            address: SECRET_MARKETPLACE_ADDRESS,
-            abi: secretMarketplaceAbi,
-            functionName: "getSellerAuctions",
-            args: [sellerAddress as Address],
-          }),
-        ])
-      : [undefined, undefined];
-
-    return {
-      sellerAddress,
-      externalMarketId: auction.marketMetadata.marketId.toString(),
-      reservePriceUsdc: bigintToUsdc(auction.reservePrice),
-      endTime: scalarToIso(auction.endTime),
-      status: getAuctionStatus(auction.status),
-      currentBidUsdc:
-        auction.currentBid === zero ? undefined : bigintToUsdc(auction.currentBid),
-      currentBidderAddress: maybeAddress(auction.currentBidder),
-      automaticBetAmountUsdc:
-        auction.currentBid === zero
-          ? undefined
-          : bigintToUsdc(auction.automaticBetAmount),
-      betOnYes: auction.marketMetadata.betOnYes,
-      sellerProfile: seller
-        ? {
-            name: seller.name.trim() === "" ? undefined : seller.name,
-            reputationScore: Number(seller.reputationScore),
-            registered: seller.registered,
-            totalAuctions: sellerAuctions?.length,
-          }
-        : undefined,
-    };
-  } catch (error) {
-    console.error(`Failed to load contract data for auction ${auctionId}`, error);
-    return undefined;
-  }
-}
-
 async function getSecretRecord(
   auctionId: bigint,
 ): Promise<AuctionDetailSecretRecord | undefined> {
@@ -268,6 +152,28 @@ async function getSecretRecord(
   }
 }
 
+function resolveSellerAddress(
+  createdAuction: AuctionDetailSubgraphQuery["createdAuction"][number] | undefined,
+  closedAuction: AuctionDetailSubgraphQuery["closedAuction"][number] | undefined,
+  forceClosedAuction: AuctionDetailSubgraphQuery["forceClosedAuction"][number] | undefined,
+): string | undefined {
+  const raw =
+    createdAuction?.seller ?? closedAuction?.seller ?? forceClosedAuction?.seller;
+  return raw !== undefined ? getAddress(String(raw)) : undefined;
+}
+
+function resolveExternalMarketId(
+  createdAuction: AuctionDetailSubgraphQuery["createdAuction"][number] | undefined,
+  closedAuction: AuctionDetailSubgraphQuery["closedAuction"][number] | undefined,
+  forceClosedAuction: AuctionDetailSubgraphQuery["forceClosedAuction"][number] | undefined,
+): string | undefined {
+  const raw =
+    createdAuction?.externalMarketId ??
+    closedAuction?.externalMarketId ??
+    forceClosedAuction?.externalMarketId;
+  return raw !== undefined ? String(raw) : undefined;
+}
+
 export async function getAuctionDetail({
   auctionId,
   bidLimit,
@@ -281,77 +187,59 @@ export async function getAuctionDetail({
   const closedAuction = result.closedAuction[0];
   const forceClosedAuction = result.forceClosedAuction[0];
   const latestBid = result.bids[0];
-  const auctionIdBigInt = scalarToBigInt(auctionId);
-  const [contractData, secretRecord] = await Promise.all([
-    getContractAuctionData(auctionIdBigInt),
-    getSecretRecord(auctionIdBigInt),
-  ]);
 
-  if (!createdAuction && !contractData) {
+  if (!createdAuction && !closedAuction && !forceClosedAuction) {
     return null;
   }
 
-  const sellerAddress =
-    createdAuction?.seller !== undefined
-      ? getAddress(String(createdAuction.seller))
-      : contractData?.sellerAddress;
-  const externalMarketId =
-    createdAuction?.externalMarketId !== undefined
-      ? String(createdAuction.externalMarketId)
-      : contractData?.externalMarketId;
-  const reservePriceUsdc =
-    createdAuction?.reservePrice !== undefined
-      ? bigintToUsdc(scalarToBigInt(createdAuction.reservePrice))
-      : contractData?.reservePriceUsdc;
-  const endTime =
-    createdAuction?.endTime !== undefined
-      ? scalarToIso(createdAuction.endTime)
-      : contractData?.endTime;
-  const createdAt =
-    createdAuction?.blockTimestamp !== undefined
-      ? scalarToIso(createdAuction.blockTimestamp)
-      : undefined;
+  const sellerAddress = resolveSellerAddress(
+    createdAuction,
+    closedAuction,
+    forceClosedAuction,
+  );
+  const externalMarketId = resolveExternalMarketId(
+    createdAuction,
+    closedAuction,
+    forceClosedAuction,
+  );
 
-  if (
-    sellerAddress === undefined ||
-    externalMarketId === undefined ||
-    reservePriceUsdc === undefined ||
-    endTime === undefined
-  ) {
+  if (sellerAddress === undefined || externalMarketId === undefined) {
     return null;
   }
+
+  const secretRecord = await getSecretRecord(scalarToBigInt(auctionId));
 
   return {
     auctionId,
     sellerAddress,
     externalMarketId,
-    reservePriceUsdc,
-    endTime,
-    createdAt,
-    status:
-      contractData?.status ??
-      (forceClosedAuction
-        ? "ForceClosed"
-        : closedAuction
-          ? "Closed"
-          : "Open"),
-    currentBidUsdc:
-      contractData?.currentBidUsdc ??
-      (closedAuction
-        ? bigintToUsdc(scalarToBigInt(closedAuction.winningBid))
-        : latestBid
-          ? bigintToUsdc(scalarToBigInt(latestBid.amount))
-          : undefined),
-    currentBidderAddress:
-      contractData?.currentBidderAddress ??
-      (closedAuction
-        ? getAddress(String(closedAuction.buyer))
-        : latestBid
-          ? getAddress(String(latestBid.bidder))
-          : undefined),
-    automaticBetAmountUsdc: contractData?.automaticBetAmountUsdc,
-    betOnYes: contractData?.betOnYes,
-    sellerProfile: contractData?.sellerProfile,
+    reservePriceUsdc:
+      createdAuction?.reservePrice !== undefined
+        ? bigintToUsdc(scalarToBigInt(createdAuction.reservePrice))
+        : undefined,
+    endTime:
+      createdAuction?.endTime !== undefined
+        ? scalarToIso(createdAuction.endTime)
+        : undefined,
+    createdAt:
+      createdAuction?.blockTimestamp !== undefined
+        ? scalarToIso(createdAuction.blockTimestamp)
+        : undefined,
+    status: forceClosedAuction
+      ? "ForceClosed"
+      : closedAuction
+        ? "Closed"
+        : "Open",
+    currentBidUsdc: closedAuction
+      ? bigintToUsdc(scalarToBigInt(closedAuction.winningBid))
+      : latestBid
+        ? bigintToUsdc(scalarToBigInt(latestBid.amount))
+        : undefined,
+    currentBidderAddress: closedAuction
+      ? getAddress(String(closedAuction.buyer))
+      : latestBid
+        ? getAddress(String(latestBid.bidder))
+        : undefined,
     bids: result.bids.map(mapBid),
     closedAuction: closedAuction ? mapClosedAuction(closedAuction) : undefined,
     forceClosedAuction: forceClosedAuction
