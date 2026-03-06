@@ -5,8 +5,9 @@
  *   - SellerRegistered
  *   - AuctionCreated
  *   - BidPlaced
- *   - AuctionClosed + TradeExecuted
+ *   - AuctionClosed
  *   - AuctionForceClosed + ReputationUpdated
+ *   - ExternalMarketResolved + ReputationUpdated
  *
  * Then exercises the Supabase web2 private bidding workflow:
  *   - Deposit (credit balance)
@@ -16,14 +17,13 @@
  *   - Force-close refund
  *   - Constraint checks (invalid address, negative balance, duplicate active bid)
  *   - Withdrawal lifecycle
- *   - ExternalMarketResolved + ReputationUpdated
  *
  * Env vars required:
  *   OWNER_PK                    — deploys, creates markets, closes auctions, settles
- *   BIDDER_PK                   — places bids, claims winnings (MUST be different from owner)
+ *   BIDDER_PK                   — unused on-chain (admin-only model) but needed for Supabase tests
  *   RPC_URL                     — Eth Sepolia RPC
  *   MOCK_USDC_ADDRESS           — MockUSDC contract
- *   SIMPLE_MARKET_ADDRESS       — SimpleMarket contract
+ *   SIMPLE_MARKET_ADDRESS       — ExamplePredictionMarket contract
  *   SECRET_MARKETPLACE_ADDRESS  — SecretMarketplace contract
  *   SUPABASE_URL                — Supabase project URL
  *   SUPABASE_SERVICE_ROLE_KEY   — Supabase service role key
@@ -36,7 +36,7 @@ import {
   mockUsdcAbi,
   SECRET_MARKETPLACE_ADDRESS,
   secretMarketplaceAbi,
-  simpleMarketAbi,
+  examplePredictionMarketAbi,
   type Database,
 } from "@private-streams/common";
 import { createClient } from "@supabase/supabase-js";
@@ -70,7 +70,7 @@ const MOCK_USDC = (process.env.MOCK_USDC_ADDRESS ??
   MOCK_USDC_ADDRESS) as Address;
 const SECRET_MARKETPLACE = (process.env.SECRET_MARKETPLACE_ADDRESS ??
   SECRET_MARKETPLACE_ADDRESS) as Address;
-// NOTE: We read the SimpleMarket address from SecretMarketplace.market() at runtime
+// NOTE: We read the ExamplePredictionMarket address from SecretMarketplace.simpleMarket() at runtime
 // to avoid mismatch between the two contracts. See Step 0 below.
 let SIMPLE_MARKET: Address;
 
@@ -89,12 +89,6 @@ const publicClient = createPublicClient({
 
 const ownerClient = createWalletClient({
   account: ownerAccount,
-  chain: sepolia,
-  transport: http(RPC_URL),
-});
-
-const bidderClient = createWalletClient({
-  account: bidderAccount,
   chain: sepolia,
   transport: http(RPC_URL),
 });
@@ -123,21 +117,16 @@ const MINT_AMOUNT = 10_000_000_000n; // 10,000 USDC
 const MIN_BALANCE = 10_000_000n; // 10 USDC — threshold to trigger mint
 const APPROVAL_AMOUNT = 100_000_000_000n; // 100,000 USDC — blanket approval
 const BID_AMOUNT = 1_000_000n; // 1 USDC
-const AUTOMATIC_BET_AMOUNT = 5_000_000n; // 5 USDC — intended bet on prediction market
 const AUCTION_DURATION = 60; // seconds
 const FORCE_CLOSE_AUCTION_DURATION = 300; // seconds (won't wait for it)
 const QUESTION_1 = "The New York Yankees won the 2009 World Series.";
 const QUESTION_2 = "Will ETH hit $10k by end of 2026?";
-// SimpleMarket.Outcome values
-const OUTCOME_NO = 1;
-const OUTCOME_YES = 2;
-
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address;
+const SELLER_NAME = "Insider Alice";
 
 // ─── E2E Flow ────────────────────────────────────────────────────────────────
 
 async function main() {
-  // Read the SimpleMarket address that SecretMarketplace was deployed with
+  // Read the ExamplePredictionMarket address that SecretMarketplace was deployed with
   SIMPLE_MARKET = (await publicClient.readContract({
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
@@ -147,17 +136,17 @@ async function main() {
   console.log("===================================================");
   console.log("  SecretMarketplace E2E — Fire ALL Events");
   console.log("===================================================");
-  console.log(`  Owner:            ${ownerAccount.address}`);
-  console.log(`  Bidder:           ${bidderAccount.address}`);
+  console.log(`  Owner (admin):    ${ownerAccount.address}`);
+  console.log(`  Bidder (web2):    ${bidderAccount.address}`);
   console.log(`  MockUSDC:         ${MOCK_USDC}`);
   console.log(
-    `  SimpleMarket:     ${SIMPLE_MARKET} (from SecretMarketplace.market())`,
+    `  ExamplePredictionMarket: ${SIMPLE_MARKET} (from SecretMarketplace.simpleMarket())`,
   );
   console.log(`  SecretMarketplace: ${SECRET_MARKETPLACE}`);
   console.log("===================================================\n");
 
   // ── Step 0: Mint USDC + approve ────────────────────────────────────────────
-  console.log(">> Step 0: Ensuring both accounts have USDC and approvals...");
+  console.log(">> Step 0: Ensuring owner has USDC and approvals...");
 
   const ownerBalance = await publicClient.readContract({
     address: MOCK_USDC,
@@ -179,27 +168,7 @@ async function main() {
     );
   }
 
-  const bidderBalance = await publicClient.readContract({
-    address: MOCK_USDC,
-    abi: mockUsdcAbi,
-    functionName: "balanceOf",
-    args: [bidderAccount.address],
-  });
-  if (bidderBalance < MIN_BALANCE) {
-    const h = await ownerClient.writeContract({
-      address: MOCK_USDC,
-      abi: mockUsdcAbi,
-      functionName: "mint",
-      args: [bidderAccount.address, MINT_AMOUNT],
-    });
-    await waitForTx(h, "Mint USDC to bidder");
-  } else {
-    console.log(
-      `  ok Bidder has ${formatUnits(bidderBalance, USDC_DECIMALS)} USDC`,
-    );
-  }
-
-  // Approve SecretMarketplace and SimpleMarket for both users
+  // Approve SecretMarketplace and ExamplePredictionMarket for owner
   const approveOwnerSM = await ownerClient.writeContract({
     address: MOCK_USDC,
     abi: mockUsdcAbi,
@@ -214,15 +183,7 @@ async function main() {
     functionName: "approve",
     args: [SIMPLE_MARKET, APPROVAL_AMOUNT],
   });
-  await waitForTx(approveOwnerMarket, "Owner approved SimpleMarket");
-
-  const approveBidder = await bidderClient.writeContract({
-    address: MOCK_USDC,
-    abi: mockUsdcAbi,
-    functionName: "approve",
-    args: [SECRET_MARKETPLACE, APPROVAL_AMOUNT],
-  });
-  await waitForTx(approveBidder, "Bidder approved SecretMarketplace");
+  await waitForTx(approveOwnerMarket, "Owner approved ExamplePredictionMarket");
 
   // ── Step 1: Register seller ────────────────────────────────────────────────
   // EVENT: SellerRegistered
@@ -231,27 +192,24 @@ async function main() {
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
     functionName: "registerSeller",
-    args: ["Insider Alice"],
+    args: [SELLER_NAME],
   });
   await waitForTx(registerHash, "[EVENT: SellerRegistered]");
 
   // ══════════════════════════════════════════════════════════════════════════
-  // AUCTION 1: Normal flow → AuctionCreated, BidPlaced, AuctionClosed,
-  //            TradeExecuted
+  // AUCTION 1: Normal flow → AuctionCreated, BidPlaced, AuctionClosed
   // ══════════════════════════════════════════════════════════════════════════
 
-  console.log(
-    "\n>> Step 2: Create market + auction (normal flow, betOnYes=true)...",
-  );
+  console.log("\n>> Step 2: Create market + auction (normal flow)...");
   const createMarketHash = await ownerClient.writeContract({
     address: SIMPLE_MARKET,
-    abi: simpleMarketAbi,
+    abi: examplePredictionMarketAbi,
     functionName: "newMarket",
     args: [QUESTION_1],
   });
   const marketReceipt = await waitForTx(createMarketHash, "Market created");
   const marketLogs = parseEventLogs({
-    abi: simpleMarketAbi,
+    abi: examplePredictionMarketAbi,
     logs: marketReceipt.logs,
     eventName: "MarketCreated",
   });
@@ -265,7 +223,7 @@ async function main() {
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
     functionName: "createAuction",
-    args: [marketId1, BID_AMOUNT, endTime1, ZERO_ADDRESS, ZERO_ADDRESS, true],
+    args: [SELLER_NAME, marketId1, QUESTION_1, endTime1],
   });
   const auctionReceipt = await waitForTx(
     createAuctionHash,
@@ -279,13 +237,13 @@ async function main() {
   const auctionId1 = auctionLogs[0].args.auctionId;
   console.log(`  Auction ID: ${auctionId1}`);
 
-  // EVENT: BidPlaced (bidder bids — seller cannot bid on own auction)
-  console.log("\n>> Step 3: Bidder places bid...");
-  const bid1Hash = await bidderClient.writeContract({
+  // EVENT: BidPlaced (admin places bid on behalf of web2 user)
+  console.log("\n>> Step 3: Admin places bid...");
+  const bid1Hash = await ownerClient.writeContract({
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
     functionName: "placeBid",
-    args: [auctionId1, BID_AMOUNT, AUTOMATIC_BET_AMOUNT],
+    args: [auctionId1, BID_AMOUNT],
   });
   await waitForTx(bid1Hash, "[EVENT: BidPlaced]");
 
@@ -309,25 +267,25 @@ async function main() {
   }
   console.log("  ok Auction 1 period ended (on-chain)");
 
-  // EVENT: AuctionClosed + TradeExecuted (seller closes own auction)
-  console.log("\n>> Step 5: Seller closes auction 1...");
+  // EVENT: AuctionClosed (admin closes auction — funds stay in contract)
+  console.log("\n>> Step 5: Admin closes auction 1...");
   const closeHash = await ownerClient.writeContract({
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
     functionName: "closeAuction",
     args: [auctionId1],
   });
-  await waitForTx(closeHash, "[EVENT: AuctionClosed + TradeExecuted]");
+  await waitForTx(closeHash, "[EVENT: AuctionClosed]");
 
-  // EVENT: ExternalMarketResolved + ReputationUpdated (resolve market 1 as Yes → +1)
+  // EVENT: ExternalMarketResolved + ReputationUpdated (resolve market 1 with delta=+1)
   console.log(
-    "\n>> Step 6: Resolve external market (outcome=Yes, seller bet Yes → +1)...",
+    "\n>> Step 6: Resolve external market (delta=+1)...",
   );
   const resolveHash = await ownerClient.writeContract({
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
     functionName: "resolveExternalMarket",
-    args: [marketId1, OUTCOME_YES],
+    args: [marketId1, 1],
   });
   await waitForTx(
     resolveHash,
@@ -339,7 +297,7 @@ async function main() {
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
     functionName: "getSeller",
-    args: [ownerAccount.address],
+    args: [SELLER_NAME],
   });
   console.log(
     `  Seller reputation after resolve: ${sellerAfterResolve.reputationScore}`,
@@ -351,17 +309,17 @@ async function main() {
   // ══════════════════════════════════════════════════════════════════════════
 
   console.log(
-    "\n>> Step 7: Create auction 2 (will be force-closed, betOnYes=true)...",
+    "\n>> Step 7: Create auction 2 (will be force-closed)...",
   );
   const createMarket2Hash = await ownerClient.writeContract({
     address: SIMPLE_MARKET,
-    abi: simpleMarketAbi,
+    abi: examplePredictionMarketAbi,
     functionName: "newMarket",
     args: [QUESTION_2],
   });
   const market2Receipt = await waitForTx(createMarket2Hash, "Market 2 created");
   const market2Logs = parseEventLogs({
-    abi: simpleMarketAbi,
+    abi: examplePredictionMarketAbi,
     logs: market2Receipt.logs,
     eventName: "MarketCreated",
   });
@@ -374,7 +332,7 @@ async function main() {
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
     functionName: "createAuction",
-    args: [marketId2, BID_AMOUNT, endTime2, ZERO_ADDRESS, ZERO_ADDRESS, true],
+    args: [SELLER_NAME, marketId2, QUESTION_2, endTime2],
   });
   const auction2Receipt = await waitForTx(
     createAuction2Hash,
@@ -388,25 +346,25 @@ async function main() {
   const auctionId2 = auction2Logs[0].args.auctionId;
   console.log(`  Auction ID: ${auctionId2}`);
 
-  // Bidder places a bid (will be refunded on force-close)
-  console.log("\n>> Step 8: Bidder bids on auction 2...");
-  const bid2Hash = await bidderClient.writeContract({
+  // Admin places a bid (will be held on force-close)
+  console.log("\n>> Step 8: Admin places bid on auction 2...");
+  const bid2Hash = await ownerClient.writeContract({
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
     functionName: "placeBid",
-    args: [auctionId2, BID_AMOUNT, AUTOMATIC_BET_AMOUNT],
+    args: [auctionId2, BID_AMOUNT],
   });
   await waitForTx(bid2Hash, "[EVENT: BidPlaced] on auction 2");
 
-  // EVENT: AuctionForceClosed + ReputationUpdated (outcome=No, seller bet Yes → -1)
+  // EVENT: AuctionForceClosed + ReputationUpdated (delta=-1)
   console.log(
-    "\n>> Step 9: Force-close auction 2 (outcome=No, seller bet Yes → -1)...",
+    "\n>> Step 9: Force-close auction 2 (reputationDelta=-1)...",
   );
   const forceCloseHash = await ownerClient.writeContract({
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
     functionName: "forceCloseAuction",
-    args: [auctionId2, OUTCOME_NO],
+    args: [auctionId2, -1],
   });
   await waitForTx(
     forceCloseHash,
@@ -418,14 +376,14 @@ async function main() {
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
     functionName: "getSeller",
-    args: [ownerAccount.address],
+    args: [SELLER_NAME],
   });
   console.log(
     `  Seller final reputation: ${sellerFinal.reputationScore} (expected 0: +1 resolve, -1 force-close)`,
   );
 
   console.log("\n===================================================");
-  console.log("  On-chain PASS — All 6 event types fired");
+  console.log("  On-chain PASS — All event types fired");
   console.log("===================================================");
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -457,10 +415,10 @@ async function main() {
   console.log("  Web2 Private Bidding Tests (Supabase)");
   console.log("===================================================\n");
 
-  // ── Step 8: Setup — clean up any previous test data ────────────────────
+  // ── Step 10: Setup — clean up any previous test data ────────────────────
   // Note: balances is now a VIEW derived from deposits/bids/withdrawals,
   // so we only clean the underlying tables. Order matters for FK-like deps.
-  console.log(">> Step 8: Cleaning up previous test data...");
+  console.log(">> Step 10: Cleaning up previous test data...");
   await supabase
     .from("transfers")
     .delete()
@@ -477,10 +435,10 @@ async function main() {
     .in("user_address", [ownerAddr, bidderAddr]);
   console.log("  ok Cleaned up");
 
-  // ── Step 9: Deposit — record deposits, verify view reflects them ──────
+  // ── Step 11: Deposit — record deposits, verify view reflects them ──────
   // balances is now a VIEW: inserting confirmed deposits automatically
   // makes them appear in the view. No manual balance row creation needed.
-  console.log("\n>> Step 9: Recording deposits (view auto-computes balances)...");
+  console.log("\n>> Step 11: Recording deposits (view auto-computes balances)...");
 
   // Record owner's deposit (simulates cron detecting private transfer to platform EOA)
   const ownerTxId = `test-deposit-owner-${Date.now()}`;
@@ -576,8 +534,8 @@ async function main() {
   console.log(`  ok Owner balance (view): ${ownerBal?.available_balance}`);
   console.log(`  ok Bidder balance (view): ${bidderBal?.available_balance}`);
 
-  // ── Step 10: Create secret for auction ─────────────────────────────────
-  console.log("\n>> Step 10: Creating secret for auction...");
+  // ── Step 12: Create secret for auction ─────────────────────────────────
+  console.log("\n>> Step 12: Creating secret for auction...");
   const { error: secretErr } = await supabase.from("secrets").insert({
     auction_id: testAuctionId,
     secret_data: "ETH merge date leaked — confidence 0.95",
@@ -592,10 +550,8 @@ async function main() {
   if (secretErr) throw new Error(`Secret insert failed: ${secretErr.message}`);
   console.log(`  ok Secret created for auction ${testAuctionId}`);
 
-  // ── Step 11: Bidder places private bid ─────────────────────────────────
-  // With balances as a view, we check available balance via the view,
-  // then just insert the bid. The view automatically reflects locked amounts.
-  console.log("\n>> Step 11: Bidder places private bid (3 DEMO)...");
+  // ── Step 13: Bidder places private bid ─────────────────────────────────
+  console.log("\n>> Step 13: Bidder places private bid (3 DEMO)...");
 
   const bidAmount = BigInt(BID_DEMO);
 
@@ -632,9 +588,8 @@ async function main() {
     `  ok Bidder (view): available=${bidderBalAfterBid!.available_balance}, locked=${bidderBalAfterBid!.locked_balance}`,
   );
 
-  // ── Step 12: Owner outbids (5 DEMO) — mark old bid outbid, insert new ─
-  // With the view, no manual balance updates needed — just update bid statuses.
-  console.log("\n>> Step 12: Owner outbids with 5 DEMO...");
+  // ── Step 14: Owner outbids (5 DEMO) — release bidder, lock owner ──────
+  console.log("\n>> Step 14: Owner outbids with 5 DEMO...");
   const OUTBID_AMOUNT = "5000000000000000000"; // 5 DEMO
   const outbidAmount = BigInt(OUTBID_AMOUNT);
 
@@ -689,12 +644,10 @@ async function main() {
   }
   console.log("  ok Bidder's locked balance fully released");
 
-  // ── Step 13: Constraint checks ─────────────────────────────────────────
-  // Note: balances is now a read-only VIEW, so we can't test insert/update
-  // constraints on it. We test constraints on the underlying tables instead.
-  console.log("\n>> Step 13: Testing DB constraints...");
+  // ── Step 15: Constraint checks ─────────────────────────────────────────
+  console.log("\n>> Step 15: Testing DB constraints...");
 
-  // 13a: Duplicate active bid for same auction should fail (unique partial index)
+  // 15a: Duplicate active bid for same auction should fail (unique partial index)
   const { error: dupErr } = await supabase.from("private_bids").insert({
     auction_id: testAuctionId,
     bidder_address: bidderAddr,
@@ -709,7 +662,7 @@ async function main() {
     throw new Error("Duplicate active bid should have been rejected!");
   }
 
-  // 13b: Invalid address format on transfers table should fail
+  // Invalid address format on transfers table should fail
   const { error: addrErr } = await supabase.from("transfers").insert({
     transaction_id: `test-addr-${Date.now()}`,
     type: "deposit",
@@ -729,7 +682,7 @@ async function main() {
     throw new Error("Invalid address should have been rejected!");
   }
 
-  // 13c: App-level overdraw check — verify view correctly shows insufficient funds
+  // App-level overdraw check — verify view correctly shows insufficient funds
   // (Views can't have CHECK constraints, so overdraw prevention is app-level)
   const { data: overdrawBal } = await supabase
     .from("balances")
@@ -742,10 +695,10 @@ async function main() {
     `attempted=${overdrawAmount} — would be rejected at app level`,
   );
 
-  // ── Step 14: Force-close refund — mark bid refunded ───────────────────
+  // ── Step 16: Force-close refund — mark bid refunded ───────────────────
   // With the view, marking bid as "refunded" automatically releases locked balance.
   console.log(
-    "\n>> Step 14: Force-close refund (mark bid as refunded)...",
+    "\n>> Step 16: Force-close refund (mark bid as refunded)...",
   );
 
   const { error: refundBidErr } = await supabase
@@ -773,10 +726,8 @@ async function main() {
     );
   }
 
-  // ── Step 15: Withdrawal lifecycle ──────────────────────────────────────
-  // With the view, inserting a withdrawal automatically shows in pending.
-  // Completing it automatically deducts from available.
-  console.log("\n>> Step 15: Withdrawal lifecycle...");
+  // ── Step 17: Withdrawal lifecycle ──────────────────────────────────────
+  console.log("\n>> Step 17: Withdrawal lifecycle...");
 
   // Read available balance from view to determine withdrawal amount
   const { data: bidderBalForWithdraw } = await supabase
@@ -846,9 +797,8 @@ async function main() {
   }
   console.log("  ok Withdrawal complete — all balances zeroed");
 
-  // ── Step 16: Cleanup ───────────────────────────────────────────────────
-  // Note: balances is a view — no delete needed. Clean underlying tables only.
-  console.log("\n>> Step 16: Cleaning up test data...");
+  // ── Step 18: Cleanup ───────────────────────────────────────────────────
+  console.log("\n>> Step 18: Cleaning up test data...");
   await supabase
     .from("transfers")
     .delete()
@@ -877,7 +827,6 @@ async function main() {
   console.log("    [x] AuctionCreated          (x2)");
   console.log("    [x] BidPlaced               (x2)");
   console.log("    [x] AuctionClosed           (x1)");
-  console.log("    [x] TradeExecuted           (x1)");
   console.log("    [x] ExternalMarketResolved  (x1)");
   console.log("    [x] AuctionForceClosed      (x1)");
   console.log(

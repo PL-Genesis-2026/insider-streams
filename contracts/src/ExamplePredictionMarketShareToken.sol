@@ -3,10 +3,10 @@ pragma solidity ^0.8.20;
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-/// @title ShareToken
+/// @title ExamplePredictionMarketShareToken
 /// @notice Mintable/burnable ERC-20 representing YES or NO shares in a prediction market.
-/// @dev Only the deployer (SimpleMarket) can mint and burn.
-contract ShareToken is ERC20 {
+/// @dev Only the deployer (ExamplePredictionMarket) can mint and burn.
+contract ExamplePredictionMarketShareToken is ERC20 {
     address public immutable market;
 
     error OnlyMarket();
