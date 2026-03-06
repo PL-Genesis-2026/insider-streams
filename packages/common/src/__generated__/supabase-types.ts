@@ -53,9 +53,9 @@ export type Database = {
           auction_id: string
           buyer: string | null
           created_at: string
+          event_data: Json | null
           id: string
-          market_data: Json | null
-          secret_data: Json
+          secret_data: string
           seller: string
           updated_at: string
         }
@@ -63,9 +63,9 @@ export type Database = {
           auction_id: string
           buyer?: string | null
           created_at?: string
+          event_data?: Json | null
           id?: string
-          market_data?: Json | null
-          secret_data: Json
+          secret_data: string
           seller: string
           updated_at?: string
         }
@@ -73,9 +73,9 @@ export type Database = {
           auction_id?: string
           buyer?: string | null
           created_at?: string
+          event_data?: Json | null
           id?: string
-          market_data?: Json | null
-          secret_data?: Json
+          secret_data?: string
           seller?: string
           updated_at?: string
         }

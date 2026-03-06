@@ -13,6 +13,7 @@ contracts/lib/
 *.log
 *.wasm
 .DS_Store
+.turbo/
 .cre_build_tmp.js
 .claude/settings.local.json
 Untitled

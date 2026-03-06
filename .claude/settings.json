@@ -27,9 +27,7 @@
       "Bash(node:*)",
       "Bash(npx:*)",
       "Bash(pnpm:*)",
-      "Bash(test:*)",
-      "Bash(cast call 0xD0Ad321ab6c124C211Acd0bf98f569b2950F3c9b \"getAuction\\(uint256\\)\\(\\(address,uint256,uint256,uint256,address,uint256,uint8\\)\\)\" 0 --rpc-url https://ethereum-sepolia-rpc.publicnode.com)",
-      "Bash(cast call 0xD0Ad321ab6c124C211Acd0bf98f569b2950F3c9b \"getForwarderAddress\\(\\)\\(address\\)\" --rpc-url https://ethereum-sepolia-rpc.publicnode.com)"
+      "Bash(test:*)"
     ]
   }
 }
