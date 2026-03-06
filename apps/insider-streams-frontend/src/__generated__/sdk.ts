@@ -1,4 +1,4 @@
-import { GraphQLClient, RequestOptions } from 'graphql-request';
+import type { GraphQLClient, RequestOptions } from 'graphql-request';
 import gql from 'graphql-tag';
 export type Maybe<T> = T | null;
 export type InputMaybe<T> = Maybe<T>;
@@ -15,11 +15,11 @@ export type Scalars = {
   Boolean: { input: boolean; output: boolean; }
   Int: { input: number; output: number; }
   Float: { input: number; output: number; }
-  BigDecimal: { input: any; output: any; }
-  BigInt: { input: any; output: any; }
-  Bytes: { input: any; output: any; }
-  Int8: { input: any; output: any; }
-  Timestamp: { input: any; output: any; }
+  BigDecimal: { input: string; output: string; }
+  BigInt: { input: string; output: string; }
+  Bytes: { input: string; output: string; }
+  Int8: { input: string; output: string; }
+  Timestamp: { input: string; output: string; }
 };
 
 export enum Aggregation_Interval {
@@ -1486,7 +1486,7 @@ export type AuctionDetailSubgraphQuery = { __typename?: 'Query', createdAuction:
 export type RecentAuctionsQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type RecentAuctionsQuery = { __typename?: 'Query', auctionCreateds: Array<{ __typename?: 'AuctionCreated', id: any, auctionId: any, seller: any, reservePrice: any, endTime: any, blockTimestamp: any, transactionHash: any }>, bidPlaceds: Array<{ __typename?: 'BidPlaced', id: any, auctionId: any, bidder: any, amount: any, blockTimestamp: any }> };
+export type RecentAuctionsQuery = { __typename?: 'Query', auctionCreateds: Array<{ __typename?: 'AuctionCreated', id: string, auctionId: string, seller: string, reservePrice: string, endTime: string, blockTimestamp: string, transactionHash: string }>, bidPlaceds: Array<{ __typename?: 'BidPlaced', id: string, auctionId: string, bidder: string, amount: string, blockTimestamp: string }> };
 
 export type HomepageAuctionListsQueryVariables = Exact<{
   currentTimestamp: Scalars['BigInt']['input'];
