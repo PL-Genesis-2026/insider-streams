@@ -102,8 +102,8 @@ Private keys are in `.env` files (never committed).
 
 ## Deployed Contracts (Eth Sepolia — Prediction Market)
 
-- **MockUSDC**: `0xA75c910D441C99bA651a70451D3bE1d690c1DD85` (6 decimals, public `mint()`)
-- **ExamplePredictionMarket**: `0x89F02f5a5162570F1a79C5C505b6CA78D13229e7`
+- **MockUSDC**: `0x1B69F56bEC6978D0B62C3f5612019cC6b72D6F7f` (6 decimals, public `mint()`)
+- **ExamplePredictionMarket**: `0x6b3b925114CfE8DF93Da3225cD75ee2087994c1d`
 
 ### ExamplePredictionMarket Events
 
@@ -116,7 +116,7 @@ Private keys are in `.env` files (never committed).
 
 ## Deployed Contracts (Eth Sepolia — SecretMarketplace / Auctions)
 
-- **SecretMarketplace**: `0x197D1150858Ce0c125B69E02D80790D7e7b017f1`
+- **SecretMarketplace**: `0x81c9870dCd9B7e5E8b6EcF5d508c5f6BEE7DE058`
   - Uses MockUSDC as payment token, linked to ExamplePredictionMarket
   - `simpleMarket` address is updatable via `setSimpleMarket()` (admin only)
   - CRE Forwarder: `0x15fc6ae953e024d975e77382eeec56a9101f9f88`

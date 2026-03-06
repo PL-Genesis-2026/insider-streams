@@ -168,7 +168,7 @@ async function main() {
     );
   }
 
-  // Approve SecretMarketplace for owner (admin places all bids)
+  // Approve SecretMarketplace and ExamplePredictionMarket for owner
   const approveOwnerSM = await ownerClient.writeContract({
     address: MOCK_USDC,
     abi: mockUsdcAbi,
@@ -176,6 +176,14 @@ async function main() {
     args: [SECRET_MARKETPLACE, APPROVAL_AMOUNT],
   });
   await waitForTx(approveOwnerSM, "Owner approved SecretMarketplace");
+
+  const approveOwnerMarket = await ownerClient.writeContract({
+    address: MOCK_USDC,
+    abi: mockUsdcAbi,
+    functionName: "approve",
+    args: [SIMPLE_MARKET, APPROVAL_AMOUNT],
+  });
+  await waitForTx(approveOwnerMarket, "Owner approved ExamplePredictionMarket");
 
   // ── Step 1: Register seller ────────────────────────────────────────────────
   // EVENT: SellerRegistered
