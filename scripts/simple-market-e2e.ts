@@ -25,7 +25,7 @@ import {
   MOCK_USDC_ADDRESS,
   SIMPLE_MARKET_ADDRESS,
   mockUsdcAbi,
-  simpleMarketAbi,
+  examplePredictionMarketAbi,
 } from "@private-streams/common";
 import { parseEventLogs, type Address, type Hex } from "viem";
 import {
@@ -88,7 +88,16 @@ async function main() {
   );
 
   // ── Step 2: Approve USDC ────────────────────────────────────────────────────
-  step("Bidder approving USDC for SimpleMarket...");
+  step("Owner approving USDC for ExamplePredictionMarket...");
+  const approveOwnerHash = await ownerClient.writeContract({
+    address: MOCK_USDC,
+    abi: mockUsdcAbi,
+    functionName: "approve",
+    args: [SIMPLE_MARKET, APPROVAL_AMOUNT],
+  });
+  await waitForTx(publicClient, approveOwnerHash, "Owner USDC approval");
+
+  step("Bidder approving USDC for ExamplePredictionMarket...");
   const approveHash = await bidderClient!.writeContract({
     address: MOCK_USDC,
     abi: mockUsdcAbi,
@@ -101,7 +110,7 @@ async function main() {
   step("Owner creating market...");
   const createMarketHash = await ownerClient.writeContract({
     address: SIMPLE_MARKET,
-    abi: simpleMarketAbi,
+    abi: examplePredictionMarketAbi,
     functionName: "newMarket",
     args: [QUESTION],
   });
@@ -111,7 +120,7 @@ async function main() {
     "Market created",
   );
   const marketLogs = parseEventLogs({
-    abi: simpleMarketAbi,
+    abi: examplePredictionMarketAbi,
     logs: marketReceipt.logs,
     eventName: "MarketCreated",
   });
@@ -122,7 +131,7 @@ async function main() {
   step("Bidder buying YES shares...");
   const buyHash = await bidderClient!.writeContract({
     address: SIMPLE_MARKET,
-    abi: simpleMarketAbi,
+    abi: examplePredictionMarketAbi,
     functionName: "buyShares",
     args: [marketId, OUTCOME_YES, PREDICTION_AMOUNT],
   });
@@ -132,7 +141,7 @@ async function main() {
   step("Waiting for market to close...");
   const market = await publicClient.readContract({
     address: SIMPLE_MARKET,
-    abi: simpleMarketAbi,
+    abi: examplePredictionMarketAbi,
     functionName: "getMarket",
     args: [marketId],
   });
@@ -143,7 +152,7 @@ async function main() {
   step("Owner requesting settlement...");
   const settleHash = await ownerClient.writeContract({
     address: SIMPLE_MARKET,
-    abi: simpleMarketAbi,
+    abi: examplePredictionMarketAbi,
     functionName: "requestSettlement",
     args: [marketId],
   });
@@ -193,7 +202,7 @@ async function main() {
   step("Verifying on-chain market status...");
   const finalMarket = await publicClient.readContract({
     address: SIMPLE_MARKET,
-    abi: simpleMarketAbi,
+    abi: examplePredictionMarketAbi,
     functionName: "getMarket",
     args: [marketId],
   });
