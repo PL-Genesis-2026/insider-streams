@@ -151,7 +151,7 @@ export function handleExternalMarketResolved(
     event.transaction.hash.concatI32(event.logIndex.toI32())
   )
   entity.externalMarketId = event.params.externalMarketId
-  entity.delta = event.params.delta
+  entity.reputationDelta = event.params.delta
   entity.auctionsAffected = event.params.auctionsAffected
 
   entity.blockNumber = event.block.number
@@ -199,7 +199,7 @@ export function handleReputationUpdated(event: ReputationUpdatedEvent): void {
   )
   entity.sellerId = event.params.seller
   entity.auctionId = event.params.auctionId
-  entity.delta = event.params.delta
+  entity.reputationDelta = event.params.delta
   entity.newScore = event.params.newScore
 
   entity.blockNumber = event.block.number
