@@ -8,12 +8,12 @@ contract ForceCloseAuction is Script {
     function run() external {
         address auctionAddress = vm.envAddress("SECRET_MARKETPLACE_ADDRESS");
         uint256 auctionId = vm.envUint("AUCTION_ID");
-        uint8 marketOutcome = uint8(vm.envUint("MARKET_OUTCOME")); // 1=No, 2=Yes, 3=Inconclusive
+        int8 reputationDelta = int8(int256(vm.envInt("REPUTATION_DELTA"))); // -1, 0, or 1
         uint256 deployerPk = vm.envUint("PRIVATE_KEY");
 
         vm.startBroadcast(deployerPk);
 
-        SecretMarketplace(auctionAddress).forceCloseAuction(auctionId, marketOutcome);
+        SecretMarketplace(auctionAddress).forceCloseAuction(auctionId, reputationDelta);
         console.log("Auction force closed:", auctionId);
 
         vm.stopBroadcast();

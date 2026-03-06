@@ -11,13 +11,12 @@ contract PlaceBid is Script {
         address tokenAddress = vm.envAddress("MOCK_USDC_ADDRESS");
         uint256 auctionId = vm.envUint("AUCTION_ID");
         uint256 bidAmount = vm.envUint("BID_AMOUNT");
-        uint256 automaticBetAmount = vm.envUint("AUTOMATIC_BET_AMOUNT");
-        uint256 bidderPk = vm.envUint("PRIVATE_KEY");
+        uint256 deployerPk = vm.envUint("PRIVATE_KEY");
 
-        vm.startBroadcast(bidderPk);
+        vm.startBroadcast(deployerPk);
 
         IERC20(tokenAddress).approve(auctionAddress, bidAmount);
-        SecretMarketplace(auctionAddress).placeBid(auctionId, bidAmount, automaticBetAmount);
+        SecretMarketplace(auctionAddress).placeBid(auctionId, bidAmount);
         console.log("Bid placed on auction", auctionId, "for", bidAmount);
 
         vm.stopBroadcast();

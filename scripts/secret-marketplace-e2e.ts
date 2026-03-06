@@ -36,7 +36,7 @@ import {
   mockUsdcAbi,
   SECRET_MARKETPLACE_ADDRESS,
   secretMarketplaceAbi,
-  simpleMarketAbi,
+  examplePredictionMarketAbi,
   type Database,
 } from "@private-streams/common";
 import { createClient } from "@supabase/supabase-js";
@@ -245,13 +245,13 @@ async function main() {
   );
   const createMarketHash = await ownerClient.writeContract({
     address: SIMPLE_MARKET,
-    abi: simpleMarketAbi,
+    abi: examplePredictionMarketAbi,
     functionName: "newMarket",
     args: [QUESTION_1],
   });
   const marketReceipt = await waitForTx(createMarketHash, "Market created");
   const marketLogs = parseEventLogs({
-    abi: simpleMarketAbi,
+    abi: examplePredictionMarketAbi,
     logs: marketReceipt.logs,
     eventName: "MarketCreated",
   });
@@ -355,13 +355,13 @@ async function main() {
   );
   const createMarket2Hash = await ownerClient.writeContract({
     address: SIMPLE_MARKET,
-    abi: simpleMarketAbi,
+    abi: examplePredictionMarketAbi,
     functionName: "newMarket",
     args: [QUESTION_2],
   });
   const market2Receipt = await waitForTx(createMarket2Hash, "Market 2 created");
   const market2Logs = parseEventLogs({
-    abi: simpleMarketAbi,
+    abi: examplePredictionMarketAbi,
     logs: market2Receipt.logs,
     eventName: "MarketCreated",
   });

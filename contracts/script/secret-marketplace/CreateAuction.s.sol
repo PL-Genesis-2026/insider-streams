@@ -7,10 +7,10 @@ import {SecretMarketplace} from "../../src/SecretMarketplace.sol";
 contract CreateAuction is Script {
     function run() external {
         address auctionAddress = vm.envAddress("SECRET_MARKETPLACE_ADDRESS");
-        uint256 externalMarketId = vm.envUint("EXTERNAL_MARKET_ID");
-        uint256 reservePrice = vm.envUint("RESERVE_PRICE");
+        uint256 eventId = vm.envUint("EVENT_ID");
+        string memory seller = vm.envString("SELLER_NAME");
+        string memory eventTitle = vm.envString("EVENT_TITLE");
         uint256 duration = vm.envUint("AUCTION_DURATION"); // seconds from now
-        bool betOnYes = vm.envBool("BET_ON_YES");
         uint256 deployerPk = vm.envUint("PRIVATE_KEY");
 
         uint256 endTime = block.timestamp + duration;
@@ -18,7 +18,7 @@ contract CreateAuction is Script {
         vm.startBroadcast(deployerPk);
 
         uint256 auctionId = SecretMarketplace(auctionAddress).createAuction(
-            externalMarketId, reservePrice, endTime, address(0), address(0), betOnYes
+            seller, eventId, eventTitle, endTime
         );
         console.log("Auction created with ID:", auctionId);
 

@@ -2,12 +2,12 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import {SimpleMarket} from "../src/SimpleMarket.sol";
-import {ShareToken} from "../src/ShareToken.sol";
+import {ExamplePredictionMarket} from "../src/ExamplePredictionMarket.sol";
+import {ExamplePredictionMarketShareToken} from "../src/ExamplePredictionMarketShareToken.sol";
 import {MockUSDC} from "../src/mock/MockUSDC.sol";
 
-contract SimpleMarketTest is Test {
-    SimpleMarket public sm;
+contract ExamplePredictionMarketTest is Test {
+    ExamplePredictionMarket public sm;
     MockUSDC public usdc;
 
     address creator = makeAddr("creator");
@@ -20,7 +20,7 @@ contract SimpleMarketTest is Test {
 
     function setUp() public {
         usdc = new MockUSDC(0);
-        sm = new SimpleMarket(address(usdc), forwarder);
+        sm = new ExamplePredictionMarket(address(usdc), forwarder);
 
         usdc.mint(creator, MINT_AMOUNT);
         usdc.mint(buyer1, MINT_AMOUNT);
@@ -41,9 +41,9 @@ contract SimpleMarketTest is Test {
         return sm.newMarket("Will ETH hit $10k?");
     }
 
-    function _settleMarket(uint256 marketId, SimpleMarket.Outcome outcome) internal {
+    function _settleMarket(uint256 marketId, ExamplePredictionMarket.Outcome outcome) internal {
         // Warp past market close
-        SimpleMarket.Market memory m = sm.getMarket(marketId);
+        ExamplePredictionMarket.Market memory m = sm.getMarket(marketId);
         vm.warp(m.marketClose + 1);
 
         // Request settlement
@@ -59,11 +59,11 @@ contract SimpleMarketTest is Test {
 
     function test_newMarket_createsMarketWithTokens() public {
         uint256 id = _createMarket();
-        SimpleMarket.Market memory m = sm.getMarket(id);
+        ExamplePredictionMarket.Market memory m = sm.getMarket(id);
 
         assertEq(m.creator, creator);
         assertEq(m.question, "Will ETH hit $10k?");
-        assertEq(uint8(m.status), uint8(SimpleMarket.Status.Open));
+        assertEq(uint8(m.status), uint8(ExamplePredictionMarket.Status.Open));
         assertTrue(address(m.yesToken) != address(0));
         assertTrue(address(m.noToken) != address(0));
         assertEq(m.yesReserve, INITIAL_LIQUIDITY);
@@ -79,13 +79,13 @@ contract SimpleMarketTest is Test {
     function test_newMarket_emitsEvent() public {
         vm.prank(creator);
         vm.expectEmit(true, true, false, false);
-        emit SimpleMarket.MarketCreated(0, creator, "Will ETH hit $10k?", 0, 0, address(0), address(0));
+        emit ExamplePredictionMarket.MarketCreated(0, creator, "Will ETH hit $10k?", 0, 0, address(0), address(0));
         sm.newMarket("Will ETH hit $10k?");
     }
 
     function test_newMarket_shareTokenDecimals() public {
         uint256 id = _createMarket();
-        SimpleMarket.Market memory m = sm.getMarket(id);
+        ExamplePredictionMarket.Market memory m = sm.getMarket(id);
         assertEq(m.yesToken.decimals(), 6);
         assertEq(m.noToken.decimals(), 6);
     }
@@ -100,10 +100,10 @@ contract SimpleMarketTest is Test {
 
     function test_buyShares_yes() public {
         uint256 id = _createMarket();
-        SimpleMarket.Market memory m = sm.getMarket(id);
+        ExamplePredictionMarket.Market memory m = sm.getMarket(id);
 
         vm.prank(buyer1);
-        sm.buyShares(id, SimpleMarket.Outcome.Yes, 5e6); // 5 USDC
+        sm.buyShares(id, ExamplePredictionMarket.Outcome.Yes, 5e6); // 5 USDC
 
         uint256 yesBalance = m.yesToken.balanceOf(buyer1);
         assertTrue(yesBalance > 0);
@@ -112,10 +112,10 @@ contract SimpleMarketTest is Test {
 
     function test_buyShares_no() public {
         uint256 id = _createMarket();
-        SimpleMarket.Market memory m = sm.getMarket(id);
+        ExamplePredictionMarket.Market memory m = sm.getMarket(id);
 
         vm.prank(buyer1);
-        sm.buyShares(id, SimpleMarket.Outcome.No, 5e6);
+        sm.buyShares(id, ExamplePredictionMarket.Outcome.No, 5e6);
 
         uint256 noBalance = m.noToken.balanceOf(buyer1);
         assertTrue(noBalance > 0);
@@ -126,7 +126,7 @@ contract SimpleMarketTest is Test {
 
         uint256 yesBefore = sm.getYesPrice(id);
         vm.prank(buyer1);
-        sm.buyShares(id, SimpleMarket.Outcome.Yes, 5e6);
+        sm.buyShares(id, ExamplePredictionMarket.Outcome.Yes, 5e6);
         uint256 yesAfter = sm.getYesPrice(id);
 
         // Buying YES should increase YES price
@@ -138,43 +138,43 @@ contract SimpleMarketTest is Test {
 
         vm.prank(buyer1);
         vm.expectEmit(true, true, true, false);
-        emit SimpleMarket.SharesPurchased(id, buyer1, SimpleMarket.Outcome.Yes, 5e6, 0);
-        sm.buyShares(id, SimpleMarket.Outcome.Yes, 5e6);
+        emit ExamplePredictionMarket.SharesPurchased(id, buyer1, ExamplePredictionMarket.Outcome.Yes, 5e6, 0);
+        sm.buyShares(id, ExamplePredictionMarket.Outcome.Yes, 5e6);
     }
 
     function test_buyShares_revertsAfterClose() public {
         uint256 id = _createMarket();
-        SimpleMarket.Market memory m = sm.getMarket(id);
+        ExamplePredictionMarket.Market memory m = sm.getMarket(id);
 
         vm.warp(m.marketClose + 1);
         vm.prank(buyer1);
         vm.expectRevert();
-        sm.buyShares(id, SimpleMarket.Outcome.Yes, 5e6);
+        sm.buyShares(id, ExamplePredictionMarket.Outcome.Yes, 5e6);
     }
 
     function test_buyShares_revertsInvalidOutcome() public {
         uint256 id = _createMarket();
         vm.prank(buyer1);
-        vm.expectRevert(SimpleMarket.InvalidOutcome.selector);
-        sm.buyShares(id, SimpleMarket.Outcome.None, 5e6);
+        vm.expectRevert(ExamplePredictionMarket.InvalidOutcome.selector);
+        sm.buyShares(id, ExamplePredictionMarket.Outcome.None, 5e6);
     }
 
     function test_buyShares_revertsZeroAmount() public {
         uint256 id = _createMarket();
         vm.prank(buyer1);
-        vm.expectRevert(SimpleMarket.AmountZero.selector);
-        sm.buyShares(id, SimpleMarket.Outcome.Yes, 0);
+        vm.expectRevert(ExamplePredictionMarket.AmountZero.selector);
+        sm.buyShares(id, ExamplePredictionMarket.Outcome.Yes, 0);
     }
 
     function test_buyShares_multipleBuyers() public {
         uint256 id = _createMarket();
-        SimpleMarket.Market memory m = sm.getMarket(id);
+        ExamplePredictionMarket.Market memory m = sm.getMarket(id);
 
         vm.prank(buyer1);
-        sm.buyShares(id, SimpleMarket.Outcome.Yes, 5e6);
+        sm.buyShares(id, ExamplePredictionMarket.Outcome.Yes, 5e6);
 
         vm.prank(buyer2);
-        sm.buyShares(id, SimpleMarket.Outcome.No, 3e6);
+        sm.buyShares(id, ExamplePredictionMarket.Outcome.No, 3e6);
 
         assertTrue(m.yesToken.balanceOf(buyer1) > 0);
         assertTrue(m.noToken.balanceOf(buyer2) > 0);
@@ -184,13 +184,13 @@ contract SimpleMarketTest is Test {
 
     function test_redeemShares_winningYes() public {
         uint256 id = _createMarket();
-        SimpleMarket.Market memory m = sm.getMarket(id);
+        ExamplePredictionMarket.Market memory m = sm.getMarket(id);
 
         vm.prank(buyer1);
-        sm.buyShares(id, SimpleMarket.Outcome.Yes, 5e6);
+        sm.buyShares(id, ExamplePredictionMarket.Outcome.Yes, 5e6);
         uint256 yesShares = m.yesToken.balanceOf(buyer1);
 
-        _settleMarket(id, SimpleMarket.Outcome.Yes);
+        _settleMarket(id, ExamplePredictionMarket.Outcome.Yes);
 
         uint256 balBefore = usdc.balanceOf(buyer1);
         vm.prank(buyer1);
@@ -202,13 +202,13 @@ contract SimpleMarketTest is Test {
 
     function test_redeemShares_winningNo() public {
         uint256 id = _createMarket();
-        SimpleMarket.Market memory m = sm.getMarket(id);
+        ExamplePredictionMarket.Market memory m = sm.getMarket(id);
 
         vm.prank(buyer1);
-        sm.buyShares(id, SimpleMarket.Outcome.No, 5e6);
+        sm.buyShares(id, ExamplePredictionMarket.Outcome.No, 5e6);
         uint256 noShares = m.noToken.balanceOf(buyer1);
 
-        _settleMarket(id, SimpleMarket.Outcome.No);
+        _settleMarket(id, ExamplePredictionMarket.Outcome.No);
 
         uint256 balBefore = usdc.balanceOf(buyer1);
         vm.prank(buyer1);
@@ -221,7 +221,7 @@ contract SimpleMarketTest is Test {
         uint256 id = _createMarket();
 
         vm.prank(buyer1);
-        sm.buyShares(id, SimpleMarket.Outcome.Yes, 5e6);
+        sm.buyShares(id, ExamplePredictionMarket.Outcome.Yes, 5e6);
 
         vm.prank(buyer1);
         vm.expectRevert();
@@ -230,22 +230,22 @@ contract SimpleMarketTest is Test {
 
     function test_redeemShares_revertsZeroAmount() public {
         uint256 id = _createMarket();
-        _settleMarket(id, SimpleMarket.Outcome.Yes);
+        _settleMarket(id, ExamplePredictionMarket.Outcome.Yes);
 
         vm.prank(buyer1);
-        vm.expectRevert(SimpleMarket.AmountZero.selector);
+        vm.expectRevert(ExamplePredictionMarket.AmountZero.selector);
         sm.redeemShares(id, 0);
     }
 
     function test_redeemShares_losingSharesRevert() public {
         uint256 id = _createMarket();
-        SimpleMarket.Market memory m = sm.getMarket(id);
+        ExamplePredictionMarket.Market memory m = sm.getMarket(id);
 
         vm.prank(buyer1);
-        sm.buyShares(id, SimpleMarket.Outcome.No, 5e6);
+        sm.buyShares(id, ExamplePredictionMarket.Outcome.No, 5e6);
         uint256 noShares = m.noToken.balanceOf(buyer1);
 
-        _settleMarket(id, SimpleMarket.Outcome.Yes);
+        _settleMarket(id, ExamplePredictionMarket.Outcome.Yes);
 
         // Trying to redeem NO shares when YES won — burn will fail (not the winning token)
         vm.prank(buyer1);
@@ -257,15 +257,15 @@ contract SimpleMarketTest is Test {
         uint256 id = _createMarket();
 
         vm.prank(buyer1);
-        sm.buyShares(id, SimpleMarket.Outcome.Yes, 5e6);
-        SimpleMarket.Market memory m = sm.getMarket(id);
+        sm.buyShares(id, ExamplePredictionMarket.Outcome.Yes, 5e6);
+        ExamplePredictionMarket.Market memory m = sm.getMarket(id);
         uint256 yesShares = m.yesToken.balanceOf(buyer1);
 
-        _settleMarket(id, SimpleMarket.Outcome.Yes);
+        _settleMarket(id, ExamplePredictionMarket.Outcome.Yes);
 
         vm.prank(buyer1);
         vm.expectEmit(true, true, false, true);
-        emit SimpleMarket.SharesRedeemed(id, buyer1, yesShares, yesShares);
+        emit ExamplePredictionMarket.SharesRedeemed(id, buyer1, yesShares, yesShares);
         sm.redeemShares(id, yesShares);
     }
 
@@ -276,9 +276,9 @@ contract SimpleMarketTest is Test {
 
         // Buyer buys YES shares
         vm.prank(buyer1);
-        sm.buyShares(id, SimpleMarket.Outcome.Yes, 5e6);
+        sm.buyShares(id, ExamplePredictionMarket.Outcome.Yes, 5e6);
 
-        _settleMarket(id, SimpleMarket.Outcome.Yes);
+        _settleMarket(id, ExamplePredictionMarket.Outcome.Yes);
 
         uint256 balBefore = usdc.balanceOf(creator);
         vm.prank(creator);
@@ -290,10 +290,10 @@ contract SimpleMarketTest is Test {
 
     function test_withdrawLiquidity_revertsNotCreator() public {
         uint256 id = _createMarket();
-        _settleMarket(id, SimpleMarket.Outcome.Yes);
+        _settleMarket(id, ExamplePredictionMarket.Outcome.Yes);
 
         vm.prank(buyer1);
-        vm.expectRevert(SimpleMarket.NotCreator.selector);
+        vm.expectRevert(ExamplePredictionMarket.NotCreator.selector);
         sm.withdrawLiquidity(id);
     }
 
@@ -307,23 +307,23 @@ contract SimpleMarketTest is Test {
 
     function test_withdrawLiquidity_revertsDoubleWithdraw() public {
         uint256 id = _createMarket();
-        _settleMarket(id, SimpleMarket.Outcome.Yes);
+        _settleMarket(id, ExamplePredictionMarket.Outcome.Yes);
 
         vm.prank(creator);
         sm.withdrawLiquidity(id);
 
         vm.prank(creator);
-        vm.expectRevert(SimpleMarket.LiquidityAlreadyWithdrawn.selector);
+        vm.expectRevert(ExamplePredictionMarket.LiquidityAlreadyWithdrawn.selector);
         sm.withdrawLiquidity(id);
     }
 
     function test_withdrawLiquidity_emitsEvent() public {
         uint256 id = _createMarket();
-        _settleMarket(id, SimpleMarket.Outcome.Yes);
+        _settleMarket(id, ExamplePredictionMarket.Outcome.Yes);
 
         vm.prank(creator);
         vm.expectEmit(true, true, false, false);
-        emit SimpleMarket.LiquidityWithdrawn(id, creator, 0);
+        emit ExamplePredictionMarket.LiquidityWithdrawn(id, creator, 0);
         sm.withdrawLiquidity(id);
     }
 
@@ -331,13 +331,13 @@ contract SimpleMarketTest is Test {
 
     function test_requestSettlement() public {
         uint256 id = _createMarket();
-        SimpleMarket.Market memory m = sm.getMarket(id);
+        ExamplePredictionMarket.Market memory m = sm.getMarket(id);
 
         vm.warp(m.marketClose + 1);
         sm.requestSettlement(id);
 
         m = sm.getMarket(id);
-        assertEq(uint8(m.status), uint8(SimpleMarket.Status.SettlementRequested));
+        assertEq(uint8(m.status), uint8(ExamplePredictionMarket.Status.SettlementRequested));
     }
 
     function test_requestSettlement_revertsBeforeClose() public {
@@ -348,32 +348,32 @@ contract SimpleMarketTest is Test {
 
     function test_settleViaReport() public {
         uint256 id = _createMarket();
-        _settleMarket(id, SimpleMarket.Outcome.Yes);
+        _settleMarket(id, ExamplePredictionMarket.Outcome.Yes);
 
-        SimpleMarket.Market memory m = sm.getMarket(id);
-        assertEq(uint8(m.status), uint8(SimpleMarket.Status.Settled));
-        assertEq(uint8(m.outcome), uint8(SimpleMarket.Outcome.Yes));
+        ExamplePredictionMarket.Market memory m = sm.getMarket(id);
+        assertEq(uint8(m.status), uint8(ExamplePredictionMarket.Status.Settled));
+        assertEq(uint8(m.outcome), uint8(ExamplePredictionMarket.Outcome.Yes));
     }
 
     function test_settleManually() public {
         uint256 id = _createMarket();
-        SimpleMarket.Market memory m = sm.getMarket(id);
+        ExamplePredictionMarket.Market memory m = sm.getMarket(id);
         vm.warp(m.marketClose + 1);
         sm.requestSettlement(id);
 
         // Settle as Inconclusive → NeedsManual
-        bytes memory report = abi.encode(id, uint8(SimpleMarket.Outcome.Inconclusive), uint16(2000), "low-conf");
+        bytes memory report = abi.encode(id, uint8(ExamplePredictionMarket.Outcome.Inconclusive), uint16(2000), "low-conf");
         vm.prank(forwarder);
         sm.onReport(hex"", report);
 
         m = sm.getMarket(id);
-        assertEq(uint8(m.status), uint8(SimpleMarket.Status.NeedsManual));
+        assertEq(uint8(m.status), uint8(ExamplePredictionMarket.Status.NeedsManual));
 
         // Manual settle
-        sm.settleMarketManually(id, SimpleMarket.Outcome.No);
+        sm.settleMarketManually(id, ExamplePredictionMarket.Outcome.No);
         m = sm.getMarket(id);
-        assertEq(uint8(m.status), uint8(SimpleMarket.Status.Settled));
-        assertEq(uint8(m.outcome), uint8(SimpleMarket.Outcome.No));
+        assertEq(uint8(m.status), uint8(ExamplePredictionMarket.Status.Settled));
+        assertEq(uint8(m.outcome), uint8(ExamplePredictionMarket.Outcome.No));
     }
 
     // ── Price view tests ────────────────────────────────────
@@ -382,7 +382,7 @@ contract SimpleMarketTest is Test {
         uint256 id = _createMarket();
 
         vm.prank(buyer1);
-        sm.buyShares(id, SimpleMarket.Outcome.Yes, 5e6);
+        sm.buyShares(id, ExamplePredictionMarket.Outcome.Yes, 5e6);
 
         uint256 yes = sm.getYesPrice(id);
         uint256 no = sm.getNoPrice(id);
@@ -395,19 +395,19 @@ contract SimpleMarketTest is Test {
     function test_fullLifecycle() public {
         // Create market
         uint256 id = _createMarket();
-        SimpleMarket.Market memory m = sm.getMarket(id);
+        ExamplePredictionMarket.Market memory m = sm.getMarket(id);
 
         // Buyer1 buys YES
         vm.prank(buyer1);
-        sm.buyShares(id, SimpleMarket.Outcome.Yes, 5e6);
+        sm.buyShares(id, ExamplePredictionMarket.Outcome.Yes, 5e6);
         uint256 yesShares = m.yesToken.balanceOf(buyer1);
 
         // Buyer2 buys NO
         vm.prank(buyer2);
-        sm.buyShares(id, SimpleMarket.Outcome.No, 3e6);
+        sm.buyShares(id, ExamplePredictionMarket.Outcome.No, 3e6);
 
         // Settle as YES
-        _settleMarket(id, SimpleMarket.Outcome.Yes);
+        _settleMarket(id, ExamplePredictionMarket.Outcome.Yes);
 
         // Buyer1 redeems YES shares
         uint256 bal1Before = usdc.balanceOf(buyer1);

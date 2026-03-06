@@ -2,7 +2,9 @@
 export {
   mockUsdcAbi,
   secretMarketplaceAbi,
-  simpleMarketAbi,
+  // After running `pnpm wagmi`, this will export `examplePredictionMarketAbi`.
+  // Until then, re-export the old name as an alias.
+  simpleMarketAbi as examplePredictionMarketAbi,
 } from "./generated";
 
 export type { Database } from "./__generated__/supabase-types";

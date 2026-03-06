@@ -4,7 +4,7 @@ pragma solidity 0.8.26;
 import {Script, console} from "forge-std/Script.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {PolicyEngine} from "@chainlink/policy-management/core/PolicyEngine.sol";
-import {SimpleToken} from "../../src/SimpleToken.sol";
+import {ConfidentialUSDC} from "../../src/ConfidentialUSDC.sol";
 
 interface IVault {
     function register(address token, address policyEngine) external;
@@ -31,9 +31,9 @@ contract SetupAll is Script {
 
         vm.startBroadcast(deployerPK);
 
-        // 1. Deploy SimpleToken ERC20
-        SimpleToken token = new SimpleToken("DemoToken", "DEMO", deployer);
-        console.log("1) SimpleToken deployed at:", address(token));
+        // 1. Deploy ConfidentialUSDC ERC20
+        ConfidentialUSDC token = new ConfidentialUSDC("ConfidentialUSDC", "cUSDC", deployer);
+        console.log("1) ConfidentialUSDC deployed at:", address(token));
 
         // 2. Deploy PolicyEngine (behind proxy)
         PolicyEngine policyEngineImpl = new PolicyEngine();
@@ -70,7 +70,7 @@ contract SetupAll is Script {
         console.log("============================================");
         console.log("  SETUP COMPLETE");
         console.log("============================================");
-        console.log("SimpleToken:        ", address(token));
+        console.log("ConfidentialUSDC:        ", address(token));
         console.log("PolicyEngine proxy: ", address(proxy));
         console.log("PolicyEngine impl:  ", address(policyEngineImpl));
         console.log("Vault:              ", VAULT);
