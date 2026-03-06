@@ -8,7 +8,7 @@ dataSources:
     name: SecretMarketplace
     network: sepolia
     source:
-      address: "0xED53f1AE2Ee56ca0fDAA79f0e050E873FCF86616"
+      address: "0xda55F6bc945CCA8A92e938c05bba58B934892a3c"
       abi: SecretMarketplace
       startBlock: 10391293
 
@@ -24,10 +24,12 @@ dataSources:
         - ExpectedAuthorUpdated
         - ExpectedWorkflowIdUpdated
         - ExpectedWorkflowNameUpdated
+        - ExternalMarketResolved
         - ForwarderAddressUpdated
         - OwnershipTransferred
         - ReputationUpdated
         - SecurityWarning
+        - SellerRegistered
         - TradeExecuted
       abis:
         - name: SecretMarketplace
@@ -35,11 +37,11 @@ dataSources:
       eventHandlers:
         - event: AuctionClosed(indexed uint256,indexed address,uint256,address,uint256)
           handler: handleAuctionClosed
-        - event: AuctionCreated(indexed uint256,indexed address,uint256,uint256,uint256)
+        - event: AuctionCreated(indexed uint256,indexed address,indexed uint256,uint256,uint256,bool)
           handler: handleAuctionCreated
         - event: AuctionForceClosed(indexed uint256,indexed address,uint256,address,uint256,int8)
           handler: handleAuctionForceClosed
-        - event: BidPlaced(indexed uint256,indexed address,uint256,address,uint256)
+        - event: BidPlaced(indexed uint256,indexed address,uint256,uint256,address,uint256)
           handler: handleBidPlaced
         - event: ExpectedAuthorUpdated(indexed address,indexed address)
           handler: handleExpectedAuthorUpdated
@@ -47,6 +49,8 @@ dataSources:
           handler: handleExpectedWorkflowIdUpdated
         - event: ExpectedWorkflowNameUpdated(indexed bytes10,indexed bytes10)
           handler: handleExpectedWorkflowNameUpdated
+        - event: ExternalMarketResolved(indexed uint256,uint8,uint256)
+          handler: handleExternalMarketResolved
         - event: ForwarderAddressUpdated(indexed address,indexed address)
           handler: handleForwarderAddressUpdated
         - event: OwnershipTransferred(indexed address,indexed address)
@@ -55,6 +59,8 @@ dataSources:
           handler: handleReputationUpdated
         - event: SecurityWarning(string)
           handler: handleSecurityWarning
-        - event: TradeExecuted(indexed uint256,indexed uint256,indexed address,uint256)
+        - event: SellerRegistered(indexed address,string)
+          handler: handleSellerRegistered
+        - event: TradeExecuted(indexed uint256,indexed uint256,indexed address,uint256,bool)
           handler: handleTradeExecuted
       file: ./src/secret-marketplace.ts
