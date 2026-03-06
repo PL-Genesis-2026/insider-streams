@@ -1,0 +1,238 @@
+/**
+ * Auction Closer E2E Test Script
+ *
+ * Full lifecycle test on Eth Sepolia:
+ *   1. Owner creates a SimpleMarket market
+ *   2. Owner creates a SecretMarketplace auction (short duration)
+ *   3. Bidder approves USDC + places bid
+ *   4. Waits for auction to expire
+ *   5. CRE auction-closer simulation (dry run) — detects expired auction
+ *   6. CRE auction-closer broadcast — closes auction on-chain
+ *   7. Verifies auction is closed and removed from open list
+ *
+ * Env vars required:
+ *   OWNER_PK   — creates market + auction
+ *   BIDDER_PK  — places bid (must be different from owner)
+ *   RPC_URL    — Eth Sepolia RPC
+ *
+ * Usage: pnpm e2e:auction-closer
+ */
+
+import {
+  MOCK_USDC_ADDRESS,
+  SECRET_MARKETPLACE_ADDRESS,
+  mockUsdcAbi,
+  secretMarketplaceAbi,
+  simpleMarketAbi,
+} from "@private-streams/common";
+import { parseEventLogs, type Address, type Hex } from "viem";
+import {
+  banner,
+  step,
+  assert,
+  envRequired,
+  createClients,
+  waitForTx,
+  waitForTimestamp,
+  ensureUsdcBalance,
+  runCRE,
+} from "./e2e-helpers.js";
+
+// ─── Config ──────────────────────────────────────────────────────────────────
+
+const OWNER_PK = envRequired("OWNER_PK") as Hex;
+const BIDDER_PK = envRequired("BIDDER_PK") as Hex;
+const RPC_URL = envRequired("RPC_URL");
+
+const MOCK_USDC = (process.env.MOCK_USDC_ADDRESS ??
+  MOCK_USDC_ADDRESS) as Address;
+const SECRET_MARKETPLACE = (process.env.SECRET_MARKETPLACE_ADDRESS ??
+  SECRET_MARKETPLACE_ADDRESS) as Address;
+
+const { publicClient, ownerClient, ownerAccount, bidderClient, bidderAccount } =
+  createClients({ ownerPk: OWNER_PK, bidderPk: BIDDER_PK, rpcUrl: RPC_URL });
+
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+const MIN_BALANCE = 10_000_000n; // 10 USDC
+const MINT_AMOUNT = 10_000_000_000n; // 10,000 USDC
+const APPROVAL_AMOUNT = 100_000_000_000n; // 100,000 USDC blanket
+const RESERVE_PRICE = 1_000_000n; // 1 USDC
+const BID_AMOUNT = 2_000_000n; // 2 USDC
+const AUTOMATIC_BET_AMOUNT = 5_000_000n; // 5 USDC
+const AUCTION_DURATION = 120; // 2 minutes
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address;
+
+// ─── E2E Flow ────────────────────────────────────────────────────────────────
+
+async function main() {
+  // Read the SimpleMarket address from SecretMarketplace
+  const SIMPLE_MARKET = (await publicClient.readContract({
+    address: SECRET_MARKETPLACE,
+    abi: secretMarketplaceAbi,
+    functionName: "simpleMarket",
+  })) as Address;
+
+  banner("Auction Closer E2E Test");
+  console.log(`  Owner:             ${ownerAccount.address}`);
+  console.log(`  Bidder:            ${bidderAccount!.address}`);
+  console.log(`  MockUSDC:          ${MOCK_USDC}`);
+  console.log(`  SimpleMarket:      ${SIMPLE_MARKET}`);
+  console.log(`  SecretMarketplace: ${SECRET_MARKETPLACE}`);
+
+  // ── Step 1: Ensure USDC balances ────────────────────────────────────────────
+  step("Ensuring bidder has USDC...");
+  await ensureUsdcBalance(
+    publicClient,
+    ownerClient,
+    MOCK_USDC,
+    bidderAccount!.address,
+    MIN_BALANCE,
+    MINT_AMOUNT,
+  );
+
+  // ── Step 2: Approve USDC ────────────────────────────────────────────────────
+  step("Bidder approving USDC for SecretMarketplace...");
+  const approveHash = await bidderClient!.writeContract({
+    address: MOCK_USDC,
+    abi: mockUsdcAbi,
+    functionName: "approve",
+    args: [SECRET_MARKETPLACE, APPROVAL_AMOUNT],
+  });
+  await waitForTx(publicClient, approveHash, "Bidder USDC approval");
+
+  // ── Step 3: Create market ───────────────────────────────────────────────────
+  step("Owner creating SimpleMarket market...");
+  const createMarketHash = await ownerClient.writeContract({
+    address: SIMPLE_MARKET,
+    abi: simpleMarketAbi,
+    functionName: "newMarket",
+    args: ["Auction closer E2E test"],
+  });
+  const marketReceipt = await waitForTx(
+    publicClient,
+    createMarketHash,
+    "Market created",
+  );
+  const marketLogs = parseEventLogs({
+    abi: simpleMarketAbi,
+    logs: marketReceipt.logs,
+    eventName: "MarketCreated",
+  });
+  const marketId = marketLogs[0].args.marketId;
+  console.log(`  Market ID: ${marketId}`);
+
+  // ── Step 4: Create auction (6 args) ─────────────────────────────────────────
+  step("Owner creating auction...");
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  const endTime = now + BigInt(AUCTION_DURATION);
+
+  const createAuctionHash = await ownerClient.writeContract({
+    address: SECRET_MARKETPLACE,
+    abi: secretMarketplaceAbi,
+    functionName: "createAuction",
+    args: [marketId, RESERVE_PRICE, endTime, ZERO_ADDRESS, ZERO_ADDRESS, true],
+  });
+  const auctionReceipt = await waitForTx(
+    publicClient,
+    createAuctionHash,
+    "Auction created",
+  );
+  const auctionLogs = parseEventLogs({
+    abi: secretMarketplaceAbi,
+    logs: auctionReceipt.logs,
+    eventName: "AuctionCreated",
+  });
+  const auctionId = auctionLogs[0].args.auctionId;
+  console.log(`  Auction ID: ${auctionId}`);
+
+  // Verify in open auctions
+  const openBefore = await publicClient.readContract({
+    address: SECRET_MARKETPLACE,
+    abi: secretMarketplaceAbi,
+    functionName: "getOpenAuctions",
+  });
+  console.log(`  Open auctions: [${openBefore.join(", ")}]`);
+  assert(
+    openBefore.includes(auctionId),
+    `Auction ${auctionId} not in open auctions`,
+  );
+
+  // ── Step 5: Bidder places bid (3 args) ──────────────────────────────────────
+  step("Bidder placing bid...");
+  const bidHash = await bidderClient!.writeContract({
+    address: SECRET_MARKETPLACE,
+    abi: secretMarketplaceAbi,
+    functionName: "placeBid",
+    args: [auctionId, BID_AMOUNT, AUTOMATIC_BET_AMOUNT],
+  });
+  await waitForTx(publicClient, bidHash, "Bid placed");
+
+  // ── Step 6: Wait for auction to expire ──────────────────────────────────────
+  step("Waiting for auction to expire...");
+  const auctionData = await publicClient.readContract({
+    address: SECRET_MARKETPLACE,
+    abi: secretMarketplaceAbi,
+    functionName: "getAuction",
+    args: [auctionId],
+  });
+  await waitForTimestamp(
+    publicClient,
+    auctionData.endTime,
+    "Auction expiry",
+  );
+
+  // ── Step 7: CRE dry run ─────────────────────────────────────────────────────
+  step("Running CRE auction-closer simulation (dry run)...");
+  const dryOutput = runCRE({ workflow: "auction-closer", triggerIndex: 0 });
+  const detectedExpired =
+    dryOutput.includes("expired") || dryOutput.includes("close");
+  console.log(
+    `  ${detectedExpired ? "ok" : "WARN"} Simulation ${detectedExpired ? "detected expired auction" : "output did not explicitly mention expired auction"}`,
+  );
+
+  // ── Step 8: CRE broadcast ──────────────────────────────────────────────────
+  step("Running CRE auction-closer with broadcast...");
+  runCRE({ workflow: "auction-closer", triggerIndex: 0, broadcast: true });
+
+  // ── Step 9: Verify on-chain ─────────────────────────────────────────────────
+  step("Verifying auction is closed on-chain...");
+  const finalAuction = await publicClient.readContract({
+    address: SECRET_MARKETPLACE,
+    abi: secretMarketplaceAbi,
+    functionName: "getAuction",
+    args: [auctionId],
+  });
+  // AuctionStatus: 0=Open, 1=Closed, 2=ForceClosed
+  assert(
+    finalAuction.status === 1,
+    `Expected status=1 (Closed), got status=${finalAuction.status}`,
+  );
+  console.log(`  ok Auction ${auctionId} is Closed (status=1)`);
+
+  // Verify removed from open auctions
+  const openAfter = await publicClient.readContract({
+    address: SECRET_MARKETPLACE,
+    abi: secretMarketplaceAbi,
+    functionName: "getOpenAuctions",
+  });
+  assert(
+    !openAfter.includes(auctionId),
+    `Auction ${auctionId} still in open auctions after close`,
+  );
+  console.log(`  ok Open auctions after close: [${openAfter.join(", ")}]`);
+
+  // ── Summary ─────────────────────────────────────────────────────────────────
+  banner("PASS — Auction Closer E2E");
+  console.log(`  Auction ID:        ${auctionId}`);
+  console.log(`  Market ID:         ${marketId}`);
+  console.log(`  Bid Amount:        ${BID_AMOUNT}`);
+  console.log(`  On-chain status:   Closed`);
+}
+
+main()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error("\nx E2E test failed:", err);
+    process.exit(1);
+  });

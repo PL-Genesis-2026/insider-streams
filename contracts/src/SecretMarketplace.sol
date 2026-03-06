@@ -39,8 +39,10 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
     // ======== STRUCTS ==========
     // ===========================
 
+    // EMIT THIS DATA IN EVENT
     struct MarketMetadata {
         uint256 marketId;
+        //TODO MARKET EVENT for ease of use, remove in prod
         address yesToken;   // placeholder for future token-based markets
         address noToken;    // placeholder for future token-based markets
         bool betOnYes;      // seller's claim about market direction
@@ -73,6 +75,7 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
         string name
     );
 
+    // TODO DUMP AS MUCH DATA AS YOU CAN
     event AuctionCreated(
         uint256 indexed auctionId,
         address indexed seller,

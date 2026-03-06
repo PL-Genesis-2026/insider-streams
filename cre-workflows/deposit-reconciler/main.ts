@@ -1,14 +1,18 @@
 import { cre, type Runtime, Runner, type CronPayload } from "@chainlink/cre-sdk";
 import { configSchema, CRON_SCHEDULE, type Config } from "./types";
 import { fetchTransactions } from "./transactions";
-import { recordDeposits, recordTransfers } from "./supabase";
+import { recordTransactions } from "./supabase";
 
 /**
  * Cron handler — polls Private Token API for recent transactions,
  * batch-inserts new deposits and outgoing transfers into Supabase.
  * The balances VIEW automatically reflects credited/debited amounts.
  *
- * Total HTTP calls per execution: 3 (fetch + batch deposits + batch transfers),
+ * Only tracks API `type: "transfer"` transactions (private transfers):
+ * - is_incoming: true  → deposit (someone transferred TO our platform EOA)
+ * - is_incoming: false → withdrawal (platform EOA transferred to a user)
+ *
+ * Total HTTP calls per execution: 2 (fetch + batch insert),
  * well within CRE's per-workflow limit of 5.
  */
 const onCronTrigger = (runtime: Runtime<Config>, payload: CronPayload): string => {
@@ -26,33 +30,26 @@ const onCronTrigger = (runtime: Runtime<Config>, payload: CronPayload): string =
       return "No transactions found";
     }
 
-    // Filter for deposit-type transactions with the correct token
+    // Filter for private transfer transactions with the correct token
     const tokenAddress = runtime.config.tokenAddress.toLowerCase();
-    const deposits = transactions.filter(
-      (tx) =>
-        tx.type === "deposit" &&
-        tx.token.toLowerCase() === tokenAddress,
-    );
-
-    runtime.log(`Found ${deposits.length} deposit(s) for token ${tokenAddress}`);
-
-    // Batch-insert deposits (duplicates silently ignored by Supabase)
-    const newDeposits = recordDeposits(runtime, deposits);
-
-    // Filter for outgoing private transfers (platform sending tokens to users)
-    const outgoing = transactions.filter(
+    const transfers = transactions.filter(
       (tx) =>
         tx.type === "transfer" &&
-        tx.is_incoming === false &&
         tx.token.toLowerCase() === tokenAddress,
     );
 
-    runtime.log(`Found ${outgoing.length} outgoing transfer(s) for token ${tokenAddress}`);
+    runtime.log(`Found ${transfers.length} transfer(s) for token ${tokenAddress}`);
 
-    // Batch-insert transfers (duplicates silently ignored by Supabase)
-    const newTransfers = recordTransfers(runtime, outgoing);
+    // Split by direction: incoming = deposits, outgoing = withdrawals
+    const incoming = transfers.filter((tx) => tx.is_incoming === true);
+    const outgoing = transfers.filter((tx) => tx.is_incoming === false);
 
-    const summary = `Deposits: ${newDeposits} new of ${deposits.length} | Transfers: ${newTransfers} new of ${outgoing.length}`;
+    runtime.log(`Incoming (deposits): ${incoming.length}, Outgoing (withdrawals): ${outgoing.length}`);
+
+    // Batch-insert all transactions (duplicates silently ignored by Supabase)
+    const newCount = recordTransactions(runtime, incoming, outgoing);
+
+    const summary = `Recorded ${newCount} new of ${transfers.length} transfers (${incoming.length} deposits, ${outgoing.length} withdrawals)`;
     runtime.log(summary);
     return summary;
   } catch (err) {

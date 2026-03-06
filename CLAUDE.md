@@ -184,6 +184,32 @@ Individual deploy scripts exist in `contracts/script/`:
 
 After deploying, update the new address in: `packages/common/src/index.ts`, `scripts/.env`, `README.md`, and the relevant section of `CLAUDE.md`.
 
+## Supabase Database Schema
+
+### `transfers` table (unified deposits + withdrawals)
+
+All private token movements go through this single table. The `type` column determines direction:
+
+| type | Meaning | `user_address` | `sender_address` | `recipient_address` |
+|------|---------|-----------------|-------------------|---------------------|
+| `deposit` | Incoming private transfer to platform EOA | depositor | depositor | platform EOA |
+| `user_withdrawal` | User-initiated withdrawal | user being debited | platform EOA | recipient |
+| `platform_transfer` | Platform-initiated outgoing transfer | user being debited | platform EOA | recipient |
+
+Status values: `pending`, `confirmed`, `failed`, `requested`, `transferring`, `completed`
+
+Additional columns: `transaction_id` (unique, NOT NULL), `token_address`, `amount` (text, wei), `raw_data` (jsonb), `credited_at`, `completed_at`, `failed_reason`
+
+### `balances` VIEW
+
+Read-only view computed from `transfers` + `private_bids`. Returns `available_balance`, `locked_balance`, `pending_withdrawal` per `user_address`. No manual balance management needed — insert/update rows in underlying tables and the view auto-computes.
+
+### Other tables
+
+- `private_bids` — private bid lifecycle (active → outbid/won/refunded)
+- `secrets` — encrypted auction secrets
+- `sellers` — registered seller profiles
+
 ## Architecture Notes
 
 - `SimpleMarket.sol` accepts **any ERC-20** token (constructor arg) — we use MockUSDC, not Circle USDC
@@ -192,6 +218,7 @@ After deploying, update the new address in: `packages/common/src/index.ts`, `scr
 - Settlement data is also written to Firestore for the frontend
 - **Auction-closer CRE workflow** runs on a 30-second cron, reads `getOpenAuctions()` and `getAuction(id)` to find expired auctions, then submits a signed report with `ACTION_CLOSE_AUCTION` (0x00) to close them
 - `closeAuction()` transfers the winning bid to the seller (does NOT place bets on SimpleMarket)
+- **Deposit-reconciler CRE workflow** runs on a 60-second cron, polls Private Token API for `type: "transfer"` transactions, splits by `is_incoming` (true=deposit, false=withdrawal), batch-inserts into unified `transfers` table. Total HTTP calls: 2 (fetch + insert).
 - CRE CLI installed at `~/.cre/bin/cre` (add to PATH: `export PATH="$HOME/.cre/bin:$PATH"`)
 
 ## Reference Docs
