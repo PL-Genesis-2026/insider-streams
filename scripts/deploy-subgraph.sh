@@ -14,7 +14,16 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SUBGRAPH_DIR="$ROOT_DIR/subgraphs/secrets-marketplace"
 ARTIFACTS_DIR="$ROOT_DIR/contracts/out"
+CONTRACTS_DIR="$ROOT_DIR/contracts"
+
+# Read RPC_URL from contracts/.env, fallback to public RPC
 RPC_URL="https://ethereum-sepolia-rpc.publicnode.com"
+if [ -f "$CONTRACTS_DIR/.env" ]; then
+  ENV_RPC=$(grep '^RPC_URL=' "$CONTRACTS_DIR/.env" 2>/dev/null | cut -d'=' -f2- || true)
+  if [ -n "$ENV_RPC" ]; then
+    RPC_URL="$ENV_RPC"
+  fi
+fi
 
 SKIP_DEPLOY=false
 ADDRESS_ARG=""
@@ -49,6 +58,13 @@ else
   CONTRACT_ADDRESS="${CONTRACT_ADDRESS:-$CURRENT_ADDRESS}"
 fi
 
+# ─── Validate address format ─────────────────────────────────────────────────
+if [[ ! "$CONTRACT_ADDRESS" =~ ^0x[0-9a-fA-F]{40}$ ]]; then
+  echo "  ERROR: Invalid address format: $CONTRACT_ADDRESS"
+  echo "  Expected: 0x followed by 40 hex characters"
+  exit 1
+fi
+
 # ─── If address changed, fetch deployment block via RPC ─────────────────────
 if [ "$CONTRACT_ADDRESS" != "$CURRENT_ADDRESS" ]; then
   echo ""
@@ -65,8 +81,9 @@ if [ "$CONTRACT_ADDRESS" != "$CURRENT_ADDRESS" ]; then
     exit 1
   fi
 
-  # Binary search for the deployment block (first block where code exists)
-  echo "  Binary-searching for deployment block..."
+  # Binary search for the deployment block (first block where code exists).
+  # ~23 RPC calls for Sepolia's ~8M blocks — may take 30-60s on a public RPC.
+  echo "  Binary-searching for deployment block (~23 RPC calls)..."
   LATEST_HEX=$(curl -sf -X POST "$RPC_URL" \
     -H "Content-Type: application/json" \
     -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
@@ -75,10 +92,13 @@ if [ "$CONTRACT_ADDRESS" != "$CURRENT_ADDRESS" ]; then
 
   LOW=0
   HIGH=$LATEST_BLOCK
+  ITERATION=0
 
   while [ $LOW -lt $HIGH ]; do
+    ITERATION=$((ITERATION + 1))
     MID=$(( (LOW + HIGH) / 2 ))
     MID_HEX=$(printf "0x%x" $MID)
+    printf "    [%2d] range: %d..%d (checking %d)\r" "$ITERATION" "$LOW" "$HIGH" "$MID"
 
     CODE_AT_MID=$(curl -sf -X POST "$RPC_URL" \
       -H "Content-Type: application/json" \
@@ -91,6 +111,7 @@ if [ "$CONTRACT_ADDRESS" != "$CURRENT_ADDRESS" ]; then
       HIGH=$MID
     fi
   done
+  echo ""
 
   START_BLOCK=$LOW
   echo "  Found deployment block: $START_BLOCK"
