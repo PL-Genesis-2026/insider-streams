@@ -2,7 +2,7 @@ type AuctionClosed @entity(immutable: true) {
   id: Bytes!
   auctionId: BigInt! # uint256
   winningBid: BigInt! # uint256
-  seller: String! # string
+  sellerId: String! # string
   eventId: BigInt! # uint256
   blockNumber: BigInt!
   blockTimestamp: BigInt!
@@ -13,7 +13,7 @@ type AuctionCreated @entity(immutable: true) {
   id: Bytes!
   auctionId: BigInt! # uint256
   eventId: BigInt! # uint256
-  seller: String! # string
+  sellerId: String! # string
   eventTitle: String! # string
   endTime: BigInt! # uint256
   blockNumber: BigInt!
@@ -25,7 +25,7 @@ type AuctionForceClosed @entity(immutable: true) {
   id: Bytes!
   auctionId: BigInt! # uint256
   heldAmount: BigInt! # uint256
-  seller: String! # string
+  sellerId: String! # string
   eventId: BigInt! # uint256
   reputationDelta: Int! # int8
   blockNumber: BigInt!
@@ -73,7 +73,7 @@ type ExpectedWorkflowNameUpdated @entity(immutable: true) {
 type ExternalMarketResolved @entity(immutable: true) {
   id: Bytes!
   externalMarketId: BigInt! # uint256
-  delta: Int! # int8
+  reputationDelta: Int! # int8
   auctionsAffected: BigInt! # uint256
   blockNumber: BigInt!
   blockTimestamp: BigInt!
@@ -100,9 +100,9 @@ type OwnershipTransferred @entity(immutable: true) {
 
 type ReputationUpdated @entity(immutable: true) {
   id: Bytes!
-  seller: String! # string
+  sellerId: String! # string
   auctionId: BigInt! # uint256
-  delta: Int! # int8
+  reputationDelta: Int! # int8
   newScore: BigInt! # int256
   blockNumber: BigInt!
   blockTimestamp: BigInt!
@@ -119,7 +119,7 @@ type SecurityWarning @entity(immutable: true) {
 
 type SellerRegistered @entity(immutable: true) {
   id: Bytes!
-  seller: String! # string
+  sellerId: String! # string
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!
