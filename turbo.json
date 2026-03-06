@@ -1,0 +1,37 @@
+{
+  "$schema": "https://turborepo.dev/schema.v2.json",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "!.next/**", "!.turbo/**"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {
+      "dependsOn": ["^build"]
+    },
+    "codegen": {
+      "cache": false
+    },
+    "wagmi": {
+      "cache": false
+    },
+    "e2e": {
+      "cache": false,
+      "dependsOn": ["^build"]
+    },
+    "start": {
+      "dependsOn": ["build"],
+      "cache": false,
+      "persistent": true
+    }
+  },
+  "globalPassThroughEnv": [
+    "NEXT_TELEMETRY_DISABLED",
+    "TURBO_TELEMETRY_DISABLED",
+    "DO_NOT_TRACK"
+  ]
+}
