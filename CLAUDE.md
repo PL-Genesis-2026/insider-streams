@@ -12,14 +12,14 @@ private-streams/
 ├── packages/
 │   ├── common/                          # Shared ABIs, addresses, utilities (@private-streams/common)
 │   └── chainlink-private-token-api-client/  # Typed API client for Compliant Private Token API
-├── contracts/                       # Foundry — MockUSDC + SimpleMarket + SecretMarketplace
+├── contracts/                       # Foundry — MockUSDC + ExamplePredictionMarket + SecretMarketplace
 ├── cre-workflows/                   # CRE TypeScript workflows (Bun-managed)
 │   ├── prediction-market-demo/      # Gemini AI settlement workflow
 │   ├── auction-closer/             # Cron-based auction closer workflow
 │   └── deposit-reconciler/         # Cron-based private token deposit/withdrawal reconciler
 ├── subgraphs/secrets-marketplace/   # The Graph subgraph
 ├── scripts/                         # E2E test scripts and utilities
-│   ├── simple-market-e2e.ts         # SimpleMarket + CRE settlement E2E
+│   ├── simple-market-e2e.ts         # ExamplePredictionMarket + CRE settlement E2E
 │   ├── auction-closer-e2e.ts        # Auction closer CRE workflow E2E
 │   ├── secret-marketplace-e2e.ts    # SecretMarketplace full event lifecycle E2E
 │   ├── deposit-reconciler-e2e.ts    # Deposit reconciler workflow E2E
@@ -84,7 +84,7 @@ All E2E scripts are TypeScript and run via `tsx` with `--env-file=.env` from the
 
 ```bash
 pnpm e2e                  # SecretMarketplace full event lifecycle
-pnpm e2e:simple-market    # SimpleMarket + CRE settlement lifecycle
+pnpm e2e:simple-market    # ExamplePredictionMarket + CRE settlement lifecycle
 pnpm e2e:auction-closer   # Auction create → bid → expire → CRE close
 pnpm e2e:deposits         # Deposit reconciler workflow
 ```
@@ -168,7 +168,7 @@ Use the interactive deploy script to deploy contracts and auto-replace addresses
 ./scripts/deploy-contracts.sh
 ```
 
-This script prompts which contracts to redeploy (MockUSDC, SimpleMarket, SecretMarketplace), deploys them via Foundry, then does a best-effort case-insensitive find-and-replace of the old addresses across the entire codebase (source files, configs, scripts, .env files). It also checks .env files for any stale addresses that may remain and warns about them.
+This script prompts which contracts to redeploy (MockUSDC, ExamplePredictionMarket, SecretMarketplace), deploys them via Foundry, then does a best-effort case-insensitive find-and-replace of the old addresses across the entire codebase (source files, configs, scripts, .env files). It also checks .env files for any stale addresses that may remain and warns about them.
 
 After the script finishes, you must still:
 
@@ -208,12 +208,12 @@ After updating CRE workflow configs, the workflow must be redeployed and tested 
 
 **Foundry deploy scripts** (use env vars, not hardcoded — but verify `contracts/.env` is correct):
 
-| File                                             | Env vars used                                                     |
-| ------------------------------------------------ | ----------------------------------------------------------------- |
-| `contracts/script/DeploySimpleMarket.s.sol`      | `PAYMENT_TOKEN`, `CRE_FORWARDER_ADDRESS`                          |
-| `contracts/script/DeploySecretMarketplace.s.sol` | `PAYMENT_TOKEN`, `SIMPLE_MARKET_ADDRESS`, `CRE_FORWARDER_ADDRESS` |
+| File                                                   | Env vars used                                                     |
+| ------------------------------------------------------ | ----------------------------------------------------------------- |
+| `contracts/script/DeployExamplePredictionMarket.s.sol`  | `PAYMENT_TOKEN`, `CRE_FORWARDER_ADDRESS`                          |
+| `contracts/script/DeploySecretMarketplace.s.sol`       | `PAYMENT_TOKEN`, `SIMPLE_MARKET_ADDRESS`, `CRE_FORWARDER_ADDRESS` |
 
-**Private token scripts** (only if Vault or SimpleToken changed):
+**Private token scripts** (only if Vault or ConfidentialUSDC changed):
 
 | File                                            | What's hardcoded                                     |
 | ----------------------------------------------- | ---------------------------------------------------- |
@@ -255,7 +255,7 @@ After running codegen, run `turbo run build` and report on any errors.
 Individual deploy scripts exist in `contracts/script/`:
 
 - `DeployMockUSDC.s.sol` — rarely changes
-- `DeploySimpleMarket.s.sol` — env: `PAYMENT_TOKEN`, `CRE_FORWARDER_ADDRESS`
+- `DeployExamplePredictionMarket.s.sol` — env: `PAYMENT_TOKEN`, `CRE_FORWARDER_ADDRESS`
 - `DeploySecretMarketplace.s.sol` — env: `PAYMENT_TOKEN`, `SIMPLE_MARKET_ADDRESS`, `CRE_FORWARDER_ADDRESS`
 - `DeployAll.s.sol` — deploys everything (only for fresh environments)
 
@@ -263,12 +263,12 @@ After deploying, follow the full procedure in **"After a Contract Deployment"** 
 
 ## Architecture Notes
 
-- `SimpleMarket.sol` accepts **any ERC-20** token (constructor arg) — we use MockUSDC, not Circle USDC
+- `ExamplePredictionMarket.sol` accepts **any ERC-20** token (constructor arg) — we use MockUSDC, not Circle USDC
 - Markets close after **3 minutes** from creation
 - CRE workflow listens for `SettlementRequested` events, calls Gemini AI with Google Search grounding, submits signed report on-chain
 - Settlement data is also written to Firestore for the frontend
 - **Auction-closer CRE workflow** runs on a 30-second cron, reads `getOpenAuctions()` and `getAuction(id)` to find expired auctions, then submits a signed report with `ACTION_CLOSE_AUCTION` (0x00) to close them
-- `closeAuction()` transfers the winning bid to the seller (does NOT place bets on SimpleMarket)
+- `closeAuction()` keeps funds in contract; admin withdraws via `withdrawFunds()`
 - **Deposit-reconciler CRE workflow** runs on a 60-second cron, polls the Private Token API for transfers to/from the platform EOA, and records them as deposits or withdrawals in the Supabase `transfers` table
 - CRE CLI installed at `~/.cre/bin/cre` (add to PATH: `export PATH="$HOME/.cre/bin:$PATH"`)
 

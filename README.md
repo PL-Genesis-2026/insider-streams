@@ -14,9 +14,9 @@ pnpm dev:insider-streams
 
 | Contract | Address |
 |----------|---------|
-| MockUSDC | `0x2aD4A3782b1C323E6F6aEE51584e83818e8befda` |
-| SimpleMarket | `0x1cDDd36691bc9a55AD59b177fcF79FCF4F42Eba2` |
-| SecretMarketplace | `0x65c44b9C025F9482Cc9B473efAd8301F6E780E08` |
+| MockUSDC | `0x1B69F56bEC6978D0B62C3f5612019cC6b72D6F7f` |
+| SimpleMarket | `0x6b3b925114CfE8DF93Da3225cD75ee2087994c1d` |
+| SecretMarketplace | `0x81c9870dCd9B7e5E8b6EcF5d508c5f6BEE7DE058` |
 
 ## Create a Prediction Market
 
@@ -39,7 +39,7 @@ See [CRE Workflows README](cre-workflows/README.md) for details.
 cd contracts
 
 # Create a market
-SIMPLE_MARKET_ADDRESS=0x1cDDd36691bc9a55AD59b177fcF79FCF4F42Eba2 \
+SIMPLE_MARKET_ADDRESS=0x6b3b925114CfE8DF93Da3225cD75ee2087994c1d \
 QUESTION="The New York Yankees won the 2009 World Series." \
 forge script script/CreateMarket.s.sol --rpc-url $RPC_URL --broadcast
 ```
@@ -49,7 +49,7 @@ forge script script/CreateMarket.s.sol --rpc-url $RPC_URL --broadcast
 ```bash
 cd contracts
 
-SECRET_MARKETPLACE_ADDRESS=0x65c44b9C025F9482Cc9B473efAd8301F6E780E08 \
+SECRET_MARKETPLACE_ADDRESS=0x81c9870dCd9B7e5E8b6EcF5d508c5f6BEE7DE058 \
 EXTERNAL_MARKET_ID=0 \
 RESERVE_PRICE=1000000 \
 AUCTION_DURATION=120 \
@@ -72,7 +72,7 @@ cre workflow simulate auction-closer --target local-simulation --broadcast
 ```bash
 cd contracts
 
-SECRET_MARKETPLACE_ADDRESS=0x65c44b9C025F9482Cc9B473efAd8301F6E780E08 \
+SECRET_MARKETPLACE_ADDRESS=0x81c9870dCd9B7e5E8b6EcF5d508c5f6BEE7DE058 \
 AUCTION_ID=0 \
 forge script script/secret-marketplace/CloseAuction.s.sol --rpc-url $RPC_URL --broadcast
 ```
@@ -84,7 +84,7 @@ Force-closes an auction regardless of expiry. Refunds the highest bidder and adj
 ```bash
 cd contracts
 
-SECRET_MARKETPLACE_ADDRESS=0x65c44b9C025F9482Cc9B473efAd8301F6E780E08 \
+SECRET_MARKETPLACE_ADDRESS=0x81c9870dCd9B7e5E8b6EcF5d508c5f6BEE7DE058 \
 AUCTION_ID=0 \
 REPUTATION_DELTA=-1 \
 forge script script/secret-marketplace/ForceCloseAuction.s.sol --rpc-url $RPC_URL --broadcast

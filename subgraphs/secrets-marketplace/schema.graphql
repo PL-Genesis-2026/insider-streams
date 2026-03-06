@@ -1,10 +1,9 @@
 type AuctionClosed @entity(immutable: true) {
   id: Bytes!
   auctionId: BigInt! # uint256
-  buyer: Bytes! # address
   winningBid: BigInt! # uint256
-  seller: Bytes! # address
-  externalMarketId: BigInt! # uint256
+  sellerId: String! # string
+  eventId: BigInt! # uint256
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!
@@ -13,11 +12,10 @@ type AuctionClosed @entity(immutable: true) {
 type AuctionCreated @entity(immutable: true) {
   id: Bytes!
   auctionId: BigInt! # uint256
-  seller: Bytes! # address
-  externalMarketId: BigInt! # uint256
-  reservePrice: BigInt! # uint256
+  eventId: BigInt! # uint256
+  sellerId: String! # string
+  eventTitle: String! # string
   endTime: BigInt! # uint256
-  betOnYes: Boolean! # bool
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!
@@ -26,10 +24,9 @@ type AuctionCreated @entity(immutable: true) {
 type AuctionForceClosed @entity(immutable: true) {
   id: Bytes!
   auctionId: BigInt! # uint256
-  refundedBidder: Bytes! # address
-  refundAmount: BigInt! # uint256
-  seller: Bytes! # address
-  externalMarketId: BigInt! # uint256
+  heldAmount: BigInt! # uint256
+  sellerId: String! # string
+  eventId: BigInt! # uint256
   reputationDelta: Int! # int8
   blockNumber: BigInt!
   blockTimestamp: BigInt!
@@ -39,10 +36,7 @@ type AuctionForceClosed @entity(immutable: true) {
 type BidPlaced @entity(immutable: true) {
   id: Bytes!
   auctionId: BigInt! # uint256
-  bidder: Bytes! # address
   bidAmount: BigInt! # uint256
-  automaticBetAmount: BigInt! # uint256
-  previousBidder: Bytes! # address
   previousBid: BigInt! # uint256
   blockNumber: BigInt!
   blockTimestamp: BigInt!
@@ -79,7 +73,7 @@ type ExpectedWorkflowNameUpdated @entity(immutable: true) {
 type ExternalMarketResolved @entity(immutable: true) {
   id: Bytes!
   externalMarketId: BigInt! # uint256
-  outcome: Int! # uint8
+  reputationDelta: Int! # int8
   auctionsAffected: BigInt! # uint256
   blockNumber: BigInt!
   blockTimestamp: BigInt!
@@ -106,9 +100,9 @@ type OwnershipTransferred @entity(immutable: true) {
 
 type ReputationUpdated @entity(immutable: true) {
   id: Bytes!
-  seller: Bytes! # address
+  sellerId: String! # string
   auctionId: BigInt! # uint256
-  delta: Int! # int8
+  reputationDelta: Int! # int8
   newScore: BigInt! # int256
   blockNumber: BigInt!
   blockTimestamp: BigInt!
@@ -125,20 +119,16 @@ type SecurityWarning @entity(immutable: true) {
 
 type SellerRegistered @entity(immutable: true) {
   id: Bytes!
-  seller: Bytes! # address
-  name: String! # string
+  sellerId: String! # string
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!
 }
 
-type TradeExecuted @entity(immutable: true) {
+type SimpleMarketUpdated @entity(immutable: true) {
   id: Bytes!
-  auctionId: BigInt! # uint256
-  externalMarketId: BigInt! # uint256
-  buyer: Bytes! # address
-  automaticBetAmount: BigInt! # uint256
-  betOnYes: Boolean! # bool
+  previousMarket: Bytes! # address
+  newMarket: Bytes! # address
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!
