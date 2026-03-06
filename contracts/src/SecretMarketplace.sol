@@ -39,21 +39,24 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
     // ======== STRUCTS ==========
     // ===========================
 
+    // EMIT THIS DATA IN EVENT
     struct MarketMetadata {
-        uint256 marketId;
-        address yesToken;   // placeholder for future token-based markets
-        address noToken;    // placeholder for future token-based markets
-        bool betOnYes;      // seller's claim about market direction
+        uint256 marketId; //TODO Rename to eventId, put into event
+        //TODO : If possible add "string eventTitle"
+        //TODO MARKET EVENT for ease of use, remove in prod
+        address yesToken;   // placeholder for future token-based markets //TODO REMOVE THIS
+        address noToken;    // placeholder for future token-based markets //TODO REMOVE THIS
+        bool betOnYes;      // seller's claim about market direction //TODO REMOVE THIS
     }
 
     struct Auction {
-        address seller;
-        uint256 reservePrice;
+        address seller; //TODO Change to string/bytes32
+        uint256 reservePrice; //TODO Let's remove this
         uint256 endTime;
         uint256 currentBid;
-        address currentBidder;
-        uint256 automaticBetAmount;  // winning bidder's intended bet on the prediction market
-        MarketMetadata marketMetadata;
+        address currentBidder; // TODO Remove this
+        uint256 automaticBetAmount;  // winning bidder's intended bet on the prediction market //TODO Lets remove this (won't have time)
+        MarketMetadata marketMetadata; //TODO Can drop this type, put in eventId and eventTitle here
         AuctionStatus status;
         bool reputationResolved;
     }
@@ -69,10 +72,11 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
     // ===========================
 
     event SellerRegistered(
-        address indexed seller,
+        address indexed seller, //TODO
         string name
     );
 
+    // TODO DUMP AS MUCH DATA AS YOU CAN IN THIS EVENT (ideally the full AuctionData payload)
     event AuctionCreated(
         uint256 indexed auctionId,
         address indexed seller,
@@ -84,18 +88,18 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
 
     event BidPlaced(
         uint256 indexed auctionId,
-        address indexed bidder,
+        address indexed bidder, //TODO Remove (always us)
         uint256 bidAmount,
-        uint256 automaticBetAmount,
-        address previousBidder,
-        uint256 previousBid
+        uint256 automaticBetAmount, // TODO Remove (won't be able to build this in)
+        address previousBidder, //TODO Remove
+        uint256 previousBid //(I think this is fine to keep)
     );
 
     event AuctionClosed(
         uint256 indexed auctionId,
-        address indexed buyer,
+        address indexed buyer, // TODO Remove
         uint256 winningBid,
-        address seller,
+        address seller, // TODO Change to string
         uint256 externalMarketId
     );
 
@@ -108,6 +112,7 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
         int8 reputationDelta
     );
 
+//TODO I think this can be removed (we won't support betting in this contract in the final version)
     event TradeExecuted(
         uint256 indexed auctionId,
         uint256 indexed externalMarketId,

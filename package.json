@@ -15,7 +15,8 @@
     "build:prediction-market": "turbo run build --filter=prediction-market-frontend",
     "build:insider-streams": "turbo run build --filter=insider-streams-frontend",
     "build:contracts": "cd contracts && forge build --via-ir --skip SetupAll DeployPolicyEngine",
-    "test:contracts": "cd contracts && forge test --via-ir --skip SetupAll DeployPolicyEngine"
+    "test:contracts": "cd contracts && forge test --via-ir --skip SetupAll DeployPolicyEngine",
+    "generate:supabase-types": "./scripts/generate-supabase-types.sh"
   },
   "devDependencies": {
     "turbo": "^2.8.14"
