@@ -2,10 +2,12 @@
  * SecretMarketplace E2E Test Script
  *
  * Full lifecycle test on Eth Sepolia that fires EVERY event type:
+ *   - SellerRegistered
  *   - AuctionCreated
- *   - BidPlaced (first bid + outbid with previousBidder)
+ *   - BidPlaced
  *   - AuctionClosed + TradeExecuted
  *   - AuctionForceClosed + ReputationUpdated
+ *   - ExternalMarketResolved + ReputationUpdated
  *
  * Env vars required:
  *   OWNER_PK                    — deploys, creates markets, closes auctions, settles
@@ -101,22 +103,28 @@ const MINT_AMOUNT = 10_000_000_000n;           // 10,000 USDC
 const MIN_BALANCE = 10_000_000n;               // 10 USDC — threshold to trigger mint
 const APPROVAL_AMOUNT = 100_000_000_000n;      // 100,000 USDC — blanket approval
 const BID_AMOUNT = 1_000_000n;                 // 1 USDC
+const AUTOMATIC_BET_AMOUNT = 5_000_000n;       // 5 USDC — intended bet on prediction market
 const AUCTION_DURATION = 60;                   // seconds
 const FORCE_CLOSE_AUCTION_DURATION = 300;      // seconds (won't wait for it)
 const QUESTION_1 = "The New York Yankees won the 2009 World Series.";
 const QUESTION_2 = "Will ETH hit $10k by end of 2026?";
+// SimpleMarket.Outcome values
+const OUTCOME_NO = 1;
+const OUTCOME_YES = 2;
+
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address;
 
 // ─── E2E Flow ────────────────────────────────────────────────────────────────
 
 async function main() {
   console.log("===================================================");
-  console.log("  Auction E2E Test — Fire ALL Events");
+  console.log("  SecretMarketplace E2E — Fire ALL Events");
   console.log("===================================================");
-  console.log(`  Owner:   ${ownerAccount.address}`);
-  console.log(`  Bidder:  ${bidderAccount.address}`);
-  console.log(`  MockUSDC:    ${MOCK_USDC}`);
-  console.log(`  SimpleMarket:  ${SIMPLE_MARKET}`);
-  console.log(`  Auction: ${SECRET_MARKETPLACE}`);
+  console.log(`  Owner:            ${ownerAccount.address}`);
+  console.log(`  Bidder:           ${bidderAccount.address}`);
+  console.log(`  MockUSDC:         ${MOCK_USDC}`);
+  console.log(`  SimpleMarket:     ${SIMPLE_MARKET}`);
+  console.log(`  SecretMarketplace: ${SECRET_MARKETPLACE}`);
   console.log("===================================================\n");
 
   // ── Step 0: Mint USDC + approve ────────────────────────────────────────────
@@ -150,12 +158,18 @@ async function main() {
     console.log(`  ok Bidder has ${formatUnits(bidderBalance, USDC_DECIMALS)} USDC`);
   }
 
-  // Approve auction contract for both users
-  const approveOwner = await ownerClient.writeContract({
+  // Approve SecretMarketplace and SimpleMarket for both users
+  const approveOwnerSM = await ownerClient.writeContract({
     address: MOCK_USDC, abi: mockUsdcAbi, functionName: "approve",
     args: [SECRET_MARKETPLACE, APPROVAL_AMOUNT],
   });
-  await waitForTx(approveOwner, "Owner approved SecretMarketplace");
+  await waitForTx(approveOwnerSM, "Owner approved SecretMarketplace");
+
+  const approveOwnerMarket = await ownerClient.writeContract({
+    address: MOCK_USDC, abi: mockUsdcAbi, functionName: "approve",
+    args: [SIMPLE_MARKET, APPROVAL_AMOUNT],
+  });
+  await waitForTx(approveOwnerMarket, "Owner approved SimpleMarket");
 
   const approveBidder = await bidderClient.writeContract({
     address: MOCK_USDC, abi: mockUsdcAbi, functionName: "approve",
@@ -163,12 +177,21 @@ async function main() {
   });
   await waitForTx(approveBidder, "Bidder approved SecretMarketplace");
 
+  // ── Step 1: Register seller ────────────────────────────────────────────────
+  // EVENT: SellerRegistered
+  console.log("\n>> Step 1: Register seller...");
+  const registerHash = await ownerClient.writeContract({
+    address: SECRET_MARKETPLACE, abi: secretMarketplaceAbi, functionName: "registerSeller",
+    args: ["Insider Alice"],
+  });
+  await waitForTx(registerHash, "[EVENT: SellerRegistered]");
+
   // ══════════════════════════════════════════════════════════════════════════
   // AUCTION 1: Normal flow → AuctionCreated, BidPlaced, AuctionClosed,
   //            TradeExecuted
   // ══════════════════════════════════════════════════════════════════════════
 
-  console.log("\n>> Step 1: Create market + auction (normal flow)...");
+  console.log("\n>> Step 2: Create market + auction (normal flow, betOnYes=true)...");
   const createMarketHash = await ownerClient.writeContract({
     address: SIMPLE_MARKET, abi: simpleMarketAbi, functionName: "newMarket",
     args: [QUESTION_1],
@@ -185,7 +208,7 @@ async function main() {
   const endTime1 = now1 + BigInt(AUCTION_DURATION);
   const createAuctionHash = await ownerClient.writeContract({
     address: SECRET_MARKETPLACE, abi: secretMarketplaceAbi, functionName: "createAuction",
-    args: [marketId1, BID_AMOUNT, endTime1],
+    args: [marketId1, BID_AMOUNT, endTime1, ZERO_ADDRESS, ZERO_ADDRESS, true],
   });
   const auctionReceipt = await waitForTx(createAuctionHash, "[EVENT: AuctionCreated]");
   const auctionLogs = parseEventLogs({
@@ -195,15 +218,15 @@ async function main() {
   console.log(`  Auction ID: ${auctionId1}`);
 
   // EVENT: BidPlaced (bidder bids — seller cannot bid on own auction)
-  console.log("\n>> Step 2: Bidder places bid...");
+  console.log("\n>> Step 3: Bidder places bid...");
   const bid1Hash = await bidderClient.writeContract({
     address: SECRET_MARKETPLACE, abi: secretMarketplaceAbi, functionName: "placeBid",
-    args: [auctionId1, BID_AMOUNT],
+    args: [auctionId1, BID_AMOUNT, AUTOMATIC_BET_AMOUNT],
   });
   await waitForTx(bid1Hash, "[EVENT: BidPlaced]");
 
   // Wait for auction 1 to end
-  console.log("\n>> Step 3: Waiting for auction 1 to end...");
+  console.log("\n>> Step 4: Waiting for auction 1 to end...");
   const auctionData = await publicClient.readContract({
     address: SECRET_MARKETPLACE, abi: secretMarketplaceAbi, functionName: "getAuction",
     args: [auctionId1],
@@ -219,19 +242,34 @@ async function main() {
   console.log("  ok Auction 1 period ended (on-chain)");
 
   // EVENT: AuctionClosed + TradeExecuted (seller closes own auction)
-  console.log("\n>> Step 4: Seller closes auction 1...");
+  console.log("\n>> Step 5: Seller closes auction 1...");
   const closeHash = await ownerClient.writeContract({
     address: SECRET_MARKETPLACE, abi: secretMarketplaceAbi, functionName: "closeAuction",
     args: [auctionId1],
   });
   await waitForTx(closeHash, "[EVENT: AuctionClosed + TradeExecuted]");
 
+  // EVENT: ExternalMarketResolved + ReputationUpdated (resolve market 1 as Yes → +1)
+  console.log("\n>> Step 6: Resolve external market (outcome=Yes, seller bet Yes → +1)...");
+  const resolveHash = await ownerClient.writeContract({
+    address: SECRET_MARKETPLACE, abi: secretMarketplaceAbi, functionName: "resolveExternalMarket",
+    args: [marketId1, OUTCOME_YES],
+  });
+  await waitForTx(resolveHash, "[EVENT: ExternalMarketResolved + ReputationUpdated]");
+
+  // Verify reputation after resolve
+  const sellerAfterResolve = await publicClient.readContract({
+    address: SECRET_MARKETPLACE, abi: secretMarketplaceAbi, functionName: "getSeller",
+    args: [ownerAccount.address],
+  });
+  console.log(`  Seller reputation after resolve: ${sellerAfterResolve.reputationScore}`);
+
   // ══════════════════════════════════════════════════════════════════════════
   // AUCTION 2: Force-close flow → AuctionCreated, BidPlaced,
   //            AuctionForceClosed, ReputationUpdated
   // ══════════════════════════════════════════════════════════════════════════
 
-  console.log("\n>> Step 5: Create auction 2 (will be force-closed)...");
+  console.log("\n>> Step 7: Create auction 2 (will be force-closed, betOnYes=true)...");
   const createMarket2Hash = await ownerClient.writeContract({
     address: SIMPLE_MARKET, abi: simpleMarketAbi, functionName: "newMarket",
     args: [QUESTION_2],
@@ -247,7 +285,7 @@ async function main() {
   const endTime2 = now2 + BigInt(FORCE_CLOSE_AUCTION_DURATION);
   const createAuction2Hash = await ownerClient.writeContract({
     address: SECRET_MARKETPLACE, abi: secretMarketplaceAbi, functionName: "createAuction",
-    args: [marketId2, BID_AMOUNT, endTime2],
+    args: [marketId2, BID_AMOUNT, endTime2, ZERO_ADDRESS, ZERO_ADDRESS, true],
   });
   const auction2Receipt = await waitForTx(createAuction2Hash, "[EVENT: AuctionCreated] auction 2");
   const auction2Logs = parseEventLogs({
@@ -257,42 +295,44 @@ async function main() {
   console.log(`  Auction ID: ${auctionId2}`);
 
   // Bidder places a bid (will be refunded on force-close)
-  console.log("\n>> Step 6: Bidder bids on auction 2...");
-  const bid3Hash = await bidderClient.writeContract({
+  console.log("\n>> Step 8: Bidder bids on auction 2...");
+  const bid2Hash = await bidderClient.writeContract({
     address: SECRET_MARKETPLACE, abi: secretMarketplaceAbi, functionName: "placeBid",
-    args: [auctionId2, BID_AMOUNT],
+    args: [auctionId2, BID_AMOUNT, AUTOMATIC_BET_AMOUNT],
   });
-  await waitForTx(bid3Hash, "[EVENT: BidPlaced] on auction 2");
+  await waitForTx(bid2Hash, "[EVENT: BidPlaced] on auction 2");
 
-  // EVENT: AuctionForceClosed + ReputationUpdated
-  console.log("\n>> Step 7: Force-close auction 2 (reputation -1)...");
+  // EVENT: AuctionForceClosed + ReputationUpdated (outcome=No, seller bet Yes → -1)
+  console.log("\n>> Step 9: Force-close auction 2 (outcome=No, seller bet Yes → -1)...");
   const forceCloseHash = await ownerClient.writeContract({
     address: SECRET_MARKETPLACE, abi: secretMarketplaceAbi, functionName: "forceCloseAuction",
-    args: [auctionId2, -1],
+    args: [auctionId2, OUTCOME_NO],
   });
   await waitForTx(forceCloseHash, "[EVENT: AuctionForceClosed + ReputationUpdated]");
 
-  // Verify reputation
-  const rep = await publicClient.readContract({
-    address: SECRET_MARKETPLACE, abi: secretMarketplaceAbi, functionName: "reputationScores",
+  // Verify final reputation (+1 from resolve, -1 from force-close = 0)
+  const sellerFinal = await publicClient.readContract({
+    address: SECRET_MARKETPLACE, abi: secretMarketplaceAbi, functionName: "getSeller",
     args: [ownerAccount.address],
   });
-  console.log(`  Seller reputation: ${rep}`);
+  console.log(`  Seller final reputation: ${sellerFinal.reputationScore} (expected 0: +1 resolve, -1 force-close)`);
 
   // ══════════════════════════════════════════════════════════════════════════
   // Summary
   // ══════════════════════════════════════════════════════════════════════════
 
   console.log("\n===================================================");
-  console.log("  PASS — All 6 event types fired on-chain");
+  console.log("  PASS — All event types fired on-chain");
   console.log("===================================================");
   console.log("  Events fired:");
-  console.log("    [x] AuctionCreated      (x2)");
-  console.log("    [x] BidPlaced           (x2)");
-  console.log("    [x] AuctionClosed        (x1)");
-  console.log("    [x] TradeExecuted        (x1)");
-  console.log("    [x] AuctionForceClosed   (x1)");
-  console.log("    [x] ReputationUpdated    (x1)");
+  console.log("    [x] SellerRegistered        (x1)");
+  console.log("    [x] AuctionCreated          (x2)");
+  console.log("    [x] BidPlaced               (x2)");
+  console.log("    [x] AuctionClosed           (x1)");
+  console.log("    [x] TradeExecuted           (x1)");
+  console.log("    [x] ExternalMarketResolved  (x1)");
+  console.log("    [x] AuctionForceClosed      (x1)");
+  console.log("    [x] ReputationUpdated       (x2: resolve +1, force-close -1)");
   console.log("===================================================");
   console.log(`  SecretMarketplace: ${SECRET_MARKETPLACE}`);
   console.log("===================================================");

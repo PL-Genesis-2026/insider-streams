@@ -5,25 +5,45 @@ import "forge-std/Test.sol";
 import {SecretMarketplace} from "../src/SecretMarketplace.sol";
 import {MockUSDC} from "../src/mock/MockUSDC.sol";
 import {SimpleMarket} from "../src/SimpleMarket.sol";
+import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 
 contract SecretMarketplaceTest is Test {
-    SecretMarketplace public auction;
+    SecretMarketplace public sm;
     MockUSDC public usdc;
     SimpleMarket public market;
 
     address owner = address(this);
     address seller = makeAddr("seller");
+    address seller2 = makeAddr("seller2");
     address bidder1 = makeAddr("bidder1");
     address bidder2 = makeAddr("bidder2");
+    address creAddress = makeAddr("cre");
     address forwarder = makeAddr("forwarder");
+    address nobody = makeAddr("nobody");
 
     uint256 constant RESERVE_PRICE = 100e6; // 100 USDC
     uint256 constant MINT_AMOUNT = 10_000e6;
+    uint256 constant BID_AMOUNT = 200e6;
+    uint256 constant HIGHER_BID = 300e6;
+    uint256 constant BET_AMOUNT = 500e6;
+
+    // SimpleMarket.Outcome values
+    uint8 constant OUTCOME_NONE = 0;
+    uint8 constant OUTCOME_NO = 1;
+    uint8 constant OUTCOME_YES = 2;
+    uint8 constant OUTCOME_INCONCLUSIVE = 3;
 
     function setUp() public {
         usdc = new MockUSDC(0);
         market = new SimpleMarket(address(usdc), forwarder);
-        auction = new SecretMarketplace(address(usdc), address(market), forwarder);
+        sm = new SecretMarketplace(address(usdc), address(market), forwarder);
+
+        // Grant CRE role
+        sm.grantRole(sm.CRE_ROLE(), creAddress);
+
+        // newMarket now requires 10 USDC initial liquidity
+        usdc.mint(address(this), 100e6);
+        usdc.approve(address(market), type(uint256).max);
 
         // Create markets on SimpleMarket so createAuction validation passes
         market.newMarket("Test market 0");  // marketId=0
@@ -33,13 +53,94 @@ contract SecretMarketplaceTest is Test {
         market.newMarket("Test market 4");  // marketId=4
 
         usdc.mint(seller, MINT_AMOUNT);
+        usdc.mint(seller2, MINT_AMOUNT);
         usdc.mint(bidder1, MINT_AMOUNT);
         usdc.mint(bidder2, MINT_AMOUNT);
 
         vm.prank(bidder1);
-        usdc.approve(address(auction), type(uint256).max);
+        usdc.approve(address(sm), type(uint256).max);
         vm.prank(bidder2);
-        usdc.approve(address(auction), type(uint256).max);
+        usdc.approve(address(sm), type(uint256).max);
+    }
+
+    // ===========================
+    // ======= HELPERS ===========
+    // ===========================
+
+    function _createDefaultAuction() internal returns (uint256) {
+        return _createAuction(seller, 0, RESERVE_PRICE, block.timestamp + 1 hours, true);
+    }
+
+    function _createAuction(
+        address _seller, uint256 marketId, uint256 reserve, uint256 endTime, bool betOnYes
+    ) internal returns (uint256) {
+        vm.prank(_seller);
+        return sm.createAuction(marketId, reserve, endTime, address(0), address(0), betOnYes);
+    }
+
+    function _placeBid(address bidder, uint256 auctionId, uint256 amount) internal {
+        vm.prank(bidder);
+        sm.placeBid(auctionId, amount, BET_AMOUNT);
+    }
+
+    // ===========================
+    // ==== ACCESS CONTROL =======
+    // ===========================
+
+    function test_constructor_grantsAdminRole() public view {
+        assertTrue(sm.hasRole(sm.DEFAULT_ADMIN_ROLE(), owner));
+    }
+
+    function test_grantCRERole() public view {
+        assertTrue(sm.hasRole(sm.CRE_ROLE(), creAddress));
+    }
+
+    function test_nonAdmin_cannotGrantRole() public {
+        bytes32 creRole = sm.CRE_ROLE();
+        bytes32 adminRole = sm.DEFAULT_ADMIN_ROLE();
+        assertFalse(sm.hasRole(adminRole, nobody));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector,
+                nobody,
+                adminRole
+            )
+        );
+        vm.prank(nobody);
+        sm.grantRole(creRole, nobody);
+    }
+
+    // ===========================
+    // ====== SELLER REGISTRY ====
+    // ===========================
+
+    function test_registerSeller() public {
+        vm.prank(seller);
+        sm.registerSeller("Alice");
+
+        SecretMarketplace.Seller memory s = sm.getSeller(seller);
+        assertTrue(s.registered);
+        assertEq(s.name, "Alice");
+        assertEq(s.reputationScore, 0);
+    }
+
+    function test_registerSeller_updateName() public {
+        vm.prank(seller);
+        sm.registerSeller("Alice");
+        vm.prank(seller);
+        sm.registerSeller("Alice Updated");
+
+        SecretMarketplace.Seller memory s = sm.getSeller(seller);
+        assertEq(s.name, "Alice Updated");
+    }
+
+    function test_createAuction_autoRegistersSeller() public {
+        uint256 id = _createDefaultAuction();
+        assertEq(id, 0);
+
+        SecretMarketplace.Seller memory s = sm.getSeller(seller);
+        assertTrue(s.registered);
+        assertEq(s.reputationScore, 0);
     }
 
     // ===========================
@@ -47,129 +148,133 @@ contract SecretMarketplaceTest is Test {
     // ===========================
 
     function test_createAuction() public {
-        vm.prank(seller);
-        uint256 id = auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
+        uint256 id = _createDefaultAuction();
 
         assertEq(id, 0);
-        SecretMarketplace.AuctionData memory a = auction.getAuction(id);
+        SecretMarketplace.Auction memory a = sm.getAuction(id);
         assertEq(a.seller, seller);
         assertEq(a.reservePrice, RESERVE_PRICE);
-        assertEq(a.highestBidder, address(0));
+        assertEq(a.currentBidder, address(0));
         assertEq(uint8(a.status), uint8(SecretMarketplace.AuctionStatus.Open));
+        assertTrue(a.marketMetadata.betOnYes);
+        assertEq(a.marketMetadata.marketId, 0);
+    }
+
+    function test_createAuction_tracksMarketForResolution() public {
+        _createDefaultAuction(); // market 0
+
+        uint256[] memory unresolved = sm.getUnresolvedMarkets();
+        assertEq(unresolved.length, 1);
+        assertEq(unresolved[0], 0);
+
+        uint256[] memory linked = sm.getMarketAuctions(0);
+        assertEq(linked.length, 1);
+        assertEq(linked[0], 0);
+    }
+
+    function test_createAuction_multipleAuctionsSameMarket() public {
+        _createAuction(seller, 0, RESERVE_PRICE, block.timestamp + 1 hours, true);
+        _createAuction(seller2, 0, RESERVE_PRICE, block.timestamp + 1 hours, false);
+
+        // Market tracked only once
+        uint256[] memory unresolved = sm.getUnresolvedMarkets();
+        assertEq(unresolved.length, 1);
+
+        // Both auctions linked
+        uint256[] memory linked = sm.getMarketAuctions(0);
+        assertEq(linked.length, 2);
+    }
+
+    function test_createAuction_tracksSellerAuctions() public {
+        _createAuction(seller, 0, RESERVE_PRICE, block.timestamp + 1 hours, true);
+        _createAuction(seller, 1, RESERVE_PRICE, block.timestamp + 1 hours, false);
+
+        uint256[] memory auctions = sm.getSellerAuctions(seller);
+        assertEq(auctions.length, 2);
+        assertEq(auctions[0], 0);
+        assertEq(auctions[1], 1);
     }
 
     function test_createAuction_addsToOpenList() public {
-        vm.startPrank(seller);
-        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
-        auction.createAuction(1, RESERVE_PRICE, block.timestamp + 1 hours);
-        vm.stopPrank();
+        _createAuction(seller, 0, RESERVE_PRICE, block.timestamp + 1 hours, true);
+        _createAuction(seller, 1, RESERVE_PRICE, block.timestamp + 1 hours, true);
 
-        uint256[] memory open = auction.getOpenAuctions();
+        uint256[] memory open = sm.getOpenAuctions();
         assertEq(open.length, 2);
-        assertEq(open[0], 0);
-        assertEq(open[1], 1);
     }
 
     function test_createAuction_revert_endTimeInPast() public {
         vm.expectRevert(SecretMarketplace.EndTimeInPast.selector);
-        auction.createAuction(0, RESERVE_PRICE, block.timestamp - 1);
+        sm.createAuction(0, RESERVE_PRICE, block.timestamp - 1, address(0), address(0), true);
     }
 
     function test_createAuction_revert_reservePriceZero() public {
         vm.expectRevert(SecretMarketplace.ReservePriceZero.selector);
-        auction.createAuction(0, 0, block.timestamp + 1 hours);
+        sm.createAuction(0, 0, block.timestamp + 1 hours, address(0), address(0), true);
     }
 
     function test_createAuction_revert_marketDoesNotExist() public {
-        vm.expectRevert(abi.encodeWithSelector(SecretMarketplace.MarketDoesNotExist.selector, uint256(999)));
-        auction.createAuction(999, RESERVE_PRICE, block.timestamp + 1 hours);
+        vm.expectRevert(abi.encodeWithSelector(SecretMarketplace.MarketDoesNotExist.selector, 99));
+        sm.createAuction(99, RESERVE_PRICE, block.timestamp + 1 hours, address(0), address(0), true);
     }
 
     // ===========================
-    // ======== BID ==============
+    // ======== PLACE BID ========
     // ===========================
 
     function test_placeBid() public {
-        vm.prank(seller);
-        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
+        uint256 id = _createDefaultAuction();
+        _placeBid(bidder1, id, BID_AMOUNT);
 
-        vm.prank(bidder1);
-        auction.placeBid(0, 200e6);
-
-        SecretMarketplace.AuctionData memory a = auction.getAuction(0);
-        assertEq(a.highestBidder, bidder1);
-        assertEq(a.highestBid, 200e6);
-        assertEq(usdc.balanceOf(address(auction)), 200e6);
+        SecretMarketplace.Auction memory a = sm.getAuction(id);
+        assertEq(a.currentBidder, bidder1);
+        assertEq(a.currentBid, BID_AMOUNT);
+        assertEq(a.automaticBetAmount, BET_AMOUNT);
     }
 
     function test_placeBid_outbidRefundsPrevious() public {
-        vm.prank(seller);
-        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
+        uint256 id = _createDefaultAuction();
+        _placeBid(bidder1, id, BID_AMOUNT);
 
-        uint256 bidder1BalBefore = usdc.balanceOf(bidder1);
+        uint256 balBefore = usdc.balanceOf(bidder1);
+        _placeBid(bidder2, id, HIGHER_BID);
+        uint256 balAfter = usdc.balanceOf(bidder1);
 
-        vm.prank(bidder1);
-        auction.placeBid(0, 200e6);
-
-        vm.prank(bidder2);
-        auction.placeBid(0, 300e6);
-
-        SecretMarketplace.AuctionData memory a = auction.getAuction(0);
-        assertEq(a.highestBidder, bidder2);
-        assertEq(a.highestBid, 300e6);
-        // bidder1 gets refunded directly
-        assertEq(usdc.balanceOf(bidder1), bidder1BalBefore);
+        assertEq(balAfter - balBefore, BID_AMOUNT);
+        SecretMarketplace.Auction memory a = sm.getAuction(id);
+        assertEq(a.currentBidder, bidder2);
     }
 
     function test_placeBid_revert_sellerCannotBid() public {
+        uint256 id = _createDefaultAuction();
         vm.prank(seller);
-        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
+        usdc.approve(address(sm), type(uint256).max);
 
-        usdc.mint(seller, MINT_AMOUNT);
-        vm.prank(seller);
-        usdc.approve(address(auction), type(uint256).max);
-
-        vm.prank(seller);
         vm.expectRevert(SecretMarketplace.SellerCannotBid.selector);
-        auction.placeBid(0, 200e6);
-    }
-
-    function test_placeBid_revert_belowReserve() public {
         vm.prank(seller);
-        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
-
-        vm.prank(bidder1);
-        vm.expectRevert(SecretMarketplace.BidTooLow.selector);
-        auction.placeBid(0, 50e6);
-    }
-
-    function test_placeBid_revert_notHigherThanCurrent() public {
-        vm.prank(seller);
-        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
-
-        vm.prank(bidder1);
-        auction.placeBid(0, 200e6);
-
-        vm.prank(bidder2);
-        vm.expectRevert(SecretMarketplace.BidTooLow.selector);
-        auction.placeBid(0, 200e6); // equal, not higher
-    }
-
-    function test_placeBid_revert_auctionEnded() public {
-        vm.prank(seller);
-        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
-
-        vm.warp(block.timestamp + 2 hours);
-
-        vm.prank(bidder1);
-        vm.expectRevert(SecretMarketplace.AuctionNotActive.selector);
-        auction.placeBid(0, 200e6);
+        sm.placeBid(id, BID_AMOUNT, BET_AMOUNT);
     }
 
     function test_placeBid_revert_doesNotExist() public {
-        vm.prank(bidder1);
         vm.expectRevert(SecretMarketplace.AuctionDoesNotExist.selector);
-        auction.placeBid(99, 200e6);
+        vm.prank(bidder1);
+        sm.placeBid(999, BID_AMOUNT, BET_AMOUNT);
+    }
+
+    function test_placeBid_revert_belowReserve() public {
+        uint256 id = _createDefaultAuction();
+        vm.expectRevert(SecretMarketplace.BidTooLow.selector);
+        vm.prank(bidder1);
+        sm.placeBid(id, RESERVE_PRICE - 1, BET_AMOUNT);
+    }
+
+    function test_placeBid_revert_auctionEnded() public {
+        uint256 id = _createDefaultAuction();
+        vm.warp(block.timestamp + 2 hours);
+
+        vm.expectRevert(SecretMarketplace.AuctionNotActive.selector);
+        vm.prank(bidder1);
+        sm.placeBid(id, BID_AMOUNT, BET_AMOUNT);
     }
 
     // ===========================
@@ -177,362 +282,424 @@ contract SecretMarketplaceTest is Test {
     // ===========================
 
     function test_closeAuction_transfersToSeller() public {
-        vm.prank(seller);
-        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
-
-        vm.prank(bidder1);
-        auction.placeBid(0, 200e6);
-
-        uint256 sellerBalBefore = usdc.balanceOf(seller);
+        uint256 id = _createDefaultAuction();
+        _placeBid(bidder1, id, BID_AMOUNT);
         vm.warp(block.timestamp + 2 hours);
-        auction.closeAuction(0);
 
-        SecretMarketplace.AuctionData memory a = auction.getAuction(0);
-        assertEq(uint8(a.status), uint8(SecretMarketplace.AuctionStatus.Closed));
-        // Seller receives the winning bid
-        assertEq(usdc.balanceOf(seller), sellerBalBefore + 200e6);
+        uint256 sellerBefore = usdc.balanceOf(seller);
+        sm.closeAuction(id);
+        uint256 sellerAfter = usdc.balanceOf(seller);
+
+        assertEq(sellerAfter - sellerBefore, BID_AMOUNT);
+    }
+
+    function test_closeAuction_tracksBuyerAuction() public {
+        uint256 id = _createDefaultAuction();
+        _placeBid(bidder1, id, BID_AMOUNT);
+        vm.warp(block.timestamp + 2 hours);
+        sm.closeAuction(id);
+
+        uint256[] memory buys = sm.getBuyerAuctions(bidder1);
+        assertEq(buys.length, 1);
+        assertEq(buys[0], id);
     }
 
     function test_closeAuction_sellerCanClose() public {
-        vm.prank(seller);
-        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
-
+        uint256 id = _createDefaultAuction();
+        _placeBid(bidder1, id, BID_AMOUNT);
         vm.warp(block.timestamp + 2 hours);
 
         vm.prank(seller);
-        auction.closeAuction(0);
+        sm.closeAuction(id);
 
-        SecretMarketplace.AuctionData memory a = auction.getAuction(0);
+        SecretMarketplace.Auction memory a = sm.getAuction(id);
         assertEq(uint8(a.status), uint8(SecretMarketplace.AuctionStatus.Closed));
     }
 
-    function test_closeAuction_removesFromOpenList() public {
-        vm.startPrank(seller);
-        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
-        auction.createAuction(1, RESERVE_PRICE, block.timestamp + 1 hours);
-        vm.stopPrank();
-
+    function test_closeAuction_creCanClose() public {
+        uint256 id = _createDefaultAuction();
+        _placeBid(bidder1, id, BID_AMOUNT);
         vm.warp(block.timestamp + 2 hours);
-        auction.closeAuction(0);
 
-        uint256[] memory open = auction.getOpenAuctions();
-        assertEq(open.length, 1);
-        assertEq(open[0], 1);
+        vm.prank(creAddress);
+        sm.closeAuction(id);
+
+        SecretMarketplace.Auction memory a = sm.getAuction(id);
+        assertEq(uint8(a.status), uint8(SecretMarketplace.AuctionStatus.Closed));
     }
 
-    function test_closeAuction_noBids() public {
-        vm.prank(seller);
-        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
-
+    function test_closeAuction_revert_notSellerOrAdmin() public {
+        uint256 id = _createDefaultAuction();
+        _placeBid(bidder1, id, BID_AMOUNT);
         vm.warp(block.timestamp + 2 hours);
-        auction.closeAuction(0);
 
-        SecretMarketplace.AuctionData memory a = auction.getAuction(0);
-        assertEq(uint8(a.status), uint8(SecretMarketplace.AuctionStatus.Closed));
-        assertEq(a.highestBidder, address(0));
+        vm.expectRevert(SecretMarketplace.NotSellerOrAdmin.selector);
+        vm.prank(nobody);
+        sm.closeAuction(id);
     }
 
     function test_closeAuction_revert_notEnded() public {
-        vm.prank(seller);
-        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
+        uint256 id = _createDefaultAuction();
+        _placeBid(bidder1, id, BID_AMOUNT);
 
         vm.expectRevert(SecretMarketplace.AuctionNotEnded.selector);
-        auction.closeAuction(0);
+        sm.closeAuction(id);
     }
 
-    function test_closeAuction_revert_alreadySettled() public {
-        vm.prank(seller);
-        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
-
+    function test_closeAuction_noBids() public {
+        uint256 id = _createDefaultAuction();
         vm.warp(block.timestamp + 2 hours);
-        auction.closeAuction(0);
+        sm.closeAuction(id);
 
-        vm.expectRevert(SecretMarketplace.AuctionAlreadySettled.selector);
-        auction.closeAuction(0);
+        SecretMarketplace.Auction memory a = sm.getAuction(id);
+        assertEq(uint8(a.status), uint8(SecretMarketplace.AuctionStatus.Closed));
+        assertEq(a.currentBidder, address(0));
     }
 
-    function test_closeAuction_revert_notSellerOrOwner() public {
-        vm.prank(seller);
-        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
-
+    function test_closeAuction_removesFromOpenList() public {
+        _createAuction(seller, 0, RESERVE_PRICE, block.timestamp + 1 hours, true);
+        _createAuction(seller, 1, RESERVE_PRICE, block.timestamp + 1 hours, true);
+        _createAuction(seller, 2, RESERVE_PRICE, block.timestamp + 1 hours, true);
         vm.warp(block.timestamp + 2 hours);
 
-        vm.prank(bidder1);
-        vm.expectRevert(SecretMarketplace.NotSellerOrOwner.selector);
-        auction.closeAuction(0);
+        sm.closeAuction(1); // close middle one
+        uint256[] memory open = sm.getOpenAuctions();
+        assertEq(open.length, 2);
     }
 
     // ===========================
-    // ======== FORCE CLOSE ======
+    // ====== FORCE CLOSE ========
     // ===========================
 
     function test_forceCloseAuction_refundsBidder() public {
-        vm.prank(seller);
-        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
+        uint256 id = _createDefaultAuction();
+        _placeBid(bidder1, id, BID_AMOUNT);
 
-        uint256 bidder1BalBefore = usdc.balanceOf(bidder1);
+        uint256 balBefore = usdc.balanceOf(bidder1);
+        sm.forceCloseAuction(id, OUTCOME_YES);
+        uint256 balAfter = usdc.balanceOf(bidder1);
 
-        vm.prank(bidder1);
-        auction.placeBid(0, 200e6);
-
-        auction.forceCloseAuction(0, int8(1));
-
-        // bidder1 gets refunded directly
-        assertEq(usdc.balanceOf(bidder1), bidder1BalBefore);
-        SecretMarketplace.AuctionData memory a = auction.getAuction(0);
+        assertEq(balAfter - balBefore, BID_AMOUNT);
+        SecretMarketplace.Auction memory a = sm.getAuction(id);
         assertEq(uint8(a.status), uint8(SecretMarketplace.AuctionStatus.ForceClosed));
     }
 
-    function test_forceCloseAuction_updatesReputation() public {
-        vm.prank(seller);
-        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
+    function test_forceCloseAuction_updatesReputation_positive() public {
+        uint256 id = _createAuction(seller, 0, RESERVE_PRICE, block.timestamp + 1 hours, true); // betOnYes
+        _placeBid(bidder1, id, BID_AMOUNT);
 
-        auction.forceCloseAuction(0, int8(1));
+        sm.forceCloseAuction(id, OUTCOME_YES); // seller was right
 
-        assertEq(auction.reputationScores(seller), 1);
+        SecretMarketplace.Seller memory s = sm.getSeller(seller);
+        assertEq(s.reputationScore, 1);
     }
 
-    function test_forceCloseAuction_negativeReputation() public {
-        vm.prank(seller);
-        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
+    function test_forceCloseAuction_updatesReputation_negative() public {
+        uint256 id = _createAuction(seller, 0, RESERVE_PRICE, block.timestamp + 1 hours, true); // betOnYes
+        _placeBid(bidder1, id, BID_AMOUNT);
 
-        auction.forceCloseAuction(0, int8(-1));
+        sm.forceCloseAuction(id, OUTCOME_NO); // seller was wrong
 
-        assertEq(auction.reputationScores(seller), -1);
+        SecretMarketplace.Seller memory s = sm.getSeller(seller);
+        assertEq(s.reputationScore, -1);
     }
 
-    function test_forceCloseAuction_noImpact() public {
-        vm.prank(seller);
-        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
+    function test_forceCloseAuction_inconclusive_noImpact() public {
+        uint256 id = _createAuction(seller, 0, RESERVE_PRICE, block.timestamp + 1 hours, true);
+        _placeBid(bidder1, id, BID_AMOUNT);
 
-        auction.forceCloseAuction(0, int8(0));
+        sm.forceCloseAuction(id, OUTCOME_INCONCLUSIVE);
 
-        assertEq(auction.reputationScores(seller), 0);
+        SecretMarketplace.Seller memory s = sm.getSeller(seller);
+        assertEq(s.reputationScore, 0);
     }
 
-    function test_forceCloseAuction_noBids() public {
-        vm.prank(seller);
-        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
+    function test_forceCloseAuction_revert_notAdminOrCRE() public {
+        uint256 id = _createDefaultAuction();
 
-        auction.forceCloseAuction(0, int8(0));
+        vm.expectRevert();
+        vm.prank(nobody);
+        sm.forceCloseAuction(id, OUTCOME_YES);
+    }
 
-        SecretMarketplace.AuctionData memory a = auction.getAuction(0);
+    function test_forceCloseAuction_creCanCall() public {
+        uint256 id = _createDefaultAuction();
+        _placeBid(bidder1, id, BID_AMOUNT);
+
+        vm.prank(creAddress);
+        sm.forceCloseAuction(id, OUTCOME_YES);
+
+        SecretMarketplace.Auction memory a = sm.getAuction(id);
         assertEq(uint8(a.status), uint8(SecretMarketplace.AuctionStatus.ForceClosed));
     }
 
     // ===========================
-    // ======== REPUTATION =======
+    // === RESOLVE MARKET ========
     // ===========================
 
-    function test_updateReputationScore() public {
-        vm.prank(seller);
-        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
+    function test_resolveExternalMarket_updatesReputationForAllAuctions() public {
+        // Two sellers on same market, different directions
+        _createAuction(seller, 0, RESERVE_PRICE, block.timestamp + 1 hours, true);   // betOnYes
+        _createAuction(seller2, 0, RESERVE_PRICE, block.timestamp + 1 hours, false); // betOnNo
+        _placeBid(bidder1, 0, BID_AMOUNT);
+        _placeBid(bidder2, 1, BID_AMOUNT);
 
-        auction.updateReputationScore(0, int8(1));
+        // Close both auctions
+        vm.warp(block.timestamp + 2 hours);
+        sm.closeAuction(0);
+        sm.closeAuction(1);
 
-        assertEq(auction.reputationScores(seller), 1);
+        // Market resolves as Yes
+        sm.resolveExternalMarket(0, OUTCOME_YES);
+
+        SecretMarketplace.Seller memory s1 = sm.getSeller(seller);
+        SecretMarketplace.Seller memory s2 = sm.getSeller(seller2);
+        assertEq(s1.reputationScore, 1);  // seller bet Yes, outcome Yes → +1
+        assertEq(s2.reputationScore, -1); // seller2 bet No, outcome Yes → -1
     }
 
-    function test_updateReputationScore_revert_auctionDoesNotExist() public {
-        vm.expectRevert(SecretMarketplace.AuctionDoesNotExist.selector);
-        auction.updateReputationScore(99, int8(1));
+    function test_resolveExternalMarket_forceClosesOpenAuctions() public {
+        _createAuction(seller, 0, RESERVE_PRICE, block.timestamp + 1 hours, true);
+        _placeBid(bidder1, 0, BID_AMOUNT);
+
+        uint256 balBefore = usdc.balanceOf(bidder1);
+        sm.resolveExternalMarket(0, OUTCOME_YES);
+        uint256 balAfter = usdc.balanceOf(bidder1);
+
+        // Bidder refunded
+        assertEq(balAfter - balBefore, BID_AMOUNT);
+
+        // Auction force-closed
+        SecretMarketplace.Auction memory a = sm.getAuction(0);
+        assertEq(uint8(a.status), uint8(SecretMarketplace.AuctionStatus.ForceClosed));
+
+        // Reputation updated
+        SecretMarketplace.Seller memory s = sm.getSeller(seller);
+        assertEq(s.reputationScore, 1);
     }
 
-    function test_updateReputationScore_multipleSellersOnSameMarket() public {
-        // Two sellers create auctions for the same external market
-        vm.prank(seller);
-        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours); // auctionId=0
+    function test_resolveExternalMarket_skipsAlreadyResolvedReputation() public {
+        _createAuction(seller, 0, RESERVE_PRICE, block.timestamp + 1 hours, true);
+        _placeBid(bidder1, 0, BID_AMOUNT);
 
-        vm.prank(bidder1); // bidder1 acts as second seller
-        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours); // auctionId=1
+        // Force-close first (resolves reputation for this auction)
+        sm.forceCloseAuction(0, OUTCOME_YES);
+        assertEq(sm.getSeller(seller).reputationScore, 1);
 
-        // Update reputation for both — should not conflict
-        auction.updateReputationScore(0, int8(1));  // seller
-        auction.updateReputationScore(1, int8(-1)); // bidder1-as-seller
+        // Now resolve the market — should NOT double-count
+        sm.resolveExternalMarket(0, OUTCOME_YES);
+        assertEq(sm.getSeller(seller).reputationScore, 1); // still 1, not 2
+    }
 
-        assertEq(auction.reputationScores(seller), 1);
-        assertEq(auction.reputationScores(bidder1), -1);
+    function test_resolveExternalMarket_removesFromUnresolvedList() public {
+        _createAuction(seller, 0, RESERVE_PRICE, block.timestamp + 1 hours, true);
+        _createAuction(seller, 1, RESERVE_PRICE, block.timestamp + 1 hours, true);
+
+        assertEq(sm.getUnresolvedMarkets().length, 2);
+
+        vm.warp(block.timestamp + 2 hours);
+        sm.closeAuction(0);
+        sm.resolveExternalMarket(0, OUTCOME_YES);
+
+        assertEq(sm.getUnresolvedMarkets().length, 1);
+        assertEq(sm.getUnresolvedMarkets()[0], 1);
+    }
+
+    function test_resolveExternalMarket_revert_alreadyResolved() public {
+        _createAuction(seller, 0, RESERVE_PRICE, block.timestamp + 1 hours, true);
+        vm.warp(block.timestamp + 2 hours);
+        sm.closeAuction(0);
+        sm.resolveExternalMarket(0, OUTCOME_YES);
+
+        vm.expectRevert(abi.encodeWithSelector(SecretMarketplace.MarketAlreadyResolved.selector, 0));
+        sm.resolveExternalMarket(0, OUTCOME_NO);
+    }
+
+    function test_resolveExternalMarket_revert_notAdminOrCRE() public {
+        _createAuction(seller, 0, RESERVE_PRICE, block.timestamp + 1 hours, true);
+
+        vm.expectRevert();
+        vm.prank(nobody);
+        sm.resolveExternalMarket(0, OUTCOME_YES);
+    }
+
+    function test_resolveExternalMarket_inconclusive_noReputationChange() public {
+        _createAuction(seller, 0, RESERVE_PRICE, block.timestamp + 1 hours, true);
+        vm.warp(block.timestamp + 2 hours);
+        sm.closeAuction(0);
+
+        sm.resolveExternalMarket(0, OUTCOME_INCONCLUSIVE);
+        assertEq(sm.getSeller(seller).reputationScore, 0);
     }
 
     // ===========================
-    // ======== CRE ==============
+    // ====== CRE REPORTS ========
     // ===========================
 
     function test_processReport_closeAuction() public {
-        vm.prank(seller);
-        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
-
+        uint256 id = _createDefaultAuction();
+        _placeBid(bidder1, id, BID_AMOUNT);
         vm.warp(block.timestamp + 2 hours);
 
-        bytes memory report = abi.encodePacked(uint8(0), abi.encode(uint256(0)));
-
+        bytes memory report = abi.encodePacked(uint8(0), abi.encode(id));
         vm.prank(forwarder);
-        auction.onReport("", report);
+        sm.onReport("", report);
 
-        SecretMarketplace.AuctionData memory a = auction.getAuction(0);
+        SecretMarketplace.Auction memory a = sm.getAuction(id);
         assertEq(uint8(a.status), uint8(SecretMarketplace.AuctionStatus.Closed));
     }
 
     function test_processReport_forceClose() public {
-        vm.prank(seller);
-        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
+        uint256 id = _createDefaultAuction();
+        _placeBid(bidder1, id, BID_AMOUNT);
 
-        bytes memory report = abi.encodePacked(uint8(1), abi.encode(uint256(0), int8(-1)));
-
+        bytes memory report = abi.encodePacked(uint8(1), abi.encode(id, uint8(OUTCOME_YES)));
         vm.prank(forwarder);
-        auction.onReport("", report);
+        sm.onReport("", report);
 
-        SecretMarketplace.AuctionData memory a = auction.getAuction(0);
+        SecretMarketplace.Auction memory a = sm.getAuction(id);
         assertEq(uint8(a.status), uint8(SecretMarketplace.AuctionStatus.ForceClosed));
-        assertEq(auction.reputationScores(seller), -1);
     }
 
-    function test_processReport_updateReputation() public {
-        vm.prank(seller);
-        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
+    function test_processReport_resolveMarket() public {
+        _createAuction(seller, 0, RESERVE_PRICE, block.timestamp + 1 hours, true);
+        vm.warp(block.timestamp + 2 hours);
+        sm.closeAuction(0);
 
-        bytes memory report = abi.encodePacked(uint8(2), abi.encode(uint256(0), int8(1)));
-
+        bytes memory report = abi.encodePacked(uint8(2), abi.encode(uint256(0), uint8(OUTCOME_YES)));
         vm.prank(forwarder);
-        auction.onReport("", report);
+        sm.onReport("", report);
 
-        assertEq(auction.reputationScores(seller), 1);
+        assertTrue(sm.marketResolved(0));
     }
 
     function test_processReport_revert_notForwarder() public {
-        bytes memory report = abi.encodePacked(uint8(0), abi.encode(uint256(0)));
-
-        vm.prank(bidder1);
         vm.expectRevert();
-        auction.onReport("", report);
+        vm.prank(nobody);
+        sm.onReport("", abi.encodePacked(uint8(0), abi.encode(uint256(0))));
     }
 
     function test_processReport_revert_unknownAction() public {
         bytes memory report = abi.encodePacked(uint8(99), abi.encode(uint256(0)));
-
+        vm.expectRevert(abi.encodeWithSelector(SecretMarketplace.UnknownAction.selector, 99));
         vm.prank(forwarder);
-        vm.expectRevert(abi.encodeWithSelector(SecretMarketplace.UnknownAction.selector, uint8(99)));
-        auction.onReport("", report);
+        sm.onReport("", report);
     }
 
     // ===========================
     // ======== EVENTS ===========
     // ===========================
 
-    function test_emits_AuctionCreated() public {
+    function test_emits_SellerRegistered() public {
+        vm.expectEmit(true, false, false, true);
+        emit SecretMarketplace.SellerRegistered(seller, "Alice");
         vm.prank(seller);
-        vm.expectEmit(true, true, false, true);
-        emit SecretMarketplace.AuctionCreated(0, seller, 3, RESERVE_PRICE, block.timestamp + 1 hours);
-        auction.createAuction(3, RESERVE_PRICE, block.timestamp + 1 hours);
+        sm.registerSeller("Alice");
+    }
+
+    function test_emits_AuctionCreated() public {
+        vm.expectEmit(true, true, true, true);
+        emit SecretMarketplace.AuctionCreated(0, seller, 0, RESERVE_PRICE, block.timestamp + 1 hours, true);
+        _createDefaultAuction();
     }
 
     function test_emits_BidPlaced() public {
-        vm.prank(seller);
-        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
-
-        vm.prank(bidder1);
+        uint256 id = _createDefaultAuction();
         vm.expectEmit(true, true, false, true);
-        emit SecretMarketplace.BidPlaced(0, bidder1, 200e6, address(0), 0);
-        auction.placeBid(0, 200e6);
-    }
-
-    function test_emits_BidPlaced_withPreviousBidder() public {
-        vm.prank(seller);
-        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
-
-        vm.prank(bidder1);
-        auction.placeBid(0, 200e6);
-
-        vm.prank(bidder2);
-        vm.expectEmit(true, true, false, true);
-        emit SecretMarketplace.BidPlaced(0, bidder2, 300e6, bidder1, 200e6);
-        auction.placeBid(0, 300e6);
+        emit SecretMarketplace.BidPlaced(id, bidder1, BID_AMOUNT, BET_AMOUNT, address(0), 0);
+        _placeBid(bidder1, id, BID_AMOUNT);
     }
 
     function test_emits_AuctionClosed() public {
-        vm.prank(seller);
-        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
-
-        vm.prank(bidder1);
-        auction.placeBid(0, 200e6);
-
+        uint256 id = _createDefaultAuction();
+        _placeBid(bidder1, id, BID_AMOUNT);
         vm.warp(block.timestamp + 2 hours);
 
         vm.expectEmit(true, true, false, true);
-        emit SecretMarketplace.AuctionClosed(0, bidder1, 200e6, seller, 0);
-        auction.closeAuction(0);
-    }
-
-    function test_emits_AuctionForceClosed() public {
-        vm.prank(seller);
-        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
-
-        vm.prank(bidder1);
-        auction.placeBid(0, 200e6);
-
-        vm.expectEmit(true, true, false, true);
-        emit SecretMarketplace.AuctionForceClosed(0, bidder1, 200e6, seller, 0, int8(-1));
-        auction.forceCloseAuction(0, int8(-1));
-    }
-
-    function test_emits_ReputationUpdated() public {
-        vm.prank(seller);
-        auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
-
-        vm.expectEmit(true, true, false, true);
-        emit SecretMarketplace.ReputationUpdated(seller, 0, int8(1), int256(1));
-        auction.updateReputationScore(0, int8(1));
+        emit SecretMarketplace.AuctionClosed(id, bidder1, BID_AMOUNT, seller, 0);
+        sm.closeAuction(id);
     }
 
     function test_emits_TradeExecuted() public {
-        vm.prank(seller);
-        auction.createAuction(4, RESERVE_PRICE, block.timestamp + 1 hours);
-
-        vm.prank(bidder1);
-        auction.placeBid(0, 200e6);
-
+        uint256 id = _createDefaultAuction();
+        _placeBid(bidder1, id, BID_AMOUNT);
         vm.warp(block.timestamp + 2 hours);
 
         vm.expectEmit(true, true, true, true);
-        emit SecretMarketplace.TradeExecuted(0, 4, bidder1, 200e6);
-        auction.closeAuction(0);
+        emit SecretMarketplace.TradeExecuted(id, 0, bidder1, BET_AMOUNT, true);
+        sm.closeAuction(id);
+    }
+
+    function test_emits_AuctionForceClosed() public {
+        uint256 id = _createDefaultAuction();
+        _placeBid(bidder1, id, BID_AMOUNT);
+
+        vm.expectEmit(true, true, false, true);
+        emit SecretMarketplace.AuctionForceClosed(id, bidder1, BID_AMOUNT, seller, 0, int8(1));
+        sm.forceCloseAuction(id, OUTCOME_YES);
+    }
+
+    function test_emits_ReputationUpdated() public {
+        uint256 id = _createDefaultAuction();
+        _placeBid(bidder1, id, BID_AMOUNT);
+
+        vm.expectEmit(true, true, false, true);
+        emit SecretMarketplace.ReputationUpdated(seller, id, int8(1), int256(1));
+        sm.forceCloseAuction(id, OUTCOME_YES);
+    }
+
+    function test_emits_ExternalMarketResolved() public {
+        _createAuction(seller, 0, RESERVE_PRICE, block.timestamp + 1 hours, true);
+        vm.warp(block.timestamp + 2 hours);
+        sm.closeAuction(0);
+
+        vm.expectEmit(true, false, false, true);
+        emit SecretMarketplace.ExternalMarketResolved(0, OUTCOME_YES, 1);
+        sm.resolveExternalMarket(0, OUTCOME_YES);
     }
 
     // ===========================
-    // ======== FULL FLOW ========
+    // ====== FULL LIFECYCLE =====
     // ===========================
 
     function test_fullLifecycle() public {
-        // Seller creates auction for external market 0
+        // 1. Register seller
         vm.prank(seller);
-        uint256 id = auction.createAuction(0, RESERVE_PRICE, block.timestamp + 1 hours);
+        sm.registerSeller("Insider Alice");
 
-        // Bidder1 bids
-        vm.prank(bidder1);
-        auction.placeBid(id, 200e6);
+        // 2. Create auction (betOnYes)
+        uint256 id = _createAuction(seller, 0, RESERVE_PRICE, block.timestamp + 1 hours, true);
 
-        // Bidder2 outbids (bidder1 refunded automatically)
-        vm.prank(bidder2);
-        auction.placeBid(id, 300e6);
-        assertEq(usdc.balanceOf(bidder1), MINT_AMOUNT); // got full refund back
+        // 3. Bidder places bid
+        _placeBid(bidder1, id, BID_AMOUNT);
 
-        // Auction ends, seller closes it
-        uint256 sellerBalBefore = usdc.balanceOf(seller);
+        // 4. Wait and close
         vm.warp(block.timestamp + 2 hours);
         vm.prank(seller);
-        auction.closeAuction(id);
+        sm.closeAuction(id);
 
-        // Verify final state
-        SecretMarketplace.AuctionData memory a = auction.getAuction(id);
-        assertEq(a.highestBidder, bidder2);
-        assertEq(a.highestBid, 300e6);
+        // 5. Verify seller received payment
+        SecretMarketplace.Auction memory a = sm.getAuction(id);
         assertEq(uint8(a.status), uint8(SecretMarketplace.AuctionStatus.Closed));
-        assertEq(auction.getOpenAuctions().length, 0);
-        // Seller received the winning bid
-        assertEq(usdc.balanceOf(seller), sellerBalBefore + 300e6);
+        assertEq(a.currentBidder, bidder1);
 
-        // Later: owner updates reputation
-        auction.updateReputationScore(0, int8(1));
-        assertEq(auction.reputationScores(seller), 1);
+        // 6. Buyer tracked
+        uint256[] memory buys = sm.getBuyerAuctions(bidder1);
+        assertEq(buys.length, 1);
+
+        // 7. Resolve market → reputation +1
+        sm.resolveExternalMarket(0, OUTCOME_YES);
+        SecretMarketplace.Seller memory s = sm.getSeller(seller);
+        assertEq(s.reputationScore, 1);
+        assertEq(s.name, "Insider Alice");
+    }
+
+    // ===========================
+    // ==== supportsInterface ====
+    // ===========================
+
+    function test_supportsInterface_IReceiver() public view {
+        // IReceiver interface ID
+        assertTrue(sm.supportsInterface(type(IAccessControl).interfaceId));
     }
 }
