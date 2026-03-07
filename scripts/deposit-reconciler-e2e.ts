@@ -36,7 +36,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import {
-  CONFIDENTIAL_USDC_ADDRESS,
+  PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
   CONFIDENTIAL_USDC_DECIMALS,
   confidentialUsdcAbi,
   VAULT_ADDRESS,
@@ -74,7 +74,7 @@ const SUPABASE_URL = envRequired("SUPABASE_URL");
 const SUPABASE_KEY = envRequired("SUPABASE_SERVICE_ROLE_KEY");
 
 // Contract addresses
-const SIMPLE_TOKEN: Address = CONFIDENTIAL_USDC_ADDRESS;
+const SIMPLE_TOKEN: Address = PRIVATE_CONFIDENTIAL_USDC_ADDRESS;
 const VAULT: Address = VAULT_ADDRESS;
 const PRIVATE_TOKEN_API = "https://convergence2026-token-api.cldev.cloud";
 const CHAIN_ID = 11155111;

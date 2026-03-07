@@ -37,7 +37,7 @@ NC='\033[0m' # No Color
 
 CLI_MODE=false
 DEPLOY_CONFIDENTIAL_USDC=false
-DEPLOY_EXAPMPLE_PREDICTION_MARKET=false
+DEPLOY_EXAMPLE_PREDICTION_MARKET=false
 DEPLOY_SECRET_MARKETPLACE=false
 
 while [[ $# -gt 0 ]]; do
@@ -48,7 +48,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --market)
-      DEPLOY_EXAPMPLE_PREDICTION_MARKET=true
+      DEPLOY_EXAMPLE_PREDICTION_MARKET=true
       CLI_MODE=true
       shift
       ;;
@@ -59,7 +59,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --all)
       DEPLOY_CONFIDENTIAL_USDC=true
-      DEPLOY_EXAPMPLE_PREDICTION_MARKET=true
+      DEPLOY_EXAMPLE_PREDICTION_MARKET=true
       DEPLOY_SECRET_MARKETPLACE=true
       CLI_MODE=true
       shift
@@ -194,9 +194,9 @@ deploy_contract() {
 
 # Read from packages/common/src/index.ts (the canonical source).
 # Address may be on the same line or the next line, so grab both with -A1.
-CURRENT_CONFIDENTIAL_USDC=$(grep -A1 'CONFIDENTIAL_USDC_ADDRESS' "$ROOT_DIR/packages/common/src/index.ts" | grep -oE '0x[0-9a-fA-F]{40}')
-CURRENT_PREDICTION_MARKET=$(grep -A1 'EXAMPLE_PREDICTION_MARKET_ADDRESS' "$ROOT_DIR/packages/common/src/index.ts" | grep -oE '0x[0-9a-fA-F]{40}')
-CURRENT_SECRET_MARKETPLACE=$(grep -A1 'SECRET_MARKETPLACE_ADDRESS' "$ROOT_DIR/packages/common/src/index.ts" | grep -oE '0x[0-9a-fA-F]{40}')
+CURRENT_CONFIDENTIAL_USDC=$(grep -A1 'export const CONFIDENTIAL_USDC_ADDRESS' "$ROOT_DIR/packages/common/src/index.ts" | grep -oE '0x[0-9a-fA-F]{40}' | head -1)
+CURRENT_PREDICTION_MARKET=$(grep -A1 'EXAMPLE_PREDICTION_MARKET_ADDRESS' "$ROOT_DIR/packages/common/src/index.ts" | grep -oE '0x[0-9a-fA-F]{40}' | head -1)
+CURRENT_SECRET_MARKETPLACE=$(grep -A1 'SECRET_MARKETPLACE_ADDRESS' "$ROOT_DIR/packages/common/src/index.ts" | grep -oE '0x[0-9a-fA-F]{40}' | head -1)
 
 # Also read from .env files — addresses there may differ from packages/common
 # (stale from a previous deploy). We'll replace these too.
@@ -247,13 +247,13 @@ if [ "$CLI_MODE" = false ]; then
   [[ "$ans" =~ ^[Yy]$ ]] && DEPLOY_CONFIDENTIAL_USDC=true
 
   read -rp "  Deploy ExamplePredictionMarket? [y/N]: " ans
-  [[ "$ans" =~ ^[Yy]$ ]] && DEPLOY_EXAPMPLE_PREDICTION_MARKET=true
+  [[ "$ans" =~ ^[Yy]$ ]] && DEPLOY_EXAMPLE_PREDICTION_MARKET=true
 
   read -rp "  Deploy SecretMarketplace? [y/N]: " ans
   [[ "$ans" =~ ^[Yy]$ ]] && DEPLOY_SECRET_MARKETPLACE=true
 fi
 
-if [ "$DEPLOY_CONFIDENTIAL_USDC" = false ] && [ "$DEPLOY_EXAPMPLE_PREDICTION_MARKET" = false ] && [ "$DEPLOY_SECRET_MARKETPLACE" = false ]; then
+if [ "$DEPLOY_CONFIDENTIAL_USDC" = false ] && [ "$DEPLOY_EXAMPLE_PREDICTION_MARKET" = false ] && [ "$DEPLOY_SECRET_MARKETPLACE" = false ]; then
   echo ""
   echo "  Nothing selected. Exiting."
   exit 0
@@ -262,12 +262,12 @@ fi
 echo ""
 echo "  Will deploy:"
 [ "$DEPLOY_CONFIDENTIAL_USDC" = true ] && echo "    - ConfidentialUSDC"
-[ "$DEPLOY_EXAPMPLE_PREDICTION_MARKET" = true ] && echo "    - ExamplePredictionMarket"
+[ "$DEPLOY_EXAMPLE_PREDICTION_MARKET" = true ] && echo "    - ExamplePredictionMarket"
 [ "$DEPLOY_SECRET_MARKETPLACE" = true ] && echo "    - SecretMarketplace"
 
 # ─── Verify contracts/.env has required vars ─────────────────────────────────
 
-if [ "$DEPLOY_EXAPMPLE_PREDICTION_MARKET" = true ] || [ "$DEPLOY_SECRET_MARKETPLACE" = true ]; then
+if [ "$DEPLOY_EXAMPLE_PREDICTION_MARKET" = true ] || [ "$DEPLOY_SECRET_MARKETPLACE" = true ]; then
   if ! grep -q '^CONFIDENTIAL_USDC_ADDRESS=' "$CONTRACTS_DIR/.env" 2>/dev/null; then
     if [ "$CLI_MODE" = true ]; then
       echo ""
@@ -310,7 +310,7 @@ if [ "$DEPLOY_EXAPMPLE_PREDICTION_MARKET" = true ] || [ "$DEPLOY_SECRET_MARKETPL
   fi
 fi
 
-if [ "$DEPLOY_SECRET_MARKETPLACE" = true ] && [ "$DEPLOY_EXAPMPLE_PREDICTION_MARKET" = false ]; then
+if [ "$DEPLOY_SECRET_MARKETPLACE" = true ] && [ "$DEPLOY_EXAMPLE_PREDICTION_MARKET" = false ]; then
   if ! grep -q '^EXAMPLE_PREDICTION_MARKET_ADDRESS=' "$CONTRACTS_DIR/.env" 2>/dev/null; then
     if [ "$CLI_MODE" = true ]; then
       echo -e "  ${CYAN}Adding EXAMPLE_PREDICTION_MARKET_ADDRESS=$CURRENT_PREDICTION_MARKET to contracts/.env${NC}"
@@ -342,23 +342,24 @@ NEW_MARKETPLACE=""
 if [ "$DEPLOY_CONFIDENTIAL_USDC" = true ]; then
   NEW_USDC=$(deploy_contract "DeployConfidentialUSDC.s.sol:DeployConfidentialUSDC" "ConfidentialUSDC")
 
-  # Update CONFIDENTIAL_USDC_ADDRESS in contracts/.env for subsequent deploys
-  if [ "$DEPLOY_EXAPMPLE_PREDICTION_MARKET" = true ] || [ "$DEPLOY_SECRET_MARKETPLACE" = true ]; then
+  # Update CONFIDENTIAL_USDC_ADDRESS in contracts/.env AND shell env for subsequent deploys
+  if [ "$DEPLOY_EXAMPLE_PREDICTION_MARKET" = true ] || [ "$DEPLOY_SECRET_MARKETPLACE" = true ]; then
     if grep -q '^CONFIDENTIAL_USDC_ADDRESS=' "$CONTRACTS_DIR/.env" 2>/dev/null; then
       sed -i.bak "s|^CONFIDENTIAL_USDC_ADDRESS=.*|CONFIDENTIAL_USDC_ADDRESS=$NEW_USDC|" "$CONTRACTS_DIR/.env"
       rm -f "$CONTRACTS_DIR/.env.bak"
     else
       echo "CONFIDENTIAL_USDC_ADDRESS=$NEW_USDC" >> "$CONTRACTS_DIR/.env"
     fi
+    export CONFIDENTIAL_USDC_ADDRESS="$NEW_USDC"
     echo "  Updated CONFIDENTIAL_USDC_ADDRESS in contracts/.env → $NEW_USDC"
   fi
 fi
 
 # Deploy ExamplePredictionMarket
-if [ "$DEPLOY_EXAPMPLE_PREDICTION_MARKET" = true ]; then
+if [ "$DEPLOY_EXAMPLE_PREDICTION_MARKET" = true ]; then
   NEW_MARKET=$(deploy_contract "DeployExamplePredictionMarket.s.sol:DeployExamplePredictionMarket" "ExamplePredictionMarket")
 
-  # Update EXAMPLE_PREDICTION_MARKET_ADDRESS in contracts/.env for SecretMarketplace deploy
+  # Update EXAMPLE_PREDICTION_MARKET_ADDRESS in contracts/.env AND shell env for SecretMarketplace deploy
   if [ "$DEPLOY_SECRET_MARKETPLACE" = true ]; then
     if grep -q '^EXAMPLE_PREDICTION_MARKET_ADDRESS=' "$CONTRACTS_DIR/.env" 2>/dev/null; then
       sed -i.bak "s|^EXAMPLE_PREDICTION_MARKET_ADDRESS=.*|EXAMPLE_PREDICTION_MARKET_ADDRESS=$NEW_MARKET|" "$CONTRACTS_DIR/.env"
@@ -366,6 +367,7 @@ if [ "$DEPLOY_EXAPMPLE_PREDICTION_MARKET" = true ]; then
     else
       echo "EXAMPLE_PREDICTION_MARKET_ADDRESS=$NEW_MARKET" >> "$CONTRACTS_DIR/.env"
     fi
+    export EXAMPLE_PREDICTION_MARKET_ADDRESS="$NEW_MARKET"
     echo "  Updated EXAMPLE_PREDICTION_MARKET_ADDRESS in contracts/.env → $NEW_MARKET"
   fi
 fi

@@ -102,7 +102,7 @@ CREATE TABLE transfers (
   id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   transaction_id    text NOT NULL UNIQUE,
   user_address      text NOT NULL,
-  token_address     text NOT NULL DEFAULT '0xcd71c57e6280b72cacd8305a6c0da7c348ca70b5',
+  token_address     text NOT NULL DEFAULT '0x38eda3f7b7649ce3f8534c59a40132be347e750a',
   amount            text NOT NULL,
   recipient_address text,
   sender_address    text,
