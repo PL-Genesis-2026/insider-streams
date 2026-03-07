@@ -3,6 +3,9 @@
 import Image from "next/image";
 import { useCallback, useState } from "react";
 import { ExternalLink, Eye, EyeOff, Loader2, Lock } from "lucide-react";
+import { useAccount, useWalletClient } from "wagmi";
+import { useAppKit } from "@reown/appkit/react";
+import stringify from "fast-json-stable-stringify";
 import { EXAMPLE_PREDICTION_MARKET_NAME } from "@private-streams/common";
 import { Button } from "@/components/ui/button";
 import { env } from "@/env";
@@ -27,7 +30,6 @@ type RevealState =
 function BlurredSkeleton() {
   return (
     <div className="select-none" aria-hidden>
-      {/* Blurred secret_data placeholder */}
       <div className="space-y-2">
         <span className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground/40">
           Secret data
@@ -37,11 +39,7 @@ function BlurredSkeleton() {
           <div className="h-4 w-3/4 rounded bg-muted-foreground/8" />
         </div>
       </div>
-
-      {/* Divider */}
       <div className="my-5 border-t border-border/40" />
-
-      {/* Blurred market link placeholder */}
       <div className="h-10 w-full rounded-md border border-border/40 bg-muted-foreground/5" />
     </div>
   );
@@ -74,15 +72,12 @@ function MarketLink({ eventData }: { eventData: EventData }) {
 function RevealedContent({ data }: { data: RevealedSecret }) {
   return (
     <div>
-      {/* secret_data */}
       <div className="space-y-2">
         <span className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground/60">
           Secret data
         </span>
         <p className="text-sm leading-7 text-foreground">{data.secret_data}</p>
       </div>
-
-      {/* Market link button */}
       {data.event_data && (
         <>
           <div className="my-5 border-t border-border/40" />
@@ -93,25 +88,48 @@ function RevealedContent({ data }: { data: RevealedSecret }) {
   );
 }
 
-export function SecretRevealCard({
-  auctionId,
-}: SecretRevealCardProps) {
+export function SecretRevealCard({ auctionId }: SecretRevealCardProps) {
   const [state, setState] = useState<RevealState>({ status: "hidden" });
+  const { isConnected } = useAccount();
+  const { data: walletClient } = useWalletClient();
+  const { open } = useAppKit();
+
+  const handleConnect = useCallback(() => {
+    void open({ view: "Connect" });
+  }, [open]);
 
   const handleReveal = useCallback(async () => {
+    if (!walletClient) return;
+
     setState({ status: "loading" });
 
     try {
-      const res = await fetch(
-        `/api/secrets?ids=${encodeURIComponent(auctionId)}`,
-      );
+      const timestamp = Math.floor(Date.now() / 1000);
+      const payload = { auctionId, timestamp };
+      const message = stringify(payload);
+      const signature = await walletClient.signMessage({ message });
+
+      const res = await fetch("/api/secrets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...payload, signature }),
+      });
+
+      if (res.status === 403) {
+        const json = await res.json();
+        setState({
+          status: "error",
+          message: json.error ?? "You are not authorized to view this secret",
+        });
+        return;
+      }
 
       if (!res.ok) {
         throw new Error(`Request failed (${res.status})`);
       }
 
       const json = await res.json();
-      const row = json.data?.[0];
+      const row = json.data;
 
       if (!row) {
         setState({ status: "error", message: "Secret not found" });
@@ -131,7 +149,7 @@ export function SecretRevealCard({
         message: "Failed to load secret. Please try again.",
       });
     }
-  }, [auctionId]);
+  }, [auctionId, walletClient]);
 
   const handleHide = useCallback(() => {
     setState({ status: "hidden" });
@@ -153,7 +171,6 @@ export function SecretRevealCard({
 
   return (
     <div className="relative">
-      {/* Blurred skeleton behind the overlay */}
       <div
         className={cn(
           "blur-[6px] transition-[filter] duration-300",
@@ -163,25 +180,31 @@ export function SecretRevealCard({
         <BlurredSkeleton />
       </div>
 
-      {/* Centered overlay */}
       <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
         {state.status === "error" && (
           <p className="text-xs text-destructive">{state.message}</p>
         )}
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleReveal}
-          disabled={state.status === "loading"}
-        >
-          {state.status === "loading" ? (
-            <Loader2 className="size-3.5 animate-spin" />
-          ) : (
-            <Eye className="size-3.5" />
-          )}
-          {state.status === "loading" ? "Revealing..." : "Reveal secret"}
-        </Button>
+        {!isConnected ? (
+          <Button variant="outline" size="sm" onClick={handleConnect}>
+            <Lock className="size-3.5" />
+            Connect wallet to reveal
+          </Button>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void handleReveal()}
+            disabled={state.status === "loading"}
+          >
+            {state.status === "loading" ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Eye className="size-3.5" />
+            )}
+            {state.status === "loading" ? "Revealing..." : "Reveal secret"}
+          </Button>
+        )}
       </div>
     </div>
   );
