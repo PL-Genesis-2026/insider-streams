@@ -1,8 +1,8 @@
 "use client";
 
+import { useDisconnect } from "@reown/appkit/react";
 import Link from "next/link";
 import { CirclePlus, LogOut, Wallet } from "lucide-react";
-import { useDisconnect } from "wagmi";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -89,7 +89,7 @@ export function WalletAccountControl() {
           <DropdownMenuItem
             variant="destructive"
             onClick={() => {
-              disconnect();
+              void disconnect({ namespace: "eip155" });
             }}
           >
             Disconnect

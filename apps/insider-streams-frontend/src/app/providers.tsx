@@ -9,9 +9,11 @@ import {
 } from "@apollo/client-integration-nextjs";
 import { useState } from "react";
 import { cookieToInitialState, WagmiProvider } from "wagmi";
-import { walletConfig } from "@/lib/wallet/config";
+import { ensureAppKit, walletConfig } from "@/lib/wallet/config";
 import { SUBGRAPH_URL, SUBGRAPH_REQUEST_HEADERS } from "@/lib/subgraph-config";
 import { PrivateDataProvider } from "@/lib/private-data/private-data-provider";
+
+ensureAppKit();
 
 function makeClient() {
   return new ApolloClient({

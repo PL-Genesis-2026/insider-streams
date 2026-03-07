@@ -1,6 +1,8 @@
 import Image from "next/image";
+import Link from "next/link";
 import { LogoMark } from "@/components/logo";
 import { AuctionList } from "@/components/auction-list";
+import { Button } from "@/components/ui/button";
 
 export default function Home() {
   return (
@@ -47,6 +49,14 @@ export default function Home() {
               tied to prediction market outcomes. Sellers list what they know,
               buyers bid on the edge.
             </p>
+            <div className="flex flex-wrap gap-3 pt-2">
+              <Button asChild variant="accent" size="lg">
+                <Link href="/create">Start selling</Link>
+              </Button>
+              <Button asChild variant="outline" size="lg">
+                <Link href="/#auctions">Browse auctions</Link>
+              </Button>
+            </div>
           </div>
         </section>
 
