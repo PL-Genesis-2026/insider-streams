@@ -22,13 +22,13 @@ pnpm dev:insider-streams
 
 ### With CRE (automated settlement)
 
-The [prediction-market-demo](cre-workflows/prediction-market-demo/) CRE workflow listens for `SettlementRequested` events, queries Gemini AI, and settles the market on-chain automatically.
+The [reputation-score-manager](cre-workflows/reputation-score-manager/) CRE workflow listens for `SettlementRequested` events, queries Gemini AI, and settles the market on-chain automatically.
 
 ```bash
 # Install CRE CLI: https://docs.chain.link/cre/getting-started/cli-installation/macos-linux
 # Then simulate the workflow:
 cd cre-workflows
-cre workflow simulate prediction-market-demo --target local-simulation --broadcast
+cre workflow simulate reputation-score-manager --target local-simulation --broadcast
 ```
 
 See [CRE Workflows README](cre-workflows/README.md) for details.
@@ -60,11 +60,11 @@ forge script script/secret-marketplace/CreateAuction.s.sol --rpc-url $RPC_URL --
 
 ### Automatically (CRE workflow)
 
-The [auction-closer](cre-workflows/auction-closer/) CRE workflow runs on a 30-second cron, detects expired auctions, and closes them via signed report.
+The [secret-marketplace-auction-closer](cre-workflows/secret-marketplace-auction-closer/) CRE workflow runs on a 30-second cron, detects expired auctions, and closes them via signed report.
 
 ```bash
 cd cre-workflows
-cre workflow simulate auction-closer --target local-simulation --broadcast
+cre workflow simulate secret-marketplace-auction-closer --target local-simulation --broadcast
 ```
 
 ### Manually
@@ -111,13 +111,13 @@ pnpm wagmi
 
 ```bash
 # SecretMarketplace full lifecycle (TypeScript)
-pnpm e2e
+pnpm e2e:secret-marketplace
 
 # SimpleMarket + CRE settlement (bash)
-./scripts/simple-market-e2e.sh
+./scripts/e2e_tests/simple-market-e2e.sh
 
 # Auction-closer CRE workflow (bash)
-./scripts/auction-closer-e2e.sh
+./scripts/e2e_tests/secret-marketplace-auction-closer-e2e.sh
 ```
 
 ## Project Structure
@@ -130,8 +130,8 @@ private-streams/
 ├── packages/common/                 # Shared ABIs, types, contract addresses
 ├── contracts/                       # Foundry — Solidity contracts
 ├── cre-workflows/                   # CRE TypeScript workflows
-│   ├── prediction-market-demo/      # AI-powered market settlement
-│   └── auction-closer/              # Automated auction closing
+│   ├── reputation-score-manager/  # AI-powered market settlement
+│   └── secret-marketplace-auction-closer/      # Automated auction closing
 ├── subgraphs/secrets-marketplace/   # The Graph subgraph
 └── scripts/                         # E2E tests and utilities
 ```
