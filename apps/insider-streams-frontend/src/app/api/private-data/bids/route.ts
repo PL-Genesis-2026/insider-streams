@@ -3,7 +3,8 @@ import { z } from "zod";
 import { verifyPrivateDataRequest } from "@/lib/signed-request";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
 
-const auctionIdsSchema = z.array(z.string().min(1)).min(1).max(100);
+const MAX_AUCTION_IDS = 100;
+const auctionIdsSchema = z.array(z.string().min(1)).min(1).max(MAX_AUCTION_IDS);
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -51,7 +52,8 @@ export async function POST(request: Request) {
     );
   }
 
-  // For each auction, keep only the latest bid (first one since ordered DESC)
+  // Results are sorted by created_at DESC, so the first bid per auction is the
+  // latest. We deduplicate by keeping only the first occurrence for each auction_id.
   const latestBids: Record<
     string,
     {
