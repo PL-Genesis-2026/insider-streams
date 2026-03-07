@@ -8,7 +8,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 contract PlaceBid is Script {
     function run() external {
         address auctionAddress = vm.envAddress("SECRET_MARKETPLACE_ADDRESS");
-        address tokenAddress = vm.envAddress("MOCK_USDC_ADDRESS");
+        address tokenAddress = vm.envAddress("CONFIDENTIAL_USDC_ADDRESS");
         uint256 auctionId = vm.envUint("AUCTION_ID");
         uint256 bidAmount = vm.envUint("BID_AMOUNT");
         uint256 deployerPk = vm.envUint("PRIVATE_KEY");

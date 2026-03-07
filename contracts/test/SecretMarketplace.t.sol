@@ -3,13 +3,13 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import {SecretMarketplace} from "../src/SecretMarketplace.sol";
-import {MockUSDC} from "../src/mock/MockUSDC.sol";
+import {ConfidentialUSDC} from "../src/ConfidentialUSDC.sol";
 import {ExamplePredictionMarket} from "../src/ExamplePredictionMarket.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 
 contract SecretMarketplaceTest is Test {
     SecretMarketplace public sm;
-    MockUSDC public usdc;
+    ConfidentialUSDC public usdc;
     ExamplePredictionMarket public market;
 
     address owner = address(this);
@@ -22,7 +22,7 @@ contract SecretMarketplaceTest is Test {
     uint256 constant HIGHER_BID = 300e6;
 
     function setUp() public {
-        usdc = new MockUSDC(0);
+        usdc = new ConfidentialUSDC("USD Coin", "USDC", address(this));
         market = new ExamplePredictionMarket(address(usdc), forwarder);
         sm = new SecretMarketplace(address(usdc), address(market), forwarder);
 

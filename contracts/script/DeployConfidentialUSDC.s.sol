@@ -1,17 +1,18 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.26;
 
 import "forge-std/Script.sol";
-import {MockUSDC} from "../src/mock/MockUSDC.sol";
+import {ConfidentialUSDC} from "../src/ConfidentialUSDC.sol";
 
-contract DeployMockUSDC is Script {
+contract DeployConfidentialUSDC is Script {
     function run() external {
         uint256 deployerPk = vm.envUint("PRIVATE_KEY");
+        address deployer = vm.addr(deployerPk);
 
         vm.startBroadcast(deployerPk);
 
-        MockUSDC usdc = new MockUSDC(0);
-        console.log("MockUSDC deployed at:", address(usdc));
+        ConfidentialUSDC usdc = new ConfidentialUSDC("USD Coin", "USDC", deployer);
+        console.log("ConfidentialUSDC deployed at:", address(usdc));
 
         // Mint to owner and tester
         address owner = 0x6B789D957B87c12F30b48E9bFc58678c2f76f1c5;

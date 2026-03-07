@@ -1,7 +1,7 @@
-import { MOCK_USDC_DECIMALS } from "@private-streams/common";
-import { formatUnits } from "viem";
 import { graphqlClient } from "@/lib/graphql";
 import { getSecretByAuctionId, type JsonValue } from "@/lib/supabase/secrets";
+import { CONFIDENTIAL_USDC_DECIMALS } from "@private-streams/common";
+import { formatUnits } from "viem";
 import type { AuctionDetailSubgraphQuery } from "../__generated__/sdk";
 import { getSdk } from "../__generated__/sdk";
 
@@ -65,7 +65,7 @@ type AuctionDetailOptions = {
 };
 
 function bigintToUsdc(value: bigint) {
-  return Number(formatUnits(value, MOCK_USDC_DECIMALS));
+  return Number(formatUnits(value, CONFIDENTIAL_USDC_DECIMALS));
 }
 
 function scalarToBigInt(value: unknown) {
@@ -126,25 +126,42 @@ async function getSecretRecord(
       updatedAt: secret.updated_at,
     };
   } catch (error) {
-    console.error(`Failed to load Supabase secret for auction ${auctionId}`, error);
+    console.error(
+      `Failed to load Supabase secret for auction ${auctionId}`,
+      error,
+    );
     return undefined;
   }
 }
 
 function resolveSellerId(
-  createdAuction: AuctionDetailSubgraphQuery["createdAuction"][number] | undefined,
-  closedAuction: AuctionDetailSubgraphQuery["closedAuction"][number] | undefined,
-  forceClosedAuction: AuctionDetailSubgraphQuery["forceClosedAuction"][number] | undefined,
+  createdAuction:
+    | AuctionDetailSubgraphQuery["createdAuction"][number]
+    | undefined,
+  closedAuction:
+    | AuctionDetailSubgraphQuery["closedAuction"][number]
+    | undefined,
+  forceClosedAuction:
+    | AuctionDetailSubgraphQuery["forceClosedAuction"][number]
+    | undefined,
 ): string | undefined {
   const raw =
-    createdAuction?.sellerId ?? closedAuction?.sellerId ?? forceClosedAuction?.sellerId;
+    createdAuction?.sellerId ??
+    closedAuction?.sellerId ??
+    forceClosedAuction?.sellerId;
   return raw !== undefined ? String(raw) : undefined;
 }
 
 function resolveEventId(
-  createdAuction: AuctionDetailSubgraphQuery["createdAuction"][number] | undefined,
-  closedAuction: AuctionDetailSubgraphQuery["closedAuction"][number] | undefined,
-  forceClosedAuction: AuctionDetailSubgraphQuery["forceClosedAuction"][number] | undefined,
+  createdAuction:
+    | AuctionDetailSubgraphQuery["createdAuction"][number]
+    | undefined,
+  closedAuction:
+    | AuctionDetailSubgraphQuery["closedAuction"][number]
+    | undefined,
+  forceClosedAuction:
+    | AuctionDetailSubgraphQuery["forceClosedAuction"][number]
+    | undefined,
 ): string | undefined {
   const raw =
     createdAuction?.eventId ??
