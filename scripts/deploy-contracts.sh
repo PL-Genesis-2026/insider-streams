@@ -1,16 +1,25 @@
 #!/usr/bin/env bash
-# deploy-contracts.sh — Interactively deploy contracts and update hardcoded addresses
+# deploy-contracts.sh — Deploy contracts and update hardcoded addresses
 #
-# Prompts which contracts to redeploy (MockUSDC, ExamplePredictionMarket, SecretMarketplace),
-# deploys them via Foundry, then does a best-effort find-and-replace of the old
-# addresses across the codebase (source files, configs, scripts, .env files).
+# Deploys selected contracts via Foundry, then does a best-effort find-and-replace
+# of old addresses across the codebase (source files, configs, scripts, .env files).
 #
-# Usage: ./scripts/deploy-contracts.sh
+# Usage:
+#   ./scripts/deploy-contracts.sh                     # interactive — prompts for each contract
+#   ./scripts/deploy-contracts.sh --market            # non-interactive — deploy ExamplePredictionMarket only
+#   ./scripts/deploy-contracts.sh --usdc --market     # non-interactive — deploy MockUSDC + ExamplePredictionMarket
+#   ./scripts/deploy-contracts.sh --all               # non-interactive — deploy everything
+#
+# Flags:
+#   --usdc          Deploy MockUSDC
+#   --market        Deploy ExamplePredictionMarket
+#   --marketplace   Deploy SecretMarketplace
+#   --all           Deploy all three contracts
 #
 # Requires:
 #   - contracts/.env with PRIVATE_KEY and RPC_URL
-#   - For ExamplePredictionMarket: PAYMENT_TOKEN and CRE_FORWARDER_ADDRESS in contracts/.env
-#   - For SecretMarketplace: PAYMENT_TOKEN, SIMPLE_MARKET_ADDRESS, CRE_FORWARDER_ADDRESS in contracts/.env
+#   - For ExamplePredictionMarket: MOCK_USDC_ADDRESS and CRE_FORWARDER_ADDRESS in contracts/.env
+#   - For SecretMarketplace: MOCK_USDC_ADDRESS, EXAMPLE_PREDICTION_MARKET_ADDRESS, CRE_FORWARDER_ADDRESS in contracts/.env
 
 set -euo pipefail
 
@@ -23,6 +32,55 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
+
+# ─── Parse CLI flags ─────────────────────────────────────────────────────────
+
+CLI_MODE=false
+DEPLOY_USDC=false
+DEPLOY_MARKET=false
+DEPLOY_MARKETPLACE=false
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --usdc)
+      DEPLOY_USDC=true
+      CLI_MODE=true
+      shift
+      ;;
+    --market)
+      DEPLOY_MARKET=true
+      CLI_MODE=true
+      shift
+      ;;
+    --marketplace)
+      DEPLOY_MARKETPLACE=true
+      CLI_MODE=true
+      shift
+      ;;
+    --all)
+      DEPLOY_USDC=true
+      DEPLOY_MARKET=true
+      DEPLOY_MARKETPLACE=true
+      CLI_MODE=true
+      shift
+      ;;
+    -h|--help)
+      echo "Usage: $0 [--usdc] [--market] [--marketplace] [--all]"
+      echo ""
+      echo "  No flags  — interactive mode (prompts for each contract)"
+      echo "  --usdc         Deploy MockUSDC"
+      echo "  --market       Deploy ExamplePredictionMarket"
+      echo "  --marketplace  Deploy SecretMarketplace"
+      echo "  --all          Deploy all three contracts"
+      exit 0
+      ;;
+    *)
+      echo -e "${RED}Unknown flag: $1${NC}"
+      echo "Usage: $0 [--usdc] [--market] [--marketplace] [--all]"
+      exit 1
+      ;;
+  esac
+done
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -130,7 +188,7 @@ deploy_contract() {
 # Read from packages/common/src/index.ts (the canonical source).
 # Address may be on the same line or the next line, so grab both with -A1.
 CURRENT_MOCK_USDC=$(grep -A1 'MOCK_USDC_ADDRESS' "$ROOT_DIR/packages/common/src/index.ts" | grep -oE '0x[0-9a-fA-F]{40}')
-CURRENT_SIMPLE_MARKET=$(grep -A1 'SIMPLE_MARKET_ADDRESS' "$ROOT_DIR/packages/common/src/index.ts" | grep -oE '0x[0-9a-fA-F]{40}')
+CURRENT_PREDICTION_MARKET=$(grep -A1 'EXAMPLE_PREDICTION_MARKET_ADDRESS' "$ROOT_DIR/packages/common/src/index.ts" | grep -oE '0x[0-9a-fA-F]{40}')
 CURRENT_SECRET_MARKETPLACE=$(grep -A1 'SECRET_MARKETPLACE_ADDRESS' "$ROOT_DIR/packages/common/src/index.ts" | grep -oE '0x[0-9a-fA-F]{40}')
 
 # Also read from .env files — addresses there may differ from packages/common
@@ -142,7 +200,7 @@ read_env_addr() {
   fi
 }
 ALT_MOCK_USDC=$(read_env_addr "$ROOT_DIR/.env" "MOCK_USDC_ADDRESS")
-ALT_SIMPLE_MARKET=$(read_env_addr "$ROOT_DIR/.env" "SIMPLE_MARKET_ADDRESS")
+ALT_PREDICTION_MARKET=$(read_env_addr "$ROOT_DIR/.env" "EXAMPLE_PREDICTION_MARKET_ADDRESS")
 ALT_SECRET_MARKETPLACE=$(read_env_addr "$ROOT_DIR/.env" "SECRET_MARKETPLACE_ADDRESS")
 
 # Read RPC_URL from contracts/.env
@@ -157,28 +215,27 @@ echo "════════════════════════�
 echo ""
 echo "  Current addresses (from packages/common/src/index.ts):"
 echo "    MockUSDC:                  $CURRENT_MOCK_USDC"
-echo "    ExamplePredictionMarket:  $CURRENT_SIMPLE_MARKET"
+echo "    ExamplePredictionMarket:  $CURRENT_PREDICTION_MARKET"
 echo "    SecretMarketplace:        $CURRENT_SECRET_MARKETPLACE"
 echo ""
 echo "  RPC: $RPC_URL"
 
-# ─── Ask which contracts to deploy ───────────────────────────────────────────
-echo ""
-echo "  Which contracts do you want to redeploy?"
-echo ""
+# ─── Ask which contracts to deploy (interactive only) ─────────────────────
 
-DEPLOY_USDC=false
-DEPLOY_MARKET=false
-DEPLOY_MARKETPLACE=false
+if [ "$CLI_MODE" = false ]; then
+  echo ""
+  echo "  Which contracts do you want to redeploy?"
+  echo ""
 
-read -rp "  Deploy MockUSDC? [y/N]: " ans
-[[ "$ans" =~ ^[Yy]$ ]] && DEPLOY_USDC=true
+  read -rp "  Deploy MockUSDC? [y/N]: " ans
+  [[ "$ans" =~ ^[Yy]$ ]] && DEPLOY_USDC=true
 
-read -rp "  Deploy ExamplePredictionMarket? [y/N]: " ans
-[[ "$ans" =~ ^[Yy]$ ]] && DEPLOY_MARKET=true
+  read -rp "  Deploy ExamplePredictionMarket? [y/N]: " ans
+  [[ "$ans" =~ ^[Yy]$ ]] && DEPLOY_MARKET=true
 
-read -rp "  Deploy SecretMarketplace? [y/N]: " ans
-[[ "$ans" =~ ^[Yy]$ ]] && DEPLOY_MARKETPLACE=true
+  read -rp "  Deploy SecretMarketplace? [y/N]: " ans
+  [[ "$ans" =~ ^[Yy]$ ]] && DEPLOY_MARKETPLACE=true
+fi
 
 if [ "$DEPLOY_USDC" = false ] && [ "$DEPLOY_MARKET" = false ] && [ "$DEPLOY_MARKETPLACE" = false ]; then
   echo ""
@@ -186,48 +243,70 @@ if [ "$DEPLOY_USDC" = false ] && [ "$DEPLOY_MARKET" = false ] && [ "$DEPLOY_MARK
   exit 0
 fi
 
+echo ""
+echo "  Will deploy:"
+[ "$DEPLOY_USDC" = true ] && echo "    - MockUSDC"
+[ "$DEPLOY_MARKET" = true ] && echo "    - ExamplePredictionMarket"
+[ "$DEPLOY_MARKETPLACE" = true ] && echo "    - SecretMarketplace"
+
 # ─── Verify contracts/.env has required vars ─────────────────────────────────
 
 if [ "$DEPLOY_MARKET" = true ] || [ "$DEPLOY_MARKETPLACE" = true ]; then
-  if ! grep -q '^PAYMENT_TOKEN=' "$CONTRACTS_DIR/.env" 2>/dev/null; then
-    echo ""
-    echo -e "  ${YELLOW}PAYMENT_TOKEN not found in contracts/.env${NC}"
-    echo "  ExamplePredictionMarket and SecretMarketplace need this."
-    echo ""
-    if [ "$DEPLOY_USDC" = true ]; then
-      echo "  It will be set automatically after MockUSDC is deployed."
+  if ! grep -q '^MOCK_USDC_ADDRESS=' "$CONTRACTS_DIR/.env" 2>/dev/null; then
+    if [ "$CLI_MODE" = true ]; then
+      echo ""
+      echo -e "  ${CYAN}Adding MOCK_USDC_ADDRESS=$CURRENT_MOCK_USDC to contracts/.env${NC}"
+      echo "MOCK_USDC_ADDRESS=$CURRENT_MOCK_USDC" >> "$CONTRACTS_DIR/.env"
     else
-      echo "  Set it to the MockUSDC address: $CURRENT_MOCK_USDC"
-      read -rp "  Add PAYMENT_TOKEN=$CURRENT_MOCK_USDC to contracts/.env? [Y/n]: " ans
-      if [[ ! "$ans" =~ ^[Nn]$ ]]; then
-        echo "PAYMENT_TOKEN=$CURRENT_MOCK_USDC" >> "$CONTRACTS_DIR/.env"
-        echo "  Added."
+      echo ""
+      echo -e "  ${YELLOW}MOCK_USDC_ADDRESS not found in contracts/.env${NC}"
+      echo "  ExamplePredictionMarket and SecretMarketplace need this."
+      echo ""
+      if [ "$DEPLOY_USDC" = true ]; then
+        echo "  It will be set automatically after MockUSDC is deployed."
       else
-        echo "  Skipped. Deployment may fail without PAYMENT_TOKEN."
+        echo "  Set it to the MockUSDC address: $CURRENT_MOCK_USDC"
+        read -rp "  Add MOCK_USDC_ADDRESS=$CURRENT_MOCK_USDC to contracts/.env? [Y/n]: " ans
+        if [[ ! "$ans" =~ ^[Nn]$ ]]; then
+          echo "MOCK_USDC_ADDRESS=$CURRENT_MOCK_USDC" >> "$CONTRACTS_DIR/.env"
+          echo "  Added."
+        else
+          echo "  Skipped. Deployment may fail without MOCK_USDC_ADDRESS."
+        fi
       fi
     fi
   fi
 
   if ! grep -q '^CRE_FORWARDER_ADDRESS=' "$CONTRACTS_DIR/.env" 2>/dev/null; then
-    echo ""
-    echo -e "  ${YELLOW}CRE_FORWARDER_ADDRESS not found in contracts/.env${NC}"
     CRE_FORWARDER="0x15fc6ae953e024d975e77382eeec56a9101f9f88"
-    read -rp "  Add CRE_FORWARDER_ADDRESS=$CRE_FORWARDER to contracts/.env? [Y/n]: " ans
-    if [[ ! "$ans" =~ ^[Nn]$ ]]; then
+    if [ "$CLI_MODE" = true ]; then
+      echo -e "  ${CYAN}Adding CRE_FORWARDER_ADDRESS=$CRE_FORWARDER to contracts/.env${NC}"
       echo "CRE_FORWARDER_ADDRESS=$CRE_FORWARDER" >> "$CONTRACTS_DIR/.env"
-      echo "  Added."
+    else
+      echo ""
+      echo -e "  ${YELLOW}CRE_FORWARDER_ADDRESS not found in contracts/.env${NC}"
+      read -rp "  Add CRE_FORWARDER_ADDRESS=$CRE_FORWARDER to contracts/.env? [Y/n]: " ans
+      if [[ ! "$ans" =~ ^[Nn]$ ]]; then
+        echo "CRE_FORWARDER_ADDRESS=$CRE_FORWARDER" >> "$CONTRACTS_DIR/.env"
+        echo "  Added."
+      fi
     fi
   fi
 fi
 
 if [ "$DEPLOY_MARKETPLACE" = true ] && [ "$DEPLOY_MARKET" = false ]; then
-  if ! grep -q '^SIMPLE_MARKET_ADDRESS=' "$CONTRACTS_DIR/.env" 2>/dev/null; then
-    echo ""
-    echo -e "  ${YELLOW}SIMPLE_MARKET_ADDRESS not found in contracts/.env${NC}"
-    read -rp "  Add SIMPLE_MARKET_ADDRESS=$CURRENT_SIMPLE_MARKET to contracts/.env? [Y/n]: " ans
-    if [[ ! "$ans" =~ ^[Nn]$ ]]; then
-      echo "SIMPLE_MARKET_ADDRESS=$CURRENT_SIMPLE_MARKET" >> "$CONTRACTS_DIR/.env"
-      echo "  Added."
+  if ! grep -q '^EXAMPLE_PREDICTION_MARKET_ADDRESS=' "$CONTRACTS_DIR/.env" 2>/dev/null; then
+    if [ "$CLI_MODE" = true ]; then
+      echo -e "  ${CYAN}Adding EXAMPLE_PREDICTION_MARKET_ADDRESS=$CURRENT_PREDICTION_MARKET to contracts/.env${NC}"
+      echo "EXAMPLE_PREDICTION_MARKET_ADDRESS=$CURRENT_PREDICTION_MARKET" >> "$CONTRACTS_DIR/.env"
+    else
+      echo ""
+      echo -e "  ${YELLOW}EXAMPLE_PREDICTION_MARKET_ADDRESS not found in contracts/.env${NC}"
+      read -rp "  Add EXAMPLE_PREDICTION_MARKET_ADDRESS=$CURRENT_PREDICTION_MARKET to contracts/.env? [Y/n]: " ans
+      if [[ ! "$ans" =~ ^[Nn]$ ]]; then
+        echo "EXAMPLE_PREDICTION_MARKET_ADDRESS=$CURRENT_PREDICTION_MARKET" >> "$CONTRACTS_DIR/.env"
+        echo "  Added."
+      fi
     fi
   fi
 fi
@@ -247,15 +326,15 @@ NEW_MARKETPLACE=""
 if [ "$DEPLOY_USDC" = true ]; then
   NEW_USDC=$(deploy_contract "DeployMockUSDC.s.sol:DeployMockUSDC" "MockUSDC")
 
-  # Update PAYMENT_TOKEN in contracts/.env for subsequent deploys
+  # Update MOCK_USDC_ADDRESS in contracts/.env for subsequent deploys
   if [ "$DEPLOY_MARKET" = true ] || [ "$DEPLOY_MARKETPLACE" = true ]; then
-    if grep -q '^PAYMENT_TOKEN=' "$CONTRACTS_DIR/.env" 2>/dev/null; then
-      sed -i.bak "s|^PAYMENT_TOKEN=.*|PAYMENT_TOKEN=$NEW_USDC|" "$CONTRACTS_DIR/.env"
+    if grep -q '^MOCK_USDC_ADDRESS=' "$CONTRACTS_DIR/.env" 2>/dev/null; then
+      sed -i.bak "s|^MOCK_USDC_ADDRESS=.*|MOCK_USDC_ADDRESS=$NEW_USDC|" "$CONTRACTS_DIR/.env"
       rm -f "$CONTRACTS_DIR/.env.bak"
     else
-      echo "PAYMENT_TOKEN=$NEW_USDC" >> "$CONTRACTS_DIR/.env"
+      echo "MOCK_USDC_ADDRESS=$NEW_USDC" >> "$CONTRACTS_DIR/.env"
     fi
-    echo "  Updated PAYMENT_TOKEN in contracts/.env → $NEW_USDC"
+    echo "  Updated MOCK_USDC_ADDRESS in contracts/.env → $NEW_USDC"
   fi
 fi
 
@@ -263,15 +342,15 @@ fi
 if [ "$DEPLOY_MARKET" = true ]; then
   NEW_MARKET=$(deploy_contract "DeployExamplePredictionMarket.s.sol:DeployExamplePredictionMarket" "ExamplePredictionMarket")
 
-  # Update SIMPLE_MARKET_ADDRESS in contracts/.env for SecretMarketplace deploy
+  # Update EXAMPLE_PREDICTION_MARKET_ADDRESS in contracts/.env for SecretMarketplace deploy
   if [ "$DEPLOY_MARKETPLACE" = true ]; then
-    if grep -q '^SIMPLE_MARKET_ADDRESS=' "$CONTRACTS_DIR/.env" 2>/dev/null; then
-      sed -i.bak "s|^SIMPLE_MARKET_ADDRESS=.*|SIMPLE_MARKET_ADDRESS=$NEW_MARKET|" "$CONTRACTS_DIR/.env"
+    if grep -q '^EXAMPLE_PREDICTION_MARKET_ADDRESS=' "$CONTRACTS_DIR/.env" 2>/dev/null; then
+      sed -i.bak "s|^EXAMPLE_PREDICTION_MARKET_ADDRESS=.*|EXAMPLE_PREDICTION_MARKET_ADDRESS=$NEW_MARKET|" "$CONTRACTS_DIR/.env"
       rm -f "$CONTRACTS_DIR/.env.bak"
     else
-      echo "SIMPLE_MARKET_ADDRESS=$NEW_MARKET" >> "$CONTRACTS_DIR/.env"
+      echo "EXAMPLE_PREDICTION_MARKET_ADDRESS=$NEW_MARKET" >> "$CONTRACTS_DIR/.env"
     fi
-    echo "  Updated SIMPLE_MARKET_ADDRESS in contracts/.env → $NEW_MARKET"
+    echo "  Updated EXAMPLE_PREDICTION_MARKET_ADDRESS in contracts/.env → $NEW_MARKET"
   fi
 fi
 
@@ -296,9 +375,9 @@ if [ -n "$NEW_USDC" ]; then
 fi
 
 if [ -n "$NEW_MARKET" ]; then
-  replace_address "$CURRENT_SIMPLE_MARKET" "$NEW_MARKET" "ExamplePredictionMarket"
-  if [ -n "$ALT_SIMPLE_MARKET" ] && [ "$ALT_SIMPLE_MARKET" != "$CURRENT_SIMPLE_MARKET" ]; then
-    replace_address "$ALT_SIMPLE_MARKET" "$NEW_MARKET" "ExamplePredictionMarket (.env variant)"
+  replace_address "$CURRENT_PREDICTION_MARKET" "$NEW_MARKET" "ExamplePredictionMarket"
+  if [ -n "$ALT_PREDICTION_MARKET" ] && [ "$ALT_PREDICTION_MARKET" != "$CURRENT_PREDICTION_MARKET" ]; then
+    replace_address "$ALT_PREDICTION_MARKET" "$NEW_MARKET" "ExamplePredictionMarket (.env variant)"
   fi
 fi
 
@@ -352,14 +431,14 @@ fix_env_address() {
 
 # Determine the final expected addresses
 EXPECTED_USDC="${NEW_USDC:-$CURRENT_MOCK_USDC}"
-EXPECTED_MARKET="${NEW_MARKET:-$CURRENT_SIMPLE_MARKET}"
+EXPECTED_MARKET="${NEW_MARKET:-$CURRENT_PREDICTION_MARKET}"
 EXPECTED_MARKETPLACE="${NEW_MARKETPLACE:-$CURRENT_SECRET_MARKETPLACE}"
 
 fix_env_address "$ROOT_DIR/.env" "MOCK_USDC_ADDRESS" "$EXPECTED_USDC" "MockUSDC"
-fix_env_address "$ROOT_DIR/.env" "SIMPLE_MARKET_ADDRESS" "$EXPECTED_MARKET" "ExamplePredictionMarket"
+fix_env_address "$ROOT_DIR/.env" "EXAMPLE_PREDICTION_MARKET_ADDRESS" "$EXPECTED_MARKET" "ExamplePredictionMarket"
 fix_env_address "$ROOT_DIR/.env" "SECRET_MARKETPLACE_ADDRESS" "$EXPECTED_MARKETPLACE" "SecretMarketplace"
 fix_env_address "$ROOT_DIR/scripts/.env" "MOCK_USDC_ADDRESS" "$EXPECTED_USDC" "MockUSDC"
-fix_env_address "$ROOT_DIR/scripts/.env" "SIMPLE_MARKET_ADDRESS" "$EXPECTED_MARKET" "ExamplePredictionMarket"
+fix_env_address "$ROOT_DIR/scripts/.env" "EXAMPLE_PREDICTION_MARKET_ADDRESS" "$EXPECTED_MARKET" "ExamplePredictionMarket"
 fix_env_address "$ROOT_DIR/scripts/.env" "SECRET_MARKETPLACE_ADDRESS" "$EXPECTED_MARKETPLACE" "SecretMarketplace"
 
 # ─── Summary ─────────────────────────────────────────────────────────────────

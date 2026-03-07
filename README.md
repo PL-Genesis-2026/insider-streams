@@ -15,7 +15,7 @@ pnpm dev:insider-streams
 | Contract | Address |
 |----------|---------|
 | MockUSDC | `0x1B69F56bEC6978D0B62C3f5612019cC6b72D6F7f` |
-| SimpleMarket | `0xAE7167747c7f50ed26125c4fFa48DD7d4c18aF0d` |
+| ExamplePredictionMarket | `0xEb4b84ad88FD5822067c6939e48744af9d87FCBb` |
 | SecretMarketplace | `0x8221Ef6351c2CA9Ae3Ae65266076f3E14279F52a` |
 
 ## Create a Prediction Market
@@ -39,7 +39,7 @@ See [CRE Workflows README](cre-workflows/README.md) for details.
 cd contracts
 
 # Create a market
-SIMPLE_MARKET_ADDRESS=0xAE7167747c7f50ed26125c4fFa48DD7d4c18aF0d \
+EXAMPLE_PREDICTION_MARKET_ADDRESS=0xEb4b84ad88FD5822067c6939e48744af9d87FCBb \
 QUESTION="The New York Yankees won the 2009 World Series." \
 forge script script/CreateMarket.s.sol --rpc-url $RPC_URL --broadcast
 ```

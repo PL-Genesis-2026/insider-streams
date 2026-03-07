@@ -26,22 +26,23 @@ All scripts require `PRIVATE_KEY` and `RPC_URL` env vars. Run with `forge script
 | Script | Purpose | Extra env vars |
 |--------|---------|----------------|
 | `DeployMockUSDC.s.sol` | Deploy MockUSDC token | — |
-| `DeploySimpleMarket.s.sol` | Deploy SimpleMarket | `PAYMENT_TOKEN`, `CRE_FORWARDER_ADDRESS` |
-| `DeploySecretMarketplace.s.sol` | Deploy SecretMarketplace | `PAYMENT_TOKEN`, `SIMPLE_MARKET_ADDRESS`, `CRE_FORWARDER_ADDRESS` |
+| `DeployExamplePredictionMarket.s.sol` | Deploy ExamplePredictionMarket | `MOCK_USDC_ADDRESS`, `CRE_FORWARDER_ADDRESS` |
+| `DeploySecretMarketplace.s.sol` | Deploy SecretMarketplace | `MOCK_USDC_ADDRESS`, `EXAMPLE_PREDICTION_MARKET_ADDRESS`, `CRE_FORWARDER_ADDRESS` |
 | `DeployAll.s.sol` | Deploy everything | `CRE_FORWARDER_ADDRESS` |
 
-### SimpleMarket
+### ExamplePredictionMarket
 
 | Script | Purpose | Extra env vars |
 |--------|---------|----------------|
-| `CreateMarket.s.sol` | Create a new prediction market | `SIMPLE_MARKET_ADDRESS`, `QUESTION` |
+| `CreateEvent.s.sol` | Create a new prediction event | `EXAMPLE_PREDICTION_MARKET_ADDRESS`, `QUESTION` |
+| `ForceSettle.s.sol` | Force-settle an event (debug) | `EXAMPLE_PREDICTION_MARKET_ADDRESS`, `EVENT_ID`, `OUTCOME` |
 | `MintMockUSDC.s.sol` | Mint USDC to an address | `MOCK_USDC_ADDRESS` |
 
 ### SecretMarketplace (`script/secret-marketplace/`)
 
 | Script | Purpose | Extra env vars |
 |--------|---------|----------------|
-| `CreateAuction.s.sol` | Create an auction | `SECRET_MARKETPLACE_ADDRESS`, `EXTERNAL_MARKET_ID`, `RESERVE_PRICE`, `AUCTION_DURATION` |
+| `CreateAuction.s.sol` | Create an auction | `SECRET_MARKETPLACE_ADDRESS`, `EVENT_ID`, `SELLER_NAME`, `EVENT_TITLE`, `AUCTION_DURATION` |
 | `PlaceBid.s.sol` | Place a bid | `SECRET_MARKETPLACE_ADDRESS`, `MOCK_USDC_ADDRESS`, `AUCTION_ID`, `BID_AMOUNT` |
 | `CloseAuction.s.sol` | Close an expired auction | `SECRET_MARKETPLACE_ADDRESS`, `AUCTION_ID` |
 | `ForceCloseAuction.s.sol` | Force-close an auction | `SECRET_MARKETPLACE_ADDRESS`, `AUCTION_ID`, `REPUTATION_DELTA` |
