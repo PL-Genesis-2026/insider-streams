@@ -1,7 +1,4 @@
 import type { CodegenConfig } from "@graphql-codegen/cli";
-import { loadEnvConfig } from "@next/env";
-
-loadEnvConfig(process.cwd());
 
 // Codegen always uses the Studio URL (no auth required).
 // The gateway URL (NEXT_PUBLIC_SUBGRAPH_URL) is only for runtime queries.

@@ -10,13 +10,12 @@ import {
 import { useState } from "react";
 import { cookieToInitialState, WagmiProvider } from "wagmi";
 import { walletConfig } from "@/lib/wallet/config";
-
-const SUBGRAPH_PROXY_PATH = "/api/subgraph";
+import { SUBGRAPH_URL, SUBGRAPH_REQUEST_HEADERS } from "@/lib/subgraph-config";
 
 function makeClient() {
   return new ApolloClient({
     cache: new InMemoryCache(),
-    link: new HttpLink({ uri: SUBGRAPH_PROXY_PATH }),
+    link: new HttpLink({ uri: SUBGRAPH_URL, headers: SUBGRAPH_REQUEST_HEADERS }),
   });
 }
 
