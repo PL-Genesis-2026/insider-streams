@@ -46,7 +46,15 @@ export type Database = {
           updated_at?: string
           won_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "pb_auction_id_fk"
+            columns: ["auction_id"]
+            isOneToOne: false
+            referencedRelation: "secrets"
+            referencedColumns: ["auction_id"]
+          },
+        ]
       }
       secrets: {
         Row: {
@@ -54,7 +62,6 @@ export type Database = {
           buyer: string | null
           created_at: string
           event_data: Json | null
-          id: string
           secret_data: string
           seller_id: string
           updated_at: string
@@ -64,7 +71,6 @@ export type Database = {
           buyer?: string | null
           created_at?: string
           event_data?: Json | null
-          id?: string
           secret_data: string
           seller_id: string
           updated_at?: string
@@ -74,7 +80,6 @@ export type Database = {
           buyer?: string | null
           created_at?: string
           event_data?: Json | null
-          id?: string
           secret_data?: string
           seller_id?: string
           updated_at?: string
@@ -165,6 +170,7 @@ export type Database = {
           available_balance: string | null
           locked_balance: string | null
           pending_withdrawal: string | null
+          total_from_won_bids: string | null
           user_address: string | null
         }
         Relationships: []

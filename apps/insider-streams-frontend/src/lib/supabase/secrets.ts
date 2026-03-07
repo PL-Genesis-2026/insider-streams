@@ -20,7 +20,6 @@ const eventDataSchema = z.object({
 });
 
 const secretRowSchema = z.object({
-  id: z.union([z.string(), z.number().int()]),
   auction_id: z.string(),
   secret_data: z.string(),
   event_data: eventDataSchema.nullable(),
@@ -54,7 +53,7 @@ export async function listSecrets() {
   const { data, error } = await supabase
     .from("secrets")
     .select(
-      "id, auction_id, secret_data, event_data, seller_id, buyer, created_at, updated_at",
+      "auction_id, secret_data, event_data, seller_id, buyer, created_at, updated_at",
     )
     .order("created_at", { ascending: false });
 
@@ -70,7 +69,7 @@ export async function getSecretByAuctionId(auctionId: string) {
   const { data, error } = await supabase
     .from("secrets")
     .select(
-      "id, auction_id, secret_data, event_data, seller_id, buyer, created_at, updated_at",
+      "auction_id, secret_data, event_data, seller_id, buyer, created_at, updated_at",
     )
     .eq("auction_id", auctionId)
     .maybeSingle();
@@ -93,7 +92,7 @@ export async function getSecretsByAuctionIds(auctionIds: string[]) {
   const { data, error } = await supabase
     .from("secrets")
     .select(
-      "id, auction_id, secret_data, event_data, seller_id, buyer, created_at, updated_at",
+      "auction_id, secret_data, event_data, seller_id, buyer, created_at, updated_at",
     )
     .in("auction_id", auctionIds);
 

@@ -40,6 +40,7 @@ const balanceSchema = z.object({
   available_balance: z.string().nullable(),
   locked_balance: z.string().nullable(),
   pending_withdrawal: z.string().nullable(),
+  total_from_won_bids: z.string().nullable(),
   user_address: z.string().nullable(),
 });
 

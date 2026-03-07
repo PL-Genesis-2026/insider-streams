@@ -19,6 +19,7 @@ const evmConfigSchema = z.object({
 });
 
 export const configSchema = z.object({
+  supabaseUrl: z.string().startsWith("https://"),
   evms: z.array(evmConfigSchema).min(1, "At least one EVM config is required"),
 });
 
