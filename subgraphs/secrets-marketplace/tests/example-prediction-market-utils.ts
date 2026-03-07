@@ -1,14 +1,8 @@
 import { newMockEvent } from "matchstick-as"
-import { ethereum, BigInt, Address, Bytes } from "@graphprotocol/graph-ts"
+import { ethereum, BigInt, Address } from "@graphprotocol/graph-ts"
 import {
   EventCreated,
-  ExpectedAuthorUpdated,
-  ExpectedWorkflowIdUpdated,
-  ExpectedWorkflowNameUpdated,
-  ForwarderAddressUpdated,
   LiquidityWithdrawn,
-  OwnershipTransferred,
-  SecurityWarning,
   SettlementRequested,
   SettlementResponse,
   SharesPurchased,
@@ -69,97 +63,6 @@ export function createEventCreatedEvent(
   return eventCreatedEvent
 }
 
-export function createExpectedAuthorUpdatedEvent(
-  previousAuthor: Address,
-  newAuthor: Address
-): ExpectedAuthorUpdated {
-  let expectedAuthorUpdatedEvent =
-    changetype<ExpectedAuthorUpdated>(newMockEvent())
-
-  expectedAuthorUpdatedEvent.parameters = new Array()
-
-  expectedAuthorUpdatedEvent.parameters.push(
-    new ethereum.EventParam(
-      "previousAuthor",
-      ethereum.Value.fromAddress(previousAuthor)
-    )
-  )
-  expectedAuthorUpdatedEvent.parameters.push(
-    new ethereum.EventParam("newAuthor", ethereum.Value.fromAddress(newAuthor))
-  )
-
-  return expectedAuthorUpdatedEvent
-}
-
-export function createExpectedWorkflowIdUpdatedEvent(
-  previousId: Bytes,
-  newId: Bytes
-): ExpectedWorkflowIdUpdated {
-  let expectedWorkflowIdUpdatedEvent =
-    changetype<ExpectedWorkflowIdUpdated>(newMockEvent())
-
-  expectedWorkflowIdUpdatedEvent.parameters = new Array()
-
-  expectedWorkflowIdUpdatedEvent.parameters.push(
-    new ethereum.EventParam(
-      "previousId",
-      ethereum.Value.fromFixedBytes(previousId)
-    )
-  )
-  expectedWorkflowIdUpdatedEvent.parameters.push(
-    new ethereum.EventParam("newId", ethereum.Value.fromFixedBytes(newId))
-  )
-
-  return expectedWorkflowIdUpdatedEvent
-}
-
-export function createExpectedWorkflowNameUpdatedEvent(
-  previousName: Bytes,
-  newName: Bytes
-): ExpectedWorkflowNameUpdated {
-  let expectedWorkflowNameUpdatedEvent =
-    changetype<ExpectedWorkflowNameUpdated>(newMockEvent())
-
-  expectedWorkflowNameUpdatedEvent.parameters = new Array()
-
-  expectedWorkflowNameUpdatedEvent.parameters.push(
-    new ethereum.EventParam(
-      "previousName",
-      ethereum.Value.fromFixedBytes(previousName)
-    )
-  )
-  expectedWorkflowNameUpdatedEvent.parameters.push(
-    new ethereum.EventParam("newName", ethereum.Value.fromFixedBytes(newName))
-  )
-
-  return expectedWorkflowNameUpdatedEvent
-}
-
-export function createForwarderAddressUpdatedEvent(
-  previousForwarder: Address,
-  newForwarder: Address
-): ForwarderAddressUpdated {
-  let forwarderAddressUpdatedEvent =
-    changetype<ForwarderAddressUpdated>(newMockEvent())
-
-  forwarderAddressUpdatedEvent.parameters = new Array()
-
-  forwarderAddressUpdatedEvent.parameters.push(
-    new ethereum.EventParam(
-      "previousForwarder",
-      ethereum.Value.fromAddress(previousForwarder)
-    )
-  )
-  forwarderAddressUpdatedEvent.parameters.push(
-    new ethereum.EventParam(
-      "newForwarder",
-      ethereum.Value.fromAddress(newForwarder)
-    )
-  )
-
-  return forwarderAddressUpdatedEvent
-}
-
 export function createLiquidityWithdrawnEvent(
   eventId: BigInt,
   creator: Address,
@@ -186,40 +89,6 @@ export function createLiquidityWithdrawnEvent(
   )
 
   return liquidityWithdrawnEvent
-}
-
-export function createOwnershipTransferredEvent(
-  previousOwner: Address,
-  newOwner: Address
-): OwnershipTransferred {
-  let ownershipTransferredEvent =
-    changetype<OwnershipTransferred>(newMockEvent())
-
-  ownershipTransferredEvent.parameters = new Array()
-
-  ownershipTransferredEvent.parameters.push(
-    new ethereum.EventParam(
-      "previousOwner",
-      ethereum.Value.fromAddress(previousOwner)
-    )
-  )
-  ownershipTransferredEvent.parameters.push(
-    new ethereum.EventParam("newOwner", ethereum.Value.fromAddress(newOwner))
-  )
-
-  return ownershipTransferredEvent
-}
-
-export function createSecurityWarningEvent(message: string): SecurityWarning {
-  let securityWarningEvent = changetype<SecurityWarning>(newMockEvent())
-
-  securityWarningEvent.parameters = new Array()
-
-  securityWarningEvent.parameters.push(
-    new ethereum.EventParam("message", ethereum.Value.fromString(message))
-  )
-
-  return securityWarningEvent
 }
 
 export function createSettlementRequestedEvent(

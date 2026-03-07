@@ -4,6 +4,7 @@ import { graphqlClient } from "@/lib/graphql";
 import type { AuctionCardData } from "@/components/auction-card";
 import type { EventData } from "@/lib/supabase/secrets";
 import { getSecretsByAuctionIds } from "@/lib/supabase/secrets";
+import { getSupabaseServiceClient } from "@/lib/supabase/server";
 import type { SellerDetailQuery } from "../__generated__/sdk";
 import { getSdk } from "../__generated__/sdk";
 
@@ -82,7 +83,8 @@ export async function getSellerDetail(
 
   let secretMap = new Map<string, { event_data: EventData | null }>();
   try {
-    const secrets = await getSecretsByAuctionIds(auctionIds);
+    const client = getSupabaseServiceClient();
+    const secrets = await getSecretsByAuctionIds(auctionIds, client);
     secretMap = new Map(secrets.map((r) => [r.auction_id, r]));
   } catch (error) {
     console.error(

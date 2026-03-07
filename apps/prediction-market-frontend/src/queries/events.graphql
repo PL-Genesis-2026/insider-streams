@@ -1,0 +1,56 @@
+query PredictionEvents($limit: Int!, $skip: Int!) {
+  eventCreateds(
+    first: $limit
+    skip: $skip
+    orderBy: blockTimestamp
+    orderDirection: desc
+  ) {
+    id
+    eventId
+    creator
+    question
+    eventOpen
+    eventClose
+    duration
+    yesToken
+    noToken
+    blockTimestamp
+    transactionHash
+  }
+  settlementResponses(first: 1000, orderBy: blockTimestamp, orderDirection: desc) {
+    eventId
+    status
+    outcome
+    blockTimestamp
+    transactionHash
+  }
+}
+
+query EventDetail($eventId: BigInt!) {
+  eventCreateds(first: 1, where: { eventId: $eventId }) {
+    id
+    eventId
+    creator
+    question
+    eventOpen
+    eventClose
+    duration
+    yesToken
+    noToken
+    blockTimestamp
+    transactionHash
+  }
+  settlementResponses(first: 1, where: { eventId: $eventId }) {
+    eventId
+    status
+    outcome
+    blockTimestamp
+    transactionHash
+  }
+  settlementRequesteds(first: 1, where: { eventId: $eventId }) {
+    eventId
+    question
+    blockTimestamp
+    transactionHash
+  }
+}

@@ -8,7 +8,6 @@ import { HomepageAuctionsDocument } from "@/__generated__/graphql";
 import type { AuctionCardData } from "@/components/auction-card";
 import { AuctionCard } from "@/components/auction-card";
 import type { EventData } from "@/lib/supabase/secrets";
-import { getSecretsByAuctionIds } from "@/lib/supabase/secrets";
 import { Badge } from "@/components/ui/badge";
 import {
   Pagination,
@@ -63,9 +62,11 @@ export function AuctionList({ className }: AuctionListProps) {
 
     const auctionIds = auctionIdKey.split(",");
 
-    getSecretsByAuctionIds(auctionIds)
-      .then((rows) => {
-        setSecrets(new Map(rows.map((r) => [r.auction_id, r])));
+    fetch(`/api/secrets?ids=${encodeURIComponent(auctionIdKey)}`)
+      .then((res) => res.json())
+      .then((json) => {
+        const rows = json.data ?? [];
+        setSecrets(new Map(rows.map((r: { auction_id: string; event_data: EventData | null }) => [r.auction_id, r])));
       })
       .catch((err) => {
         console.error("Failed to load secrets for auctions", err);

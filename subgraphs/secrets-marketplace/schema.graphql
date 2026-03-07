@@ -175,3 +175,69 @@ type Auction @entity(immutable: false) {
   blockTimestamp: BigInt!
   transactionHash: Bytes!
 }
+type EventCreated @entity(immutable: true) {
+  id: Bytes!
+  eventId: BigInt! # uint256
+  creator: Bytes! # address
+  question: String! # string
+  eventOpen: BigInt! # uint256
+  eventClose: BigInt! # uint256
+  duration: BigInt! # uint256
+  yesToken: Bytes! # address
+  noToken: Bytes! # address
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type LiquidityWithdrawn @entity(immutable: true) {
+  id: Bytes!
+  eventId: BigInt! # uint256
+  creator: Bytes! # address
+  usdcOut: BigInt! # uint256
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type SettlementRequested @entity(immutable: true) {
+  id: Bytes!
+  eventId: BigInt! # uint256
+  question: String! # string
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type SettlementResponse @entity(immutable: true) {
+  id: Bytes!
+  eventId: BigInt! # uint256
+  status: Int! # uint8
+  outcome: Int! # uint8
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type SharesPurchased @entity(immutable: true) {
+  id: Bytes!
+  eventId: BigInt! # uint256
+  buyer: Bytes! # address
+  outcome: Int! # uint8
+  usdcIn: BigInt! # uint256
+  sharesOut: BigInt! # uint256
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type SharesRedeemed @entity(immutable: true) {
+  id: Bytes!
+  eventId: BigInt! # uint256
+  redeemer: Bytes! # address
+  sharesIn: BigInt! # uint256
+  usdcOut: BigInt! # uint256
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
