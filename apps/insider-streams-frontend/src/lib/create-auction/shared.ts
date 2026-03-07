@@ -1,0 +1,80 @@
+import { z } from "zod";
+
+export const CREATE_AUCTION_EIP712_DOMAIN = {
+  name: "InsiderStreams",
+  version: "1",
+  chainId: 11155111,
+} as const;
+
+export const CREATE_AUCTION_EIP712_TYPES = {
+  CreateAuction: [
+    { name: "eventId", type: "string" },
+    { name: "privateLeg", type: "string" },
+    { name: "duration", type: "string" },
+    { name: "timestamp", type: "uint256" },
+  ],
+} as const;
+
+export const CREATE_AUCTION_DURATIONS = ["6h", "12h", "24h", "48h"] as const;
+
+export type CreateAuctionDuration = (typeof CREATE_AUCTION_DURATIONS)[number];
+
+export const CREATE_AUCTION_DURATION_SECONDS: Record<
+  CreateAuctionDuration,
+  number
+> = {
+  "6h": 6 * 3600,
+  "12h": 12 * 3600,
+  "24h": 24 * 3600,
+  "48h": 48 * 3600,
+};
+
+const nonNegativeIntegerString = z
+  .string()
+  .min(1, "eventId is required")
+  .refine((value) => {
+    try {
+      return BigInt(value) >= BigInt(0);
+    } catch {
+      return false;
+    }
+  }, "eventId must be a non-negative integer string");
+
+export const createAuctionInputSchema = z.object({
+  eventId: nonNegativeIntegerString,
+  privateLeg: z.enum(["yes", "no"], "privateLeg must be yes or no"),
+  secretPayload: z.string().trim().min(1, "secretPayload is required"),
+  duration: z.enum(
+    CREATE_AUCTION_DURATIONS,
+    "duration must be 6h, 12h, 24h, or 48h",
+  ),
+});
+
+export const createAuctionRequestSchema = createAuctionInputSchema.extend({
+  timestamp: z.number().int("timestamp must be an integer"),
+  signature: z
+    .string()
+    .regex(/^0x[a-fA-F0-9]+$/, "signature must be a hex string"),
+});
+
+export type CreateAuctionInput = z.infer<typeof createAuctionInputSchema>;
+export type CreateAuctionRequest = z.infer<typeof createAuctionRequestSchema>;
+
+export type CreateAuctionSuccessResponse = {
+  success: true;
+  auctionId: string;
+  sellerId: string;
+  txHash: `0x${string}`;
+};
+
+export type CreateAuctionErrorResponse = {
+  success?: false;
+  error: string;
+  code: string;
+  auctionId?: string;
+  txHash?: `0x${string}`;
+};
+
+export type CreateAuctionResponse =
+  | CreateAuctionSuccessResponse
+  | CreateAuctionErrorResponse;

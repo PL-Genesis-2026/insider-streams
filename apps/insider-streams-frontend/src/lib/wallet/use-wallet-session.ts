@@ -1,7 +1,9 @@
 "use client";
 
+import { useAppKitAccount } from "@reown/appkit/react";
+import { useMemo } from "react";
 import { useAccount } from "wagmi";
-import type { Address } from "viem";
+import { getAddress, isAddress, type Address } from "viem";
 import { requiredChain } from "./config";
 
 export type WalletSession = {
@@ -16,16 +18,36 @@ export type WalletSession = {
 };
 
 export function useWalletSession(): WalletSession {
-  const { address, chain, chainId, connector, isConnected } = useAccount();
+  const appKitAccount = useAppKitAccount({ namespace: "eip155" });
+  const wagmiAccount = useAccount();
 
-  return {
-    address,
-    currentChainId: chainId,
-    currentChainName: chain?.name,
-    connectorName: connector?.name,
-    isConnected,
-    isSupportedChain: chainId === undefined || chainId === requiredChain.id,
-    requiredChainId: requiredChain.id,
-    requiredChainName: requiredChain.name,
-  };
+  return useMemo(() => {
+    const appKitAddress = appKitAccount.address;
+    const resolvedAddress =
+      appKitAddress && isAddress(appKitAddress)
+        ? getAddress(appKitAddress)
+        : wagmiAccount.address;
+    const isConnected = appKitAccount.isConnected || wagmiAccount.isConnected;
+    const currentChainId = wagmiAccount.chainId;
+
+    return {
+      address: resolvedAddress,
+      currentChainId,
+      currentChainName: wagmiAccount.chain?.name,
+      connectorName: wagmiAccount.connector?.name,
+      isConnected,
+      isSupportedChain:
+        currentChainId === undefined || currentChainId === requiredChain.id,
+      requiredChainId: requiredChain.id,
+      requiredChainName: requiredChain.name,
+    };
+  }, [
+    appKitAccount.address,
+    appKitAccount.isConnected,
+    wagmiAccount.address,
+    wagmiAccount.chain?.name,
+    wagmiAccount.chainId,
+    wagmiAccount.connector?.name,
+    wagmiAccount.isConnected,
+  ]);
 }

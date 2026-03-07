@@ -12,6 +12,12 @@ export function AppNavbar() {
         </Link>
         <div className="flex items-center gap-6">
           <Link
+            href="/create"
+            className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground transition-colors duration-100 ease-out hover:text-foreground"
+          >
+            Sell
+          </Link>
+          <Link
             href="/#auctions"
             className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground transition-colors duration-100 ease-out hover:text-foreground"
           >
