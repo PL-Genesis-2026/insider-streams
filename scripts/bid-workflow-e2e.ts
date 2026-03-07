@@ -418,6 +418,12 @@ async function main() {
     assert(auctionData.status === 0, `Expected status=0 (Open), got ${auctionData.status}`);
     console.log(`  ok currentBid=0, status=Open`);
 
+
+    // Pre-clean any stale private_bids rows — this auction AND any lingering active bids for our
+    // test addresses (from failed prior runs on other auctions) so locked_balance starts at 0.
+    await supabase.from("private_bids").delete().eq("auction_id", auctionId.toString());
+    await supabase.from("private_bids").delete().eq("bidder_address", ownerAddr).eq("status", "active");
+    await supabase.from("private_bids").delete().eq("bidder_address", bidderAddr).eq("status", "active");
     // ── Step 7: Bid 1 (1 USDC) from bidder 1 (owner) ──────────────────────────
     step("Bid 1 (1 USDC) from bidder 1 (owner)...");
 
