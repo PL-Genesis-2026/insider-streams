@@ -66,5 +66,6 @@ export async function POST(request: Request) {
     );
   }
 
+  if (result.warning) console.error("[bid] DB write failed after on-chain success:", result.warning);
   return NextResponse.json({ success: true, bidId: result.bidId, txHash: result.txHash });
 }

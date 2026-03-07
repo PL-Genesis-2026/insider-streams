@@ -24,6 +24,8 @@ export interface BidSuccess {
   ok: true;
   bidId: string;
   txHash: Hex;
+  /** Set when the on-chain tx succeeded but a subsequent DB write failed. */
+  warning?: string;
 }
 
 export interface BidFailure {
@@ -59,8 +61,9 @@ export async function executeBid(
   const { bidderAddr, auctionId, amount } = params;
   const bidAmount = BigInt(amount);
 
-  // 1. Check auction exists and is open
+  // 1. Check auction exists and is open; capture currentBid as source of truth
   let auctionStatus: number;
+  let contractCurrentBid: bigint;
   try {
     const auctionData = await publicClient.readContract({
       address: marketplaceAddress,
@@ -77,6 +80,7 @@ export async function executeBid(
       };
     }
     auctionStatus = auctionData.status;
+    contractCurrentBid = auctionData.currentBid;
   } catch {
     return {
       ok: false,
@@ -95,7 +99,17 @@ export async function executeBid(
     };
   }
 
-  // 2. Check Supabase balance
+  // 2. Check bid amount against contract's currentBid (source of truth)
+  if (bidAmount <= contractCurrentBid) {
+    return {
+      ok: false,
+      status: 400,
+      error: "Bid must be strictly greater than current bid",
+      code: "BID_TOO_LOW",
+    };
+  }
+
+  // 3. Check Supabase balance
   const { data: balanceRow, error: balError } = await supabase
     .from("balances")
     .select("*")
@@ -121,7 +135,7 @@ export async function executeBid(
     };
   }
 
-  // 3. Check existing active bid
+  // 4. Fetch the active Supabase bid row — needed to mark as outbid and check ALREADY_HIGHEST
   const { data: activeBids, error: activeBidError } = await supabase
     .from("private_bids")
     .select("*")
@@ -139,23 +153,13 @@ export async function executeBid(
 
   const activeBid = activeBids && activeBids.length > 0 ? activeBids[0] : null;
 
-  if (activeBid) {
-    if (activeBid.bidder_address === bidderAddr) {
-      return {
-        ok: false,
-        status: 400,
-        error: "Already the highest bidder",
-        code: "ALREADY_HIGHEST",
-      };
-    }
-    if (bidAmount <= BigInt(activeBid.amount)) {
-      return {
-        ok: false,
-        status: 400,
-        error: "Bid must be strictly greater than current bid",
-        code: "BID_TOO_LOW",
-      };
-    }
+  if (activeBid?.bidder_address === bidderAddr) {
+    return {
+      ok: false,
+      status: 400,
+      error: "Already the highest bidder",
+      code: "ALREADY_HIGHEST",
+    };
   }
 
   // 4. Submit placeBid on-chain (admin wallet, bidder identity tracked in DB only)
@@ -200,12 +204,13 @@ export async function executeBid(
       .single();
 
     if (insertError || !newBid) {
-      // On-chain tx succeeded — return success even if DB write partially failed
-      return { ok: true, bidId: "unknown", txHash };
+      // On-chain tx succeeded — bid is placed. Surface the DB error so callers can alert/retry.
+      return { ok: true, bidId: "unknown", txHash, warning: `DB insert failed: ${insertError?.message ?? "no data returned"}` };
     }
 
     return { ok: true, bidId: newBid.id, txHash };
-  } catch {
-    return { ok: true, bidId: "unknown", txHash };
+  } catch (dbErr) {
+    const message = dbErr instanceof Error ? dbErr.message : String(dbErr);
+    return { ok: true, bidId: "unknown", txHash, warning: `DB write failed: ${message}` };
   }
 }
