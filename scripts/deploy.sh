@@ -342,7 +342,7 @@ else
     set -euo pipefail
     export NVM_DIR=\"\$HOME/.nvm\" && [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\"; export PATH=\"\$HOME/.cre/bin:\$HOME/.foundry/bin:\$HOME/.bun/bin:\$HOME/.local/bin:\$PATH\"
     cd \"$REPO_PATH/scripts\"
-    npx tsx --env-file=.env e2e_tests/secret-marketplace-auction-closer-e2e.ts 2>&1
+    pnpm e2e:secret-marketplace-auction-closer 2>&1
   '" 2>&1) || true
 
   if echo "$AUCTION_OUTPUT" | grep -q "PASS"; then
@@ -362,7 +362,7 @@ else
     set -euo pipefail
     export NVM_DIR=\"\$HOME/.nvm\" && [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\"; export PATH=\"\$HOME/.cre/bin:\$HOME/.foundry/bin:\$HOME/.bun/bin:\$HOME/.local/bin:\$PATH\"
     cd \"$REPO_PATH/scripts\"
-    npx tsx --env-file=.env e2e_tests/simple-market-e2e.ts 2>&1
+    pnpm e2e:reputation-score-manager 2>&1
   '" 2>&1) || true
 
   if echo "$MARKET_OUTPUT" | grep -q "PASS"; then
@@ -383,7 +383,7 @@ else
     set -euo pipefail
     export NVM_DIR=\"\$HOME/.nvm\" && [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\"; export PATH=\"\$HOME/.cre/bin:\$HOME/.foundry/bin:\$HOME/.bun/bin:\$HOME/.local/bin:\$PATH\"
     cd \"$REPO_PATH/scripts\"
-    npx tsx --env-file=.env e2e_tests/user-balance-recording-fallback-e2e.ts 2>&1
+    pnpm e2e:user-balance-recording-fallback 2>&1
   '" 2>&1) || DEPOSIT_EXIT=$?
 
   if [ "$DEPOSIT_EXIT" -eq 0 ] && echo "$DEPOSIT_OUTPUT" | grep -qi "PASSED\|PASS"; then
