@@ -10,11 +10,11 @@ export const SUBGRAPH_REQUEST_HEADERS: Record<string, string> = (() => {
     return headers;
   }
 
-  const apiKey = env.THE_GRAPH_API_KEY;
+  const apiKey = env.NEXT_PUBLIC_SUBGRAPH_API_KEY;
 
   if (!apiKey) {
     throw new Error(
-      "THE_GRAPH_API_KEY is required when NEXT_PUBLIC_SUBGRAPH_URL points to The Graph gateway.",
+      "NEXT_PUBLIC_SUBGRAPH_API_KEY is required when NEXT_PUBLIC_SUBGRAPH_URL points to The Graph gateway.",
     );
   }
 

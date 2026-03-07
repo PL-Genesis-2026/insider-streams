@@ -10,8 +10,8 @@ query HomepageAuctionLists(
     where: { endTime_gt: $currentTimestamp }
   ) {
     auctionId
-    seller
-    externalMarketId
+    sellerId
+    eventId
     endTime
   }
   closedAuctions: auctionCloseds(
@@ -20,9 +20,9 @@ query HomepageAuctionLists(
     orderDirection: desc
   ) {
     auctionId
-    seller
+    sellerId
     winningBid
-    externalMarketId
+    eventId
   }
 }
 

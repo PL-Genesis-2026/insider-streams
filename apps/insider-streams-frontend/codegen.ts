@@ -4,27 +4,21 @@ import { loadEnvConfig } from "@next/env";
 loadEnvConfig(process.cwd());
 
 const subgraphUrl = process.env.NEXT_PUBLIC_SUBGRAPH_URL;
-const usesGraphGateway =
-  subgraphUrl?.includes("gateway.thegraph.com/api/subgraphs/id/") ?? false;
-
 if (!subgraphUrl) {
   throw new Error("NEXT_PUBLIC_SUBGRAPH_URL is required for GraphQL codegen.");
 }
 
-const schema =
-  usesGraphGateway && process.env.THE_GRAPH_API_KEY
-    ? ["http://127.0.0.1:3001/api/subgraph"]
-    : process.env.THE_GRAPH_API_KEY
-      ? [
-          {
-            [subgraphUrl]: {
-              headers: {
-                Authorization: `Bearer ${process.env.THE_GRAPH_API_KEY}`,
-              },
-            },
+const schema = process.env.NEXT_PUBLIC_SUBGRAPH_API_KEY
+  ? [
+      {
+        [subgraphUrl]: {
+          headers: {
+            Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUBGRAPH_API_KEY}`,
           },
-        ]
-      : [subgraphUrl];
+        },
+      },
+    ]
+  : [subgraphUrl];
 
 const sharedConfig = {
   scalars: {
