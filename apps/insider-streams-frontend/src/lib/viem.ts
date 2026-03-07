@@ -1,28 +1,23 @@
+import "server-only";
+
 import { createPublicClient, createWalletClient, http, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
+import { env } from "@/env";
 
 function _makePublicClient() {
-  const rpcUrl = process.env.RPC_URL;
-  if (!rpcUrl) {
-    throw new Error("Missing RPC_URL environment variable");
-  }
-  return createPublicClient({ chain: sepolia, transport: http(rpcUrl) });
+  return createPublicClient({ chain: sepolia, transport: http(env.RPC_URL) });
 }
 
 function _makeAdminWalletClient() {
-  const ownerPk = process.env.OWNER_PK;
+  const ownerPk = env.OWNER_PK;
   if (!ownerPk) {
     throw new Error("Missing OWNER_PK environment variable");
-  }
-  const rpcUrl = process.env.RPC_URL;
-  if (!rpcUrl) {
-    throw new Error("Missing RPC_URL environment variable");
   }
   return createWalletClient({
     account: privateKeyToAccount(ownerPk as Hex),
     chain: sepolia,
-    transport: http(rpcUrl),
+    transport: http(env.RPC_URL),
   });
 }
 
