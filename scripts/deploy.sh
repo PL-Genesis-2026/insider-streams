@@ -104,7 +104,7 @@ do_rollback() {
     pnpm install --frozen-lockfile 2>/dev/null || pnpm install
   " >/dev/null 2>&1
 
-  for workflow in reputation-score-manager secret-marketplace-auction-closer user-balance-recording-fallback reputation-resolver force-close-handler; do
+  for workflow in external-prediction-market-settler secret-marketplace-auction-closer user-balance-recording-fallback reputation-resolver force-close-handler; do
     if ssh "$REMOTE_HOST" "[ -d '$REPO_PATH/cre-workflows/$workflow' ]"; then
       remote_exec "cd cre-workflows/$workflow && bun install" >/dev/null 2>&1
     fi
@@ -317,7 +317,7 @@ success "pnpm dependencies installed"
 
 # Install CRE workflow dependencies (bun)
 info "  Installing CRE workflow dependencies..."
-for workflow in reputation-score-manager secret-marketplace-auction-closer user-balance-recording-fallback reputation-resolver force-close-handler; do
+for workflow in external-prediction-market-settler secret-marketplace-auction-closer user-balance-recording-fallback reputation-resolver force-close-handler; do
   if ssh "$REMOTE_HOST" "[ -d '$REPO_PATH/cre-workflows/$workflow' ]"; then
     remote_exec "cd cre-workflows/$workflow && bun install" >/dev/null 2>&1
     success "$workflow — bun install"
@@ -385,7 +385,7 @@ else
     set -euo pipefail
     export NVM_DIR=\"\$HOME/.nvm\" && [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\"; export PATH=\"\$HOME/.cre/bin:\$HOME/.foundry/bin:\$HOME/.bun/bin:\$HOME/.local/bin:\$PATH\"
     cd \"$REPO_PATH/scripts\"
-    pnpm e2e:reputation-score-manager 2>&1
+    pnpm e2e:external-prediction-market-settler 2>&1
   '" 2>&1) || true
 
   if echo "$MARKET_OUTPUT" | grep -q "PASS"; then

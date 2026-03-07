@@ -16,4 +16,5 @@ contracts/lib/
 .turbo/
 .cre_build_tmp.js
 .claude/settings.local.json
+.watcher-state.json
 Untitled

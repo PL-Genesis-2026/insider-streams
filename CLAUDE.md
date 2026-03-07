@@ -14,7 +14,7 @@ private-streams/
 │   └── chainlink-private-token-api-client/  # Typed API client for Compliant Private Token API
 ├── contracts/                       # Foundry — ConfidentialUSDC + ExamplePredictionMarket + SecretMarketplace
 ├── cre-workflows/                   # CRE TypeScript workflows (Bun-managed)
-│   ├── reputation-score-manager/      # Gemini AI settlement workflow
+│   ├── external-prediction-market-settler/      # Gemini AI settlement workflow
 │   ├── secret-marketplace-auction-closer/             # Cron-based auction closer workflow
 │   ├── reputation-resolver/       # Cron-based per-auction reputation resolution workflow
 │   ├── force-close-handler/       # Log-triggered bid refund on AuctionForceClosed
@@ -28,6 +28,14 @@ private-streams/
 │   │   ├── reputation-resolver-e2e.ts   # Reputation resolver CRE workflow E2E
 │   │   ├── force-close-handler-e2e.ts   # Force close handler CRE workflow E2E
 │   │   └── user-balance-recording-fallback-e2e.ts    # Deposit reconciler workflow E2E
+│   ├── event-watcher/               # Long-running event watcher (systemd service)
+│   │   ├── index.ts                 # Entry point — polls chain, triggers CRE workflows
+│   │   ├── force-close-watcher.ts   # AuctionForceClosed log polling
+│   │   ├── settlement-watcher.ts    # SettlementRequested log polling
+│   │   ├── auction-expiry-watcher.ts # Expired auction contract polling
+│   │   ├── cre-runner.ts            # Shared runCRE helper
+│   │   ├── state.ts                 # Block state persistence
+│   │   └── event-watcher.service    # systemd unit file
 │   ├── generate-contract-types.sh   # Compile contracts + regenerate types/ABIs
 │   ├── generate-supabase-types.sh   # Regenerate Supabase TypeScript types
 │   ├── deploy-contracts.sh          # Interactive contract deploy + address replacement
@@ -110,11 +118,11 @@ pnpm test:contracts     # forge test --via-ir --skip SetupAll DeployPolicyEngine
 
 ```bash
 # From cre-workflows/ directory
-cre workflow simulate reputation-score-manager --target local-simulation
-cre workflow simulate reputation-score-manager --target local-simulation --broadcast
+cre workflow simulate external-prediction-market-settler --target local-simulation
+cre workflow simulate external-prediction-market-settler --target local-simulation --broadcast
 
 # Prediction Market (non-interactive, for scripts)
-cre workflow simulate reputation-score-manager --target local-simulation \
+cre workflow simulate external-prediction-market-settler --target local-simulation \
   --evm-tx-hash <TX_HASH> --evm-event-index 0 --non-interactive --trigger-index 0
 
 # Auction Closer (cron-triggered, non-interactive)
@@ -133,13 +141,28 @@ cre workflow simulate force-close-handler --target local-simulation --non-intera
 cre workflow simulate user-balance-recording-fallback --target local-simulation --non-interactive --trigger-index 0
 ```
 
+### Event Watcher
+
+Long-running process that polls the chain and triggers CRE workflows on events:
+
+```bash
+pnpm watch    # from scripts/ — starts the event watcher
+```
+
+Watches for:
+- `AuctionForceClosed` events → triggers `force-close-handler`
+- `SettlementRequested` events → triggers `external-prediction-market-settler`
+- Expired auctions (via `getOpenAuctions()`) → triggers `secret-marketplace-auction-closer`
+
+Deployed as a systemd service (`event-watcher.service`) on the remote server.
+
 ### E2E Tests
 
 All E2E scripts are TypeScript and run via `tsx` with `--env-file=.env` from the `scripts/` directory.
 
 ```bash
 pnpm e2e:secret-marketplace                      # SecretMarketplace full event lifecycle
-pnpm e2e:reputation-score-manager                # ExamplePredictionMarket + CRE settlement lifecycle
+pnpm e2e:external-prediction-market-settler                # ExamplePredictionMarket + CRE settlement lifecycle
 pnpm e2e:secret-marketplace-auction-closer       # Auction create → bid → expire → CRE close
 pnpm e2e:reputation                              # Reputation resolver — per-auction reputation after event settlement
 pnpm e2e:force-close                             # Force close handler — bid refund on AuctionForceClosed
@@ -268,7 +291,7 @@ The deploy script replaces addresses automatically, but you should verify no sta
 | `cre-workflows/secret-marketplace-auction-closer/config.json`         | `secretMarketplaceAddress`           |
 | `cre-workflows/reputation-resolver/config.json`    | `secretMarketplaceAddress`, `examplePredictionMarketAddress` |
 | `cre-workflows/force-close-handler/config.json`    | `secretMarketplaceAddress`           |
-| `cre-workflows/reputation-score-manager/config.json` | `simpleMarketAddress`                |
+| `cre-workflows/external-prediction-market-settler/config.json` | `simpleMarketAddress`                |
 | `cre-workflows/user-balance-recording-fallback/config.json`     | `tokenAddress`, `platformEoaAddress` |
 
 After updating CRE workflow configs, the workflow must be redeployed and tested live.
@@ -359,6 +382,7 @@ After deploying, follow the full procedure in **"After a Contract Deployment"** 
 - **Force-close-handler CRE workflow** is log-triggered on `AuctionForceClosed` events. When an auction is force-closed, it finds active private bids in Supabase for that auction and refunds them (sets `status="refunded"`, `refunded_at=now`). Uses 2 HTTP calls (Supabase GET + PATCH). No on-chain writes.
 - **User-balance-recording-fallback CRE workflow** runs on a 60-second cron, polls the Private Token API for transfers to/from the platform EOA, and records them as deposits or withdrawals in the Supabase `transfers` table
 - `resolveExternalEvent(eventId, AuctionResult[])` accepts per-auction correctness results — each `AuctionResult` has `{auctionId, predictionCorrect}`. Replaces the old blanket `int8 delta` approach. Auctions not in the results array are marked as resolved with 0 delta.
+- **Event watcher** (`scripts/event-watcher/`) is a long-running Node.js process that polls the chain every 15s for `AuctionForceClosed` and `SettlementRequested` events, and every 30s for expired auctions. It triggers the appropriate CRE workflows via `cre workflow simulate`. Deployed as a systemd service on the remote server. Persists last-processed block to `.watcher-state.json`.
 - CRE CLI installed at `~/.cre/bin/cre` (add to PATH: `export PATH="$HOME/.cre/bin:$PATH"`)
 
 ## Reference Docs
