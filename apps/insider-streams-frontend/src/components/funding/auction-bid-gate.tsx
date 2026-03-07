@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
+  Gavel,
   RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,6 +15,7 @@ import { ConnectWalletButton } from "@/components/wallet/connect-wallet-button";
 import { SwitchNetworkButton } from "@/components/wallet/switch-network-button";
 import { getFundingStatusCopy } from "@/lib/funding/get-funding-snapshot";
 import { useFundingSnapshot } from "@/lib/funding/use-funding-snapshot";
+import { BidModal } from "@/components/funding/bid-modal";
 
 function Label({ children }: { children: React.ReactNode }) {
   return (
@@ -22,7 +25,13 @@ function Label({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function AuctionBidGate() {
+interface AuctionBidGateProps {
+  auctionId: string;
+  currentBidUsdc?: number;
+}
+
+export function AuctionBidGate({ auctionId, currentBidUsdc }: AuctionBidGateProps) {
+  const [modalOpen, setModalOpen] = useState(false);
   const fundingSnapshot = useFundingSnapshot();
   const statusCopy = getFundingStatusCopy(fundingSnapshot.status);
   const fundingErrorMessage =
@@ -131,10 +140,18 @@ export function AuctionBidGate() {
 
         {fundingSnapshot.status === "funded" ||
         fundingSnapshot.status === "withdrawal_available" ? (
-          <div className="rounded-lg border border-accent/30 bg-accent/8 px-4 py-3 text-sm text-muted-foreground">
-            Funding is recognized. The future bid composer can plug into this
-            slot without reworking the auction page layout.
-          </div>
+          <>
+            <Button onClick={() => setModalOpen(true)} className="w-full">
+              Place Bid <Gavel className="size-4" />
+            </Button>
+            <BidModal
+              open={modalOpen}
+              onOpenChange={setModalOpen}
+              auctionId={auctionId}
+              currentBidUsdc={currentBidUsdc}
+              availableBalance={fundingSnapshot.balance?.available_balance ?? null}
+            />
+          </>
         ) : null}
         {reconcileErrorMessage ? (
           <p className="text-xs leading-6 text-destructive">

@@ -364,7 +364,7 @@ export default async function AuctionDetailPage({
           <aside className="flex flex-col gap-6 lg:sticky lg:top-8 lg:self-start">
             <Card className="border-border/90 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_96%,transparent),color-mix(in_srgb,var(--secondary)_28%,transparent))]">
               {isOpen ? (
-                <AuctionBidGate />
+                <AuctionBidGate auctionId={auction.auctionId} currentBidUsdc={auction.currentBidUsdc} />
               ) : (
                 <>
                   <CardHeader className="gap-5 pb-0">
