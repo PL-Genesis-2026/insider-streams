@@ -39,7 +39,7 @@ export type Auction = {
   scoreChange?: Maybe<Scalars['Int']['output']>;
   seller: Seller;
   sellerId: Scalars['String']['output'];
-  status: Scalars['String']['output'];
+  status: AuctionStatus;
   transactionHash: Scalars['Bytes']['output'];
 };
 
@@ -401,6 +401,11 @@ export type AuctionCreated_OrderBy =
   | 'sellerId'
   | 'transactionHash';
 
+export type AuctionStatus =
+  | 'Cancelled'
+  | 'Closed'
+  | 'Open';
+
 export type Auction_Filter = {
   /** Filter for the block changed event. */
   _change_block?: InputMaybe<BlockChangedFilter>;
@@ -552,26 +557,10 @@ export type Auction_Filter = {
   seller_not_starts_with_nocase?: InputMaybe<Scalars['String']['input']>;
   seller_starts_with?: InputMaybe<Scalars['String']['input']>;
   seller_starts_with_nocase?: InputMaybe<Scalars['String']['input']>;
-  status?: InputMaybe<Scalars['String']['input']>;
-  status_contains?: InputMaybe<Scalars['String']['input']>;
-  status_contains_nocase?: InputMaybe<Scalars['String']['input']>;
-  status_ends_with?: InputMaybe<Scalars['String']['input']>;
-  status_ends_with_nocase?: InputMaybe<Scalars['String']['input']>;
-  status_gt?: InputMaybe<Scalars['String']['input']>;
-  status_gte?: InputMaybe<Scalars['String']['input']>;
-  status_in?: InputMaybe<Array<Scalars['String']['input']>>;
-  status_lt?: InputMaybe<Scalars['String']['input']>;
-  status_lte?: InputMaybe<Scalars['String']['input']>;
-  status_not?: InputMaybe<Scalars['String']['input']>;
-  status_not_contains?: InputMaybe<Scalars['String']['input']>;
-  status_not_contains_nocase?: InputMaybe<Scalars['String']['input']>;
-  status_not_ends_with?: InputMaybe<Scalars['String']['input']>;
-  status_not_ends_with_nocase?: InputMaybe<Scalars['String']['input']>;
-  status_not_in?: InputMaybe<Array<Scalars['String']['input']>>;
-  status_not_starts_with?: InputMaybe<Scalars['String']['input']>;
-  status_not_starts_with_nocase?: InputMaybe<Scalars['String']['input']>;
-  status_starts_with?: InputMaybe<Scalars['String']['input']>;
-  status_starts_with_nocase?: InputMaybe<Scalars['String']['input']>;
+  status?: InputMaybe<AuctionStatus>;
+  status_in?: InputMaybe<Array<AuctionStatus>>;
+  status_not?: InputMaybe<AuctionStatus>;
+  status_not_in?: InputMaybe<Array<AuctionStatus>>;
   transactionHash?: InputMaybe<Scalars['Bytes']['input']>;
   transactionHash_contains?: InputMaybe<Scalars['Bytes']['input']>;
   transactionHash_gt?: InputMaybe<Scalars['Bytes']['input']>;
