@@ -21,6 +21,7 @@ import {
   CardHeader,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { AuctionBidGate } from "@/components/funding/auction-bid-gate";
 import {
   getAuctionDetail,
   type AuctionDetailBid,
@@ -68,6 +69,14 @@ function formatSignedNumber(value: number) {
   return value > 0 ? `+${value}` : String(value);
 }
 
+function formatOutcome(value: "yes" | "no" | undefined) {
+  if (!value) {
+    return undefined;
+  }
+
+  return value === "yes" ? "Yes" : "No";
+}
+
 function shortHash(hash: string) {
   if (hash.length <= 14) {
     return hash;
@@ -83,7 +92,7 @@ function buildTimeline(auction: AuctionDetailData) {
     timeline.push({
       type: "created",
       label: "Auction created",
-      detail: `Seller: ${auction.sellerId}`,
+      detail: `Seller: ${auction.sellerAddress}`,
       timestamp: auction.createdAt,
     });
   }
@@ -110,7 +119,7 @@ function buildTimeline(auction: AuctionDetailData) {
     timeline.push({
       type: "closed",
       label: "Auction force closed",
-      detail: `Held amount: ${formatCurrency(auction.forceClosedAuction.heldAmountUsdc)}`,
+      detail: `Refunded amount: ${formatCurrency(auction.forceClosedAuction.refundedAmountUsdc)}`,
       timestamp: auction.forceClosedAuction.timestamp,
     });
   }
@@ -297,9 +306,12 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
             <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.24em] text-accent">
               <span>Auction #{auction.auctionId}</span>
               <span className="text-muted-foreground/40">/</span>
-              <span>Event #{auction.eventId}</span>
+              <span>{auction.marketplace ?? `Market #${auction.marketId}`}</span>
             </div>
             <Badge variant={statusVariant}>{auction.status}</Badge>
+            {formatOutcome(auction.outcome) ? (
+              <Badge variant="outline">{formatOutcome(auction.outcome)}</Badge>
+            ) : null}
             {auction.endTime ? (
               <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
                 <Clock className="size-3.5" />
@@ -309,7 +321,7 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
           </div>
 
           <h1 className="max-w-4xl font-serif text-[3.4rem] leading-[0.88] font-medium tracking-[-0.055em] text-foreground sm:text-[4.6rem]">
-            {auction.eventTitle ?? `Auction #${auction.auctionId}`}
+            {auction.title ?? `Auction #${auction.auctionId}`}
           </h1>
         </header>
 
@@ -376,30 +388,30 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
 
           <aside className="flex flex-col gap-6 lg:sticky lg:top-8 lg:self-start">
             <Card className="border-border/90 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_96%,transparent),color-mix(in_srgb,var(--secondary)_28%,transparent))]">
-              <CardHeader className="gap-5 pb-0">
-                <Label>Current bid</Label>
-                <div className="space-y-2">
-                  <p className="font-serif text-[3.2rem] leading-none font-medium tracking-[-0.06em] text-foreground">
-                    {auction.currentBidUsdc === undefined
-                      ? "No bids yet"
-                      : formatCurrency(auction.currentBidUsdc)}
-                  </p>
-                </div>
-              </CardHeader>
+              {isOpen ? (
+                <AuctionBidGate />
+              ) : (
+                <>
+                  <CardHeader className="gap-5 pb-0">
+                    <Label>Current bid</Label>
+                    <div className="space-y-2">
+                      <p className="font-serif text-[3.2rem] leading-none font-medium tracking-[-0.06em] text-foreground">
+                        {auction.currentBidUsdc === undefined
+                          ? "No bids yet"
+                          : formatCurrency(auction.currentBidUsdc)}
+                      </p>
+                    </div>
+                  </CardHeader>
 
-              <CardContent>
-                <Separator className="mb-5" />
-                {isOpen ? (
-                  <Button className="w-full" size="lg" disabled>
-                    TODO: Place bid
-                  </Button>
-                ) : (
-                  <div className="flex items-center justify-center gap-2 rounded-lg border border-border/50 bg-muted/30 px-4 py-3 text-sm font-medium text-muted-foreground">
-                    <ShieldCheck className="size-4 text-accent/70" />
-                    Auction {auction.status.toLowerCase()}
-                  </div>
-                )}
-              </CardContent>
+                  <CardContent>
+                    <Separator className="mb-5" />
+                    <div className="flex items-center justify-center gap-2 rounded-lg border border-border/50 bg-muted/30 px-4 py-3 text-sm font-medium text-muted-foreground">
+                      <ShieldCheck className="size-4 text-accent/70" />
+                      Auction {auction.status.toLowerCase()}
+                    </div>
+                  </CardContent>
+                </>
+              )}
             </Card>
 
             <Card className="border-border/70 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_98%,transparent),color-mix(in_srgb,var(--secondary)_18%,transparent))]">
@@ -410,7 +422,7 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
                     <User className="size-4" />
                   </div>
                   <p className="min-w-0 truncate text-sm font-medium text-foreground">
-                    {auction.sellerId}
+                    {auction.sellerAddress}
                   </p>
                 </div>
               </CardHeader>
@@ -427,8 +439,8 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
                     <p className="font-mono text-sm text-foreground">#{auction.auctionId}</p>
                   </div>
                   <div className="space-y-1">
-                    <span className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground/60">Event ID</span>
-                    <p className="font-mono text-sm text-foreground">{auction.eventId}</p>
+                    <span className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground/60">Market ID</span>
+                    <p className="font-mono text-sm text-foreground">{auction.marketId}</p>
                   </div>
                 </div>
 

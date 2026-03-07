@@ -10,7 +10,7 @@ import type {
   WithdrawRequest,
   WithdrawResponse,
   ShieldedAddressResponse,
-} from "./types.js";
+} from "./types";
 
 const DEFAULT_BASE_URL = "https://convergence2026-token-api.cldev.cloud";
 

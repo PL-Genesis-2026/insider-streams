@@ -9,40 +9,27 @@ query HomepageAuctionLists(
     orderDirection: asc
     where: { endTime_gt: $currentTimestamp }
   ) {
-    id
     auctionId
-    sellerId
-    eventId
-    eventTitle
+    seller
+    externalMarketId
     endTime
-    blockTimestamp
-    transactionHash
   }
   closedAuctions: auctionCloseds(
     first: $closedLimit
     orderBy: blockTimestamp
     orderDirection: desc
   ) {
-    id
     auctionId
-    sellerId
+    seller
     winningBid
-    eventId
-    blockTimestamp
-    transactionHash
+    externalMarketId
   }
 }
 
 query HomepageClosedAuctionReferences($auctionIds: [BigInt!]) {
   referenceAuctions: auctionCreateds(where: { auctionId_in: $auctionIds }) {
-    id
     auctionId
-    sellerId
-    eventId
-    eventTitle
     endTime
-    blockTimestamp
-    transactionHash
   }
 }
 
@@ -53,8 +40,6 @@ query HomepageLatestBid($auctionId: BigInt!) {
     orderDirection: desc
     where: { auctionId: $auctionId }
   ) {
-    id
-    auctionId
     bidAmount
   }
 }

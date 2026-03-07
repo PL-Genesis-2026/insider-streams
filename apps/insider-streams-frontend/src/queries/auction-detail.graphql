@@ -6,9 +6,8 @@ query AuctionDetailSubgraph($auctionId: BigInt!, $bidLimit: Int!) {
     where: { auctionId: $auctionId }
   ) {
     auctionId
-    sellerId
-    eventId
-    eventTitle
+    seller
+    externalMarketId
     endTime
     blockTimestamp
   }
@@ -29,9 +28,9 @@ query AuctionDetailSubgraph($auctionId: BigInt!, $bidLimit: Int!) {
     orderDirection: desc
     where: { auctionId: $auctionId }
   ) {
-    sellerId
+    seller
     winningBid
-    eventId
+    externalMarketId
     blockTimestamp
   }
   forceClosedAuction: auctionForceCloseds(
@@ -40,9 +39,9 @@ query AuctionDetailSubgraph($auctionId: BigInt!, $bidLimit: Int!) {
     orderDirection: desc
     where: { auctionId: $auctionId }
   ) {
-    sellerId
-    heldAmount
-    eventId
+    seller
+    refundAmount
+    externalMarketId
     reputationDelta
     blockTimestamp
   }
@@ -51,7 +50,7 @@ query AuctionDetailSubgraph($auctionId: BigInt!, $bidLimit: Int!) {
     orderDirection: desc
     where: { auctionId: $auctionId }
   ) {
-    reputationDelta
+    delta
     newScore
     blockTimestamp
   }
