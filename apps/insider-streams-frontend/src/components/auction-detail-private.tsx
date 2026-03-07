@@ -12,11 +12,12 @@ export function AuctionDetailPrivate({
   auctionId,
   children,
 }: AuctionDetailPrivateProps) {
-  const { registerVisibleAuctions } = usePrivateData();
+  const { registerVisibleAuctions, unregisterVisibleAuctions } = usePrivateData();
 
   useEffect(() => {
     registerVisibleAuctions("auction-detail", [auctionId]);
-  }, [auctionId, registerVisibleAuctions]);
+    return () => unregisterVisibleAuctions("auction-detail");
+  }, [auctionId, registerVisibleAuctions, unregisterVisibleAuctions]);
 
   return <>{children}</>;
 }

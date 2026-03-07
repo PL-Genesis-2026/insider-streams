@@ -31,7 +31,7 @@ type AuctionFilterMode = "auto" | "open" | "all";
 export function AuctionList({ className }: AuctionListProps) {
   const [page, setPage] = useState(0);
   const [filterMode, setFilterMode] = useState<AuctionFilterMode>("auto");
-  const { seller, getBid, registerVisibleAuctions } = usePrivateData();
+  const { seller, getBid, registerVisibleAuctions, unregisterVisibleAuctions } = usePrivateData();
 
   const openAuctionsQuery = useQuery(HomepageAuctionsDocument, {
     variables: {
@@ -95,7 +95,8 @@ export function AuctionList({ className }: AuctionListProps) {
   useEffect(() => {
     const auctionIds = cards.map((c) => c.auctionId);
     registerVisibleAuctions("homepage", auctionIds);
-  }, [cards, registerVisibleAuctions]);
+    return () => unregisterVisibleAuctions("homepage");
+  }, [cards, registerVisibleAuctions, unregisterVisibleAuctions]);
 
   const handlePrevious = useCallback(
     (e: React.MouseEvent) => {
