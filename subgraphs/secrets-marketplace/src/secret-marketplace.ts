@@ -6,13 +6,13 @@ import {
   ExpectedAuthorUpdated as ExpectedAuthorUpdatedEvent,
   ExpectedWorkflowIdUpdated as ExpectedWorkflowIdUpdatedEvent,
   ExpectedWorkflowNameUpdated as ExpectedWorkflowNameUpdatedEvent,
-  ExternalMarketResolved as ExternalMarketResolvedEvent,
+  ExternalEventResolved as ExternalEventResolvedEvent,
   ForwarderAddressUpdated as ForwarderAddressUpdatedEvent,
   OwnershipTransferred as OwnershipTransferredEvent,
   ReputationUpdated as ReputationUpdatedEvent,
   SecurityWarning as SecurityWarningEvent,
   SellerRegistered as SellerRegisteredEvent,
-  SimpleMarketUpdated as SimpleMarketUpdatedEvent
+  MarketplaceUpdated as MarketplaceUpdatedEvent
 } from "../generated/SecretMarketplace/SecretMarketplace"
 import {
   AuctionClosed,
@@ -22,13 +22,13 @@ import {
   ExpectedAuthorUpdated,
   ExpectedWorkflowIdUpdated,
   ExpectedWorkflowNameUpdated,
-  ExternalMarketResolved,
+  ExternalEventResolved,
   ForwarderAddressUpdated,
   OwnershipTransferred,
   ReputationUpdated,
   SecurityWarning,
   SellerRegistered,
-  SimpleMarketUpdated
+  MarketplaceUpdated
 } from "../generated/schema"
 
 export function handleAuctionClosed(event: AuctionClosedEvent): void {
@@ -144,13 +144,13 @@ export function handleExpectedWorkflowNameUpdated(
   entity.save()
 }
 
-export function handleExternalMarketResolved(
-  event: ExternalMarketResolvedEvent
+export function handleExternalEventResolved(
+  event: ExternalEventResolvedEvent
 ): void {
-  let entity = new ExternalMarketResolved(
+  let entity = new ExternalEventResolved(
     event.transaction.hash.concatI32(event.logIndex.toI32())
   )
-  entity.externalMarketId = event.params.externalMarketId
+  entity.externalEventId = event.params.externalEventId
   entity.reputationDelta = event.params.delta
   entity.auctionsAffected = event.params.auctionsAffected
 
@@ -235,12 +235,12 @@ export function handleSellerRegistered(event: SellerRegisteredEvent): void {
   entity.save()
 }
 
-export function handleSimpleMarketUpdated(event: SimpleMarketUpdatedEvent): void {
-  let entity = new SimpleMarketUpdated(
+export function handleMarketplaceUpdated(event: MarketplaceUpdatedEvent): void {
+  let entity = new MarketplaceUpdated(
     event.transaction.hash.concatI32(event.logIndex.toI32())
   )
-  entity.previousMarket = event.params.previousMarket
-  entity.newMarket = event.params.newMarket
+  entity.previousMarketplace = event.params.previousMarketplace
+  entity.newMarketplace = event.params.newMarketplace
 
   entity.blockNumber = event.block.number
   entity.blockTimestamp = event.block.timestamp
