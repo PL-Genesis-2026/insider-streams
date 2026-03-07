@@ -1,11 +1,15 @@
 /**
- * Event Watcher — long-running process that polls the chain and triggers
- * CRE workflows when relevant events occur.
+ * Event Watcher — long-running process that subscribes to on-chain events
+ * via WebSocket and triggers CRE workflows in real-time.
  *
  * Watchers:
- *   1. force-close:    AuctionForceClosed events → force-close-handler CRE
- *   2. settlement:     SettlementRequested events → external-prediction-market-settler CRE
- *   3. auction-expiry: getOpenAuctions() polling  → secret-marketplace-auction-closer CRE
+ *   1. force-close:    AuctionForceClosed events → force-close-handler CRE  (WebSocket)
+ *   2. settlement:     SettlementRequested events → external-prediction-market-settler CRE  (WebSocket)
+ *   3. auction-expiry: getOpenAuctions() polling  → secret-marketplace-auction-closer CRE  (HTTP poll)
+ *
+ * On startup, catches up from lastProcessedBlock using getLogs (HTTP), then
+ * switches to real-time WebSocket subscriptions. The auction-expiry watcher
+ * always uses HTTP polling since there's no event to subscribe to.
  *
  * Usage: pnpm watch   (or: npx tsx event-watcher/index.ts)
  *
@@ -13,19 +17,18 @@
  */
 
 import "dotenv/config";
-import { createPublicClient, http } from "viem";
+import { createPublicClient, http, webSocket } from "viem";
 import { sepolia } from "viem/chains";
 import { loadState, saveState } from "./state.js";
-import { pollForceCloseEvents } from "./force-close-watcher.js";
-import { pollSettlementEvents } from "./settlement-watcher.js";
+import { catchUpForceClose, watchForceClose } from "./force-close-watcher.js";
+import { catchUpSettlement, watchSettlement } from "./settlement-watcher.js";
 import { pollExpiredAuctions } from "./auction-expiry-watcher.js";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
-const RPC_URL = process.env.RPC_URL ?? "https://ethereum-sepolia-rpc.publicnode.com";
-const LOG_POLL_INTERVAL_MS = 15_000;   // 15s for log-based watchers
+const HTTP_RPC_URL = process.env.RPC_URL ?? "https://ethereum-sepolia-rpc.publicnode.com";
+const WS_RPC_URL = HTTP_RPC_URL.replace("https://", "wss://").replace("http://", "ws://");
 const EXPIRY_POLL_INTERVAL_MS = 30_000; // 30s for auction expiry checks
-const CONFIRMATION_BLOCKS = 2n;         // wait 2 blocks for finality
 
 // ─── Logging ─────────────────────────────────────────────────────────────────
 
@@ -36,57 +39,56 @@ export function log(watcher: string, msg: string): void {
 
 // ─── Main ────────────────────────────────────────────────────────────────────
 
-const publicClient = createPublicClient({
+const httpClient = createPublicClient({
   chain: sepolia,
-  transport: http(RPC_URL),
+  transport: http(HTTP_RPC_URL),
 });
 
-let lastProcessedBlock: bigint;
-let logPollTimer: ReturnType<typeof setInterval>;
+const wsClient = createPublicClient({
+  chain: sepolia,
+  transport: webSocket(WS_RPC_URL, { retryCount: 10, retryDelay: 5_000 }),
+});
+
 let expiryPollTimer: ReturnType<typeof setInterval>;
+let unwatchForceClose: (() => void) | undefined;
+let unwatchSettlement: (() => void) | undefined;
 let shuttingDown = false;
 
-async function init(): Promise<void> {
+async function catchUp(): Promise<void> {
   const state = loadState();
+  const latestBlock = await httpClient.getBlockNumber();
+
   if (state) {
-    lastProcessedBlock = BigInt(state.lastProcessedBlock);
-    log("main", `Resuming from block ${lastProcessedBlock} (state file)`);
+    const fromBlock = BigInt(state.lastProcessedBlock) + 1n;
+    if (fromBlock <= latestBlock) {
+      log("main", `Catching up from block ${fromBlock} to ${latestBlock}...`);
+      await catchUpForceClose(httpClient, fromBlock, latestBlock);
+      await catchUpSettlement(httpClient, fromBlock, latestBlock);
+    } else {
+      log("main", `Already up to date at block ${state.lastProcessedBlock}`);
+    }
   } else {
-    const block = await publicClient.getBlockNumber();
-    lastProcessedBlock = block;
-    log("main", `Starting fresh from current block ${lastProcessedBlock}`);
-    saveState(Number(lastProcessedBlock));
+    log("main", `First start — no catch-up needed (starting from block ${latestBlock})`);
   }
+
+  saveState(Number(latestBlock));
+  log("main", `State saved at block ${latestBlock}`);
 }
 
-async function pollLogs(): Promise<void> {
-  if (shuttingDown) return;
+function startSubscriptions(): void {
+  log("main", "Starting WebSocket subscriptions...");
 
-  try {
-    const latestBlock = await publicClient.getBlockNumber();
-    const safeBlock = latestBlock - CONFIRMATION_BLOCKS;
+  unwatchForceClose = watchForceClose(wsClient, httpClient);
+  log("main", "Subscribed to AuctionForceClosed events");
 
-    if (safeBlock <= lastProcessedBlock) return;
-
-    const fromBlock = lastProcessedBlock + 1n;
-    const toBlock = safeBlock;
-
-    // Poll both event types in the same cycle
-    await pollForceCloseEvents(publicClient, fromBlock, toBlock);
-    await pollSettlementEvents(publicClient, fromBlock, toBlock);
-
-    lastProcessedBlock = toBlock;
-    saveState(Number(toBlock));
-  } catch (err) {
-    log("main", `Log poll error (will retry): ${err}`);
-  }
+  unwatchSettlement = watchSettlement(wsClient, httpClient);
+  log("main", "Subscribed to SettlementRequested events");
 }
 
 async function pollExpiry(): Promise<void> {
   if (shuttingDown) return;
-
   try {
-    await pollExpiredAuctions(publicClient);
+    await pollExpiredAuctions(httpClient);
   } catch (err) {
     log("main", `Auction expiry poll error (will retry): ${err}`);
   }
@@ -96,10 +98,12 @@ function shutdown(): void {
   if (shuttingDown) return;
   shuttingDown = true;
   log("main", "Shutting down...");
-  clearInterval(logPollTimer);
+
+  unwatchForceClose?.();
+  unwatchSettlement?.();
   clearInterval(expiryPollTimer);
-  saveState(Number(lastProcessedBlock));
-  log("main", `State saved at block ${lastProcessedBlock}. Goodbye.`);
+
+  log("main", "Goodbye.");
   process.exit(0);
 }
 
@@ -107,18 +111,18 @@ async function main(): Promise<void> {
   log("main", "╔══════════════════════════════════════════╗");
   log("main", "║     Private Streams Event Watcher        ║");
   log("main", "╚══════════════════════════════════════════╝");
-  log("main", `RPC: ${RPC_URL}`);
-  log("main", `Log poll interval: ${LOG_POLL_INTERVAL_MS / 1000}s`);
+  log("main", `HTTP RPC: ${HTTP_RPC_URL}`);
+  log("main", `WS   RPC: ${WS_RPC_URL}`);
   log("main", `Expiry poll interval: ${EXPIRY_POLL_INTERVAL_MS / 1000}s`);
-  log("main", `Confirmation blocks: ${CONFIRMATION_BLOCKS}`);
 
-  await init();
+  // Phase 1: Catch up from last saved block (getLogs over HTTP)
+  await catchUp();
 
-  // Run once immediately, then on interval
-  await pollLogs();
+  // Phase 2: Start real-time WebSocket subscriptions
+  startSubscriptions();
+
+  // Phase 3: Start auction-expiry polling (HTTP)
   await pollExpiry();
-
-  logPollTimer = setInterval(pollLogs, LOG_POLL_INTERVAL_MS);
   expiryPollTimer = setInterval(pollExpiry, EXPIRY_POLL_INTERVAL_MS);
 
   process.on("SIGINT", shutdown);
