@@ -29,6 +29,7 @@ export type Aggregation_Interval =
 export type Auction = {
   __typename?: 'Auction';
   auctionId: Scalars['BigInt']['output'];
+  bidCount: Scalars['Int']['output'];
   bids: Array<BidPlaced>;
   blockNumber: Scalars['BigInt']['output'];
   blockTimestamp: Scalars['BigInt']['output'];
@@ -41,7 +42,7 @@ export type Auction = {
   scoreChange?: Maybe<Scalars['Int']['output']>;
   seller: Seller;
   sellerId: Scalars['String']['output'];
-  status: Scalars['String']['output'];
+  status: AuctionStatus;
   transactionHash: Scalars['Bytes']['output'];
 };
 
@@ -403,6 +404,11 @@ export type AuctionCreated_OrderBy =
   | 'sellerId'
   | 'transactionHash';
 
+export type AuctionStatus =
+  | 'Cancelled'
+  | 'Closed'
+  | 'Open';
+
 export type Auction_Filter = {
   /** Filter for the block changed event. */
   _change_block?: InputMaybe<BlockChangedFilter>;
@@ -415,6 +421,14 @@ export type Auction_Filter = {
   auctionId_lte?: InputMaybe<Scalars['BigInt']['input']>;
   auctionId_not?: InputMaybe<Scalars['BigInt']['input']>;
   auctionId_not_in?: InputMaybe<Array<Scalars['BigInt']['input']>>;
+  bidCount?: InputMaybe<Scalars['Int']['input']>;
+  bidCount_gt?: InputMaybe<Scalars['Int']['input']>;
+  bidCount_gte?: InputMaybe<Scalars['Int']['input']>;
+  bidCount_in?: InputMaybe<Array<Scalars['Int']['input']>>;
+  bidCount_lt?: InputMaybe<Scalars['Int']['input']>;
+  bidCount_lte?: InputMaybe<Scalars['Int']['input']>;
+  bidCount_not?: InputMaybe<Scalars['Int']['input']>;
+  bidCount_not_in?: InputMaybe<Array<Scalars['Int']['input']>>;
   bids_?: InputMaybe<BidPlaced_Filter>;
   blockNumber?: InputMaybe<Scalars['BigInt']['input']>;
   blockNumber_gt?: InputMaybe<Scalars['BigInt']['input']>;
@@ -554,26 +568,10 @@ export type Auction_Filter = {
   seller_not_starts_with_nocase?: InputMaybe<Scalars['String']['input']>;
   seller_starts_with?: InputMaybe<Scalars['String']['input']>;
   seller_starts_with_nocase?: InputMaybe<Scalars['String']['input']>;
-  status?: InputMaybe<Scalars['String']['input']>;
-  status_contains?: InputMaybe<Scalars['String']['input']>;
-  status_contains_nocase?: InputMaybe<Scalars['String']['input']>;
-  status_ends_with?: InputMaybe<Scalars['String']['input']>;
-  status_ends_with_nocase?: InputMaybe<Scalars['String']['input']>;
-  status_gt?: InputMaybe<Scalars['String']['input']>;
-  status_gte?: InputMaybe<Scalars['String']['input']>;
-  status_in?: InputMaybe<Array<Scalars['String']['input']>>;
-  status_lt?: InputMaybe<Scalars['String']['input']>;
-  status_lte?: InputMaybe<Scalars['String']['input']>;
-  status_not?: InputMaybe<Scalars['String']['input']>;
-  status_not_contains?: InputMaybe<Scalars['String']['input']>;
-  status_not_contains_nocase?: InputMaybe<Scalars['String']['input']>;
-  status_not_ends_with?: InputMaybe<Scalars['String']['input']>;
-  status_not_ends_with_nocase?: InputMaybe<Scalars['String']['input']>;
-  status_not_in?: InputMaybe<Array<Scalars['String']['input']>>;
-  status_not_starts_with?: InputMaybe<Scalars['String']['input']>;
-  status_not_starts_with_nocase?: InputMaybe<Scalars['String']['input']>;
-  status_starts_with?: InputMaybe<Scalars['String']['input']>;
-  status_starts_with_nocase?: InputMaybe<Scalars['String']['input']>;
+  status?: InputMaybe<AuctionStatus>;
+  status_in?: InputMaybe<Array<AuctionStatus>>;
+  status_not?: InputMaybe<AuctionStatus>;
+  status_not_in?: InputMaybe<Array<AuctionStatus>>;
   transactionHash?: InputMaybe<Scalars['Bytes']['input']>;
   transactionHash_contains?: InputMaybe<Scalars['Bytes']['input']>;
   transactionHash_gt?: InputMaybe<Scalars['Bytes']['input']>;
@@ -588,6 +586,7 @@ export type Auction_Filter = {
 
 export type Auction_OrderBy =
   | 'auctionId'
+  | 'bidCount'
   | 'bids'
   | 'blockNumber'
   | 'blockTimestamp'
@@ -719,6 +718,7 @@ export type BidPlaced_OrderBy =
   | 'auction'
   | 'auctionId'
   | 'auction__auctionId'
+  | 'auction__bidCount'
   | 'auction__blockNumber'
   | 'auction__blockTimestamp'
   | 'auction__currentBid'
@@ -2140,108 +2140,79 @@ export type _SubgraphErrorPolicy_ =
   | 'deny';
 
 export type AuctionDetailSubgraphQueryVariables = Exact<{
-  auctionId: Scalars['BigInt']['input'];
+  auctionId: Scalars['ID']['input'];
+  auctionIdBigInt: Scalars['BigInt']['input'];
   bidLimit: Scalars['Int']['input'];
 }>;
 
 
-export type AuctionDetailSubgraphQuery = { __typename?: 'Query', createdAuction: Array<{ __typename?: 'AuctionCreated', auctionId: string, sellerId: string, eventId: string, endTime: string, blockTimestamp: string }>, bids: Array<{ __typename?: 'BidPlaced', bidAmount: string, previousBid: string, blockTimestamp: string, transactionHash: string }>, closedAuction: Array<{ __typename?: 'AuctionClosed', sellerId: string, winningBid: string, eventId: string, blockTimestamp: string }>, cancelledAuction: Array<{ __typename?: 'AuctionCancelled', sellerId: string, cancelledBidAmount: string, eventId: string, blockTimestamp: string }>, reputationUpdates: Array<{ __typename?: 'SellerReputationScoreUpdated', predictionOutcome: number, scoreChange: number, newScore: string, blockTimestamp: string }> };
+export type AuctionDetailSubgraphQuery = { __typename?: 'Query', auction?: { __typename?: 'Auction', auctionId: string, sellerId: string, eventId: string, eventTitle: string, endTime: string, currentBid: string, bidCount: number, status: AuctionStatus, predictionOutcome?: number | null, scoreChange?: number | null, blockTimestamp: string, seller: { __typename?: 'Seller', reputationScore: string, totalAuctionCount: number, totalEarnings: string, auctionsWithCorrectPredictionsCount: number, auctionsWithWrongPredictionsCount: number } } | null, bids: Array<{ __typename?: 'BidPlaced', bidAmount: string, previousBid: string, blockTimestamp: string, transactionHash: string }>, closedAuction: Array<{ __typename?: 'AuctionClosed', winningBid: string, blockTimestamp: string }>, cancelledAuction: Array<{ __typename?: 'AuctionCancelled', cancelledBidAmount: string, blockTimestamp: string }>, reputationUpdates: Array<{ __typename?: 'SellerReputationScoreUpdated', predictionOutcome: number, scoreChange: number, newScore: string, blockTimestamp: string }> };
 
-export type RecentAuctionsQueryVariables = Exact<{ [key: string]: never; }>;
-
-
-export type RecentAuctionsQuery = { __typename?: 'Query', auctionCreateds: Array<{ __typename?: 'AuctionCreated', id: string, auctionId: string, sellerId: string, eventId: string, endTime: string, blockTimestamp: string, transactionHash: string }> };
-
-export type RecentBidsQueryVariables = Exact<{ [key: string]: never; }>;
-
-
-export type RecentBidsQuery = { __typename?: 'Query', bidPlaceds: Array<{ __typename?: 'BidPlaced', id: string, auctionId: string, bidAmount: string, previousBid: string, blockTimestamp: string, transactionHash: string }> };
-
-export type RecentClosedAuctionsQueryVariables = Exact<{ [key: string]: never; }>;
-
-
-export type RecentClosedAuctionsQuery = { __typename?: 'Query', auctionCloseds: Array<{ __typename?: 'AuctionClosed', id: string, auctionId: string, sellerId: string, winningBid: string, eventId: string, blockTimestamp: string, transactionHash: string }> };
-
-export type RecentCancelledAuctionsQueryVariables = Exact<{ [key: string]: never; }>;
-
-
-export type RecentCancelledAuctionsQuery = { __typename?: 'Query', auctionCancelleds: Array<{ __typename?: 'AuctionCancelled', id: string, auctionId: string, sellerId: string, cancelledBidAmount: string, eventId: string, blockTimestamp: string, transactionHash: string }> };
-
-export type HomepageAuctionListsQueryVariables = Exact<{
-  currentTimestamp: Scalars['BigInt']['input'];
-  openLimit: Scalars['Int']['input'];
-  closedLimit: Scalars['Int']['input'];
+export type HomepageAuctionsQueryVariables = Exact<{
+  limit: Scalars['Int']['input'];
+  skip: Scalars['Int']['input'];
+  where?: InputMaybe<Auction_Filter>;
 }>;
 
 
-export type HomepageAuctionListsQuery = { __typename?: 'Query', openAuctions: Array<{ __typename?: 'AuctionCreated', auctionId: string, sellerId: string, eventId: string, endTime: string }>, closedAuctions: Array<{ __typename?: 'AuctionClosed', auctionId: string, sellerId: string, winningBid: string, eventId: string }> };
+export type HomepageAuctionsQuery = { __typename?: 'Query', auctions: Array<{ __typename?: 'Auction', auctionId: string, sellerId: string, eventId: string, eventTitle: string, endTime: string, currentBid: string, bidCount: number, status: AuctionStatus, seller: { __typename?: 'Seller', reputationScore: string, totalAuctionCount: number, auctionsWithCorrectPredictionsCount: number, auctionsWithWrongPredictionsCount: number } }> };
 
-export type HomepageClosedAuctionReferencesQueryVariables = Exact<{
-  auctionIds?: InputMaybe<Array<Scalars['BigInt']['input']> | Scalars['BigInt']['input']>;
+export type SellerDetailQueryVariables = Exact<{
+  sellerId: Scalars['ID']['input'];
 }>;
 
 
-export type HomepageClosedAuctionReferencesQuery = { __typename?: 'Query', referenceAuctions: Array<{ __typename?: 'AuctionCreated', auctionId: string, endTime: string }> };
-
-export type HomepageLatestBidQueryVariables = Exact<{
-  auctionId: Scalars['BigInt']['input'];
-}>;
-
-
-export type HomepageLatestBidQuery = { __typename?: 'Query', bidPlaceds: Array<{ __typename?: 'BidPlaced', bidAmount: string }> };
+export type SellerDetailQuery = { __typename?: 'Query', seller?: { __typename?: 'Seller', sellerId: string, reputationScore: string, totalAuctionCount: number, openAuctionCount: number, auctionsWithCorrectPredictionsCount: number, auctionsWithWrongPredictionsCount: number, unscorableAuctionCount: number, totalEarnings: string, auctions: Array<{ __typename?: 'Auction', auctionId: string, eventId: string, eventTitle: string, endTime: string, currentBid: string, bidCount: number, status: AuctionStatus, predictionOutcome?: number | null, scoreChange?: number | null, blockTimestamp: string }> } | null };
 
 
 export const AuctionDetailSubgraphDocument = gql`
-    query AuctionDetailSubgraph($auctionId: BigInt!, $bidLimit: Int!) {
-  createdAuction: auctionCreateds(
-    first: 1
-    orderBy: blockTimestamp
-    orderDirection: desc
-    where: {auctionId: $auctionId}
-  ) {
+    query AuctionDetailSubgraph($auctionId: ID!, $auctionIdBigInt: BigInt!, $bidLimit: Int!) {
+  auction(id: $auctionId) {
     auctionId
     sellerId
     eventId
+    eventTitle
     endTime
+    currentBid
+    bidCount
+    status
+    predictionOutcome
+    scoreChange
     blockTimestamp
+    seller {
+      reputationScore
+      totalAuctionCount
+      totalEarnings
+      auctionsWithCorrectPredictionsCount
+      auctionsWithWrongPredictionsCount
+    }
   }
   bids: bidPlaceds(
     first: $bidLimit
     orderBy: blockTimestamp
     orderDirection: desc
-    where: {auctionId: $auctionId}
+    where: {auctionId: $auctionIdBigInt}
   ) {
     bidAmount
     previousBid
     blockTimestamp
     transactionHash
   }
-  closedAuction: auctionCloseds(
-    first: 1
-    orderBy: blockTimestamp
-    orderDirection: desc
-    where: {auctionId: $auctionId}
-  ) {
-    sellerId
+  closedAuction: auctionCloseds(first: 1, where: {auctionId: $auctionIdBigInt}) {
     winningBid
-    eventId
     blockTimestamp
   }
   cancelledAuction: auctionCancelleds(
     first: 1
-    orderBy: blockTimestamp
-    orderDirection: desc
-    where: {auctionId: $auctionId}
+    where: {auctionId: $auctionIdBigInt}
   ) {
-    sellerId
     cancelledBidAmount
-    eventId
     blockTimestamp
   }
   reputationUpdates: sellerReputationScoreUpdateds(
     orderBy: blockTimestamp
     orderDirection: desc
-    where: {auctionId: $auctionId}
+    where: {auctionId: $auctionIdBigInt}
   ) {
     predictionOutcome
     scoreChange
@@ -2250,99 +2221,55 @@ export const AuctionDetailSubgraphDocument = gql`
   }
 }
     `;
-export const RecentAuctionsDocument = gql`
-    query RecentAuctions {
-  auctionCreateds(first: 10, orderBy: blockTimestamp, orderDirection: desc) {
-    id
-    auctionId
-    sellerId
-    eventId
-    endTime
-    blockTimestamp
-    transactionHash
-  }
-}
-    `;
-export const RecentBidsDocument = gql`
-    query RecentBids {
-  bidPlaceds(first: 10, orderBy: blockTimestamp, orderDirection: desc) {
-    id
-    auctionId
-    bidAmount
-    previousBid
-    blockTimestamp
-    transactionHash
-  }
-}
-    `;
-export const RecentClosedAuctionsDocument = gql`
-    query RecentClosedAuctions {
-  auctionCloseds(first: 10, orderBy: blockTimestamp, orderDirection: desc) {
-    id
-    auctionId
-    sellerId
-    winningBid
-    eventId
-    blockTimestamp
-    transactionHash
-  }
-}
-    `;
-export const RecentCancelledAuctionsDocument = gql`
-    query RecentCancelledAuctions {
-  auctionCancelleds(first: 10, orderBy: blockTimestamp, orderDirection: desc) {
-    id
-    auctionId
-    sellerId
-    cancelledBidAmount
-    eventId
-    blockTimestamp
-    transactionHash
-  }
-}
-    `;
-export const HomepageAuctionListsDocument = gql`
-    query HomepageAuctionLists($currentTimestamp: BigInt!, $openLimit: Int!, $closedLimit: Int!) {
-  openAuctions: auctionCreateds(
-    first: $openLimit
-    orderBy: endTime
-    orderDirection: asc
-    where: {endTime_gt: $currentTimestamp}
-  ) {
-    auctionId
-    sellerId
-    eventId
-    endTime
-  }
-  closedAuctions: auctionCloseds(
-    first: $closedLimit
+export const HomepageAuctionsDocument = gql`
+    query HomepageAuctions($limit: Int!, $skip: Int!, $where: Auction_filter) {
+  auctions(
+    first: $limit
+    skip: $skip
     orderBy: blockTimestamp
     orderDirection: desc
+    where: $where
   ) {
     auctionId
     sellerId
-    winningBid
     eventId
-  }
-}
-    `;
-export const HomepageClosedAuctionReferencesDocument = gql`
-    query HomepageClosedAuctionReferences($auctionIds: [BigInt!]) {
-  referenceAuctions: auctionCreateds(where: {auctionId_in: $auctionIds}) {
-    auctionId
+    eventTitle
     endTime
+    currentBid
+    bidCount
+    status
+    seller {
+      reputationScore
+      totalAuctionCount
+      auctionsWithCorrectPredictionsCount
+      auctionsWithWrongPredictionsCount
+    }
   }
 }
     `;
-export const HomepageLatestBidDocument = gql`
-    query HomepageLatestBid($auctionId: BigInt!) {
-  bidPlaceds(
-    first: 1
-    orderBy: blockTimestamp
-    orderDirection: desc
-    where: {auctionId: $auctionId}
-  ) {
-    bidAmount
+export const SellerDetailDocument = gql`
+    query SellerDetail($sellerId: ID!) {
+  seller(id: $sellerId) {
+    sellerId
+    reputationScore
+    totalAuctionCount
+    openAuctionCount
+    auctionsWithCorrectPredictionsCount
+    auctionsWithWrongPredictionsCount
+    unscorableAuctionCount
+    totalEarnings
+    auctions(orderBy: blockTimestamp, orderDirection: desc) {
+      auctionId
+      eventId
+      eventTitle
+      endTime
+      currentBid
+      bidCount
+      status
+      predictionOutcome
+      scoreChange
+      blockTimestamp
+    }
   }
 }
     `;
@@ -2357,26 +2284,11 @@ export function getSdk(client: GraphQLClient, withWrapper: SdkFunctionWrapper = 
     AuctionDetailSubgraph(variables: AuctionDetailSubgraphQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<AuctionDetailSubgraphQuery> {
       return withWrapper((wrappedRequestHeaders) => client.request<AuctionDetailSubgraphQuery>({ document: AuctionDetailSubgraphDocument, variables, requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders }, signal }), 'AuctionDetailSubgraph', 'query', variables);
     },
-    RecentAuctions(variables?: RecentAuctionsQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<RecentAuctionsQuery> {
-      return withWrapper((wrappedRequestHeaders) => client.request<RecentAuctionsQuery>({ document: RecentAuctionsDocument, variables, requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders }, signal }), 'RecentAuctions', 'query', variables);
+    HomepageAuctions(variables: HomepageAuctionsQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<HomepageAuctionsQuery> {
+      return withWrapper((wrappedRequestHeaders) => client.request<HomepageAuctionsQuery>({ document: HomepageAuctionsDocument, variables, requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders }, signal }), 'HomepageAuctions', 'query', variables);
     },
-    RecentBids(variables?: RecentBidsQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<RecentBidsQuery> {
-      return withWrapper((wrappedRequestHeaders) => client.request<RecentBidsQuery>({ document: RecentBidsDocument, variables, requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders }, signal }), 'RecentBids', 'query', variables);
-    },
-    RecentClosedAuctions(variables?: RecentClosedAuctionsQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<RecentClosedAuctionsQuery> {
-      return withWrapper((wrappedRequestHeaders) => client.request<RecentClosedAuctionsQuery>({ document: RecentClosedAuctionsDocument, variables, requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders }, signal }), 'RecentClosedAuctions', 'query', variables);
-    },
-    RecentCancelledAuctions(variables?: RecentCancelledAuctionsQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<RecentCancelledAuctionsQuery> {
-      return withWrapper((wrappedRequestHeaders) => client.request<RecentCancelledAuctionsQuery>({ document: RecentCancelledAuctionsDocument, variables, requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders }, signal }), 'RecentCancelledAuctions', 'query', variables);
-    },
-    HomepageAuctionLists(variables: HomepageAuctionListsQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<HomepageAuctionListsQuery> {
-      return withWrapper((wrappedRequestHeaders) => client.request<HomepageAuctionListsQuery>({ document: HomepageAuctionListsDocument, variables, requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders }, signal }), 'HomepageAuctionLists', 'query', variables);
-    },
-    HomepageClosedAuctionReferences(variables?: HomepageClosedAuctionReferencesQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<HomepageClosedAuctionReferencesQuery> {
-      return withWrapper((wrappedRequestHeaders) => client.request<HomepageClosedAuctionReferencesQuery>({ document: HomepageClosedAuctionReferencesDocument, variables, requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders }, signal }), 'HomepageClosedAuctionReferences', 'query', variables);
-    },
-    HomepageLatestBid(variables: HomepageLatestBidQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<HomepageLatestBidQuery> {
-      return withWrapper((wrappedRequestHeaders) => client.request<HomepageLatestBidQuery>({ document: HomepageLatestBidDocument, variables, requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders }, signal }), 'HomepageLatestBid', 'query', variables);
+    SellerDetail(variables: SellerDetailQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<SellerDetailQuery> {
+      return withWrapper((wrappedRequestHeaders) => client.request<SellerDetailQuery>({ document: SellerDetailDocument, variables, requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders }, signal }), 'SellerDetail', 'query', variables);
     }
   };
 }
