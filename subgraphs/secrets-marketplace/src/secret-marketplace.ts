@@ -81,12 +81,31 @@ export function handleAuctionCreated(event: AuctionCreatedEvent): void {
 
   entity.save()
 
+  // Upsert Seller — may not exist if registered before startBlock
+  let sellerId = event.params.sellerId
+  let seller = Seller.load(sellerId)
+  if (seller == null) {
+    seller = new Seller(sellerId)
+    seller.sellerId = sellerId
+    seller.reputationScore = BigInt.fromI32(0)
+    seller.totalAuctionCount = 0
+    seller.openAuctionCount = 0
+    seller.auctionsWithCorrectPredictionsCount = 0
+    seller.auctionsWithWrongPredictionsCount = 0
+    seller.unscorableAuctionCount = 0
+    seller.totalEarnings = BigInt.fromI32(0)
+    seller.blockNumber = event.block.number
+    seller.blockTimestamp = event.block.timestamp
+    seller.transactionHash = event.transaction.hash
+    seller.save()
+  }
+
   // Create Auction summary
   let auction = new Auction(event.params.auctionId.toString())
   auction.auctionId = event.params.auctionId
   auction.eventId = event.params.eventId
-  auction.sellerId = event.params.sellerId
-  auction.seller = event.params.sellerId
+  auction.sellerId = sellerId
+  auction.seller = sellerId
   auction.eventTitle = event.params.eventTitle
   auction.endTime = event.params.endTime
   auction.currentBid = BigInt.fromI32(0)
@@ -98,12 +117,9 @@ export function handleAuctionCreated(event: AuctionCreatedEvent): void {
   auction.save()
 
   // Update Seller summary
-  let seller = Seller.load(event.params.sellerId)
-  if (seller != null) {
-    seller.totalAuctionCount = seller.totalAuctionCount + 1
-    seller.openAuctionCount = seller.openAuctionCount + 1
-    seller.save()
-  }
+  seller.totalAuctionCount = seller.totalAuctionCount + 1
+  seller.openAuctionCount = seller.openAuctionCount + 1
+  seller.save()
 }
 
 export function handleAuctionCancelled(event: AuctionCancelledEvent): void {

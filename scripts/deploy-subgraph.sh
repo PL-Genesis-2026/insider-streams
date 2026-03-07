@@ -136,6 +136,7 @@ npm run build
 
 # ─── Deploy ─────────────────────────────────────────────────────────────────
 if [ "$SKIP_DEPLOY" = false ]; then
+  CURRENT_VERSION=$(node -p "require('./package.json').version")
   npm version patch --no-git-tag-version > /dev/null
   DEPLOY_VERSION=$(node -p "require('./package.json').version")
   echo ""
@@ -146,7 +147,9 @@ if [ "$SKIP_DEPLOY" = false ]; then
     echo "    npx graph publish --protocol-network arbitrum-one"
   else
     echo ""
-    echo "  WARNING: Deploy failed. Run 'npx graph auth --studio <DEPLOY_KEY>' in subgraphs/secrets-marketplace/ first."
+    echo "  WARNING: Deploy failed — rolling back version to v$CURRENT_VERSION."
+    npm version "$CURRENT_VERSION" --no-git-tag-version --allow-same-version > /dev/null
+    echo "  Run 'npx graph auth --studio <DEPLOY_KEY>' in subgraphs/secrets-marketplace/ first."
     echo "  Codegen and build succeeded — only deploy was skipped."
   fi
 else
