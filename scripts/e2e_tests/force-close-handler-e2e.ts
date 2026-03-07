@@ -22,7 +22,7 @@
  *   SUPABASE_URL              — Supabase project URL
  *   SUPABASE_SERVICE_ROLE_KEY — Supabase service role key
  *
- * Usage: pnpm e2e:force-close
+ * Usage: pnpm e2e:force-close-handler
  */
 
 import "dotenv/config";
