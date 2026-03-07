@@ -329,14 +329,15 @@ async function main() {
   console.log(`  API:                  ${PRIVATE_TOKEN_API}`);
   console.log(`  Supabase:             ${SUPABASE_URL}`);
 
-  // Record the count of existing deposits before we start, so we can
-  // isolate our test from prior data in assertions
-  const { count: existingDepositCount } = await supabase
-    .from("transfers")
-    .select("*", { count: "exact", head: true })
-    .eq("status", "confirmed")
-    .eq("user_address", bidderAddr.toLowerCase());
-  console.log(`  Existing deposit count for bidder: ${existingDepositCount}`);
+  // Capture starting balance from Supabase so assertions are relative
+  // (resilient to pre-existing transfers from prior test runs / smoke tests)
+  const { data: startingBal } = await supabase
+    .from("balances")
+    .select("*")
+    .eq("user_address", bidderAddr.toLowerCase())
+    .maybeSingle();
+  const startingAvailable = startingBal ? BigInt(startingBal.available_balance!) : 0n;
+  console.log(`  Starting balance for bidder: ${formatUnits(startingAvailable, CONFIDENTIAL_USDC_DECIMALS)} DEMO`);
 
   // ── Step 1: Mint DEMO tokens to bidder ─────────────────────────────────────
   step("Mint DEMO tokens to bidder");
@@ -484,8 +485,12 @@ async function main() {
   console.log(`  Pending withdrawal: ${formatUnits(BigInt(balBefore!.pending_withdrawal!), CONFIDENTIAL_USDC_DECIMALS)} DEMO`);
 
   const availBefore = BigInt(balBefore!.available_balance!);
-  assert(availBefore >= DEPOSIT_AMOUNT, `Available balance ${availBefore} < deposit ${DEPOSIT_AMOUNT}`);
-  console.log(`  ✓ Available balance includes ${formatUnits(DEPOSIT_AMOUNT, CONFIDENTIAL_USDC_DECIMALS)} DEMO deposit`);
+  const balanceIncrease = availBefore - startingAvailable;
+  assert(
+    balanceIncrease >= DEPOSIT_AMOUNT,
+    `Balance increased by ${balanceIncrease} but expected at least ${DEPOSIT_AMOUNT} (starting: ${startingAvailable}, now: ${availBefore})`,
+  );
+  console.log(`  ✓ Balance increased by ${formatUnits(balanceIncrease, CONFIDENTIAL_USDC_DECIMALS)} DEMO (includes ${formatUnits(DEPOSIT_AMOUNT, CONFIDENTIAL_USDC_DECIMALS)} DEMO deposit)`);
 
   // ── Step 8: Idempotency check — run CRE again ─────────────────────────────
   step("Idempotency check — run CRE simulation again");
