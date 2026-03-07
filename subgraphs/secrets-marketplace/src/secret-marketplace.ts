@@ -151,8 +151,8 @@ export function handleExternalEventResolved(
     event.transaction.hash.concatI32(event.logIndex.toI32())
   )
   entity.externalEventId = event.params.externalEventId
-  entity.reputationDelta = event.params.delta
   entity.auctionsAffected = event.params.auctionsAffected
+  entity.resultsApplied = event.params.resultsApplied
 
   entity.blockNumber = event.block.number
   entity.blockTimestamp = event.block.timestamp

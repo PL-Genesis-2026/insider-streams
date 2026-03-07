@@ -2,8 +2,8 @@
 # deploy-subgraph.sh — Build and deploy the SecretMarketplace subgraph
 #
 # Prompts for a contract address (defaults to the one in subgraph.yaml).
-# If a new address is provided, fetches its deployment block via RPC and
-# updates subgraph.yaml before deploying.
+# Always fetches the deployment block via RPC and updates both
+# subgraph.yaml and networks.json before deploying.
 #
 # Usage: ./scripts/deploy-subgraph.sh [--skip-deploy] [--address <ADDRESS>]
 #   --skip-deploy  Only run codegen + build, skip deployment
@@ -14,16 +14,6 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SUBGRAPH_DIR="$ROOT_DIR/subgraphs/secrets-marketplace"
 ARTIFACTS_DIR="$ROOT_DIR/contracts/out"
-CONTRACTS_DIR="$ROOT_DIR/contracts"
-
-# Read RPC_URL from contracts/.env, fallback to public RPC
-RPC_URL="https://ethereum-sepolia-rpc.publicnode.com"
-if [ -f "$CONTRACTS_DIR/.env" ]; then
-  ENV_RPC=$(grep '^RPC_URL=' "$CONTRACTS_DIR/.env" 2>/dev/null | cut -d'=' -f2- || true)
-  if [ -n "$ENV_RPC" ]; then
-    RPC_URL="$ENV_RPC"
-  fi
-fi
 
 SKIP_DEPLOY=false
 ADDRESS_ARG=""
@@ -65,70 +55,51 @@ if [[ ! "$CONTRACT_ADDRESS" =~ ^0x[0-9a-fA-F]{40}$ ]]; then
   exit 1
 fi
 
-# ─── If address changed, fetch deployment block via RPC ─────────────────────
-if [ "$CONTRACT_ADDRESS" != "$CURRENT_ADDRESS" ]; then
-  echo ""
-  echo "  Address changed — fetching deployment block for $CONTRACT_ADDRESS..."
+# ─── Fetch deployment block via Blockscout API ───────────────────────────────
+echo ""
+echo "  Fetching deployment block for $CONTRACT_ADDRESS..."
 
-  # eth_getCode to verify the contract exists
-  CODE=$(curl -sf -X POST "$RPC_URL" \
-    -H "Content-Type: application/json" \
-    -d "{\"jsonrpc\":\"2.0\",\"method\":\"eth_getCode\",\"params\":[\"$CONTRACT_ADDRESS\",\"latest\"],\"id\":1}" \
-    | python3 -c "import sys,json; print(json.load(sys.stdin)['result'])")
+BLOCKSCOUT_RESPONSE=$(curl -sf "https://eth-sepolia.blockscout.com/api?module=contract&action=getcontractcreation&contractaddresses=$CONTRACT_ADDRESS" 2>/dev/null) || true
 
-  if [ "$CODE" = "0x" ] || [ -z "$CODE" ]; then
-    echo "  ERROR: No contract found at $CONTRACT_ADDRESS on Sepolia"
-    exit 1
-  fi
+START_BLOCK=$(echo "$BLOCKSCOUT_RESPONSE" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+if data.get('status') != '1' or not data.get('result'):
+    sys.exit(1)
+print(data['result'][0]['blockNumber'])
+" 2>/dev/null)
 
-  # Binary search for the deployment block (first block where code exists).
-  # ~23 RPC calls for Sepolia's ~8M blocks — may take 30-60s on a public RPC.
-  echo "  Binary-searching for deployment block (~23 RPC calls)..."
-  LATEST_HEX=$(curl -sf -X POST "$RPC_URL" \
-    -H "Content-Type: application/json" \
-    -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
-    | python3 -c "import sys,json; print(json.load(sys.stdin)['result'])")
-  LATEST_BLOCK=$((LATEST_HEX))
-
-  LOW=0
-  HIGH=$LATEST_BLOCK
-  ITERATION=0
-
-  while [ $LOW -lt $HIGH ]; do
-    ITERATION=$((ITERATION + 1))
-    MID=$(( (LOW + HIGH) / 2 ))
-    MID_HEX=$(printf "0x%x" $MID)
-    printf "    [%2d] range: %d..%d (checking %d)\r" "$ITERATION" "$LOW" "$HIGH" "$MID"
-
-    CODE_AT_MID=$(curl -sf -X POST "$RPC_URL" \
-      -H "Content-Type: application/json" \
-      -d "{\"jsonrpc\":\"2.0\",\"method\":\"eth_getCode\",\"params\":[\"$CONTRACT_ADDRESS\",\"$MID_HEX\"],\"id\":1}" \
-      | python3 -c "import sys,json; print(json.load(sys.stdin)['result'])")
-
-    if [ "$CODE_AT_MID" = "0x" ] || [ -z "$CODE_AT_MID" ]; then
-      LOW=$(( MID + 1 ))
-    else
-      HIGH=$MID
-    fi
-  done
-  echo ""
-
-  START_BLOCK=$LOW
-  echo "  Found deployment block: $START_BLOCK"
-
-  # Update subgraph.yaml
-  echo "  Updating subgraph.yaml..."
-  sed -i.bak "s|address: \"$CURRENT_ADDRESS\"|address: \"$CONTRACT_ADDRESS\"|" "$SUBGRAPH_DIR/subgraph.yaml"
-  sed -i.bak "s|startBlock: $CURRENT_START_BLOCK|startBlock: $START_BLOCK|" "$SUBGRAPH_DIR/subgraph.yaml"
-  rm -f "$SUBGRAPH_DIR/subgraph.yaml.bak"
-
-  echo "  Updated subgraph.yaml:"
-  echo "    Address:    $CONTRACT_ADDRESS"
-  echo "    StartBlock: $START_BLOCK"
-else
-  echo ""
-  echo "  Using existing config (no changes)."
+if [ -z "$START_BLOCK" ]; then
+  echo "  ERROR: Could not find contract creation on Blockscout for $CONTRACT_ADDRESS"
+  exit 1
 fi
+
+echo "  Found deployment block: $START_BLOCK"
+
+# ─── Update subgraph.yaml ──────────────────────────────────────────────────
+echo "  Updating subgraph.yaml..."
+sed -i.bak "s|address: \"$CURRENT_ADDRESS\"|address: \"$CONTRACT_ADDRESS\"|" "$SUBGRAPH_DIR/subgraph.yaml"
+sed -i.bak "s|startBlock: $CURRENT_START_BLOCK|startBlock: $START_BLOCK|" "$SUBGRAPH_DIR/subgraph.yaml"
+rm -f "$SUBGRAPH_DIR/subgraph.yaml.bak"
+
+# ─── Update networks.json ──────────────────────────────────────────────────
+echo "  Updating networks.json..."
+python3 -c "
+import json, sys
+path = sys.argv[1]
+addr = sys.argv[2]
+block = int(sys.argv[3])
+data = json.load(open(path))
+data['sepolia']['SecretMarketplace']['address'] = addr
+data['sepolia']['SecretMarketplace']['startBlock'] = block
+with open(path, 'w') as f:
+    json.dump(data, f, indent=2)
+    f.write('\n')
+" "$SUBGRAPH_DIR/networks.json" "$CONTRACT_ADDRESS" "$START_BLOCK"
+
+echo "  Updated config:"
+echo "    Address:    $CONTRACT_ADDRESS"
+echo "    StartBlock: $START_BLOCK"
 
 # ─── Copy ABI from Foundry artifacts ────────────────────────────────────────
 echo ""
@@ -173,22 +144,9 @@ if [ "$SKIP_DEPLOY" = false ]; then
     NEXT_VERSION=$(node -p "require('./package.json').version")
     echo "  Bumped subgraph version: v$CURRENT_VERSION → v$NEXT_VERSION"
 
-    # ─── Publish prompt (only in interactive mode) ─────────────────────────
-    # Publishing is an on-chain transaction on Arbitrum that requires wallet
-    # signing. The Graph CLI has no headless/non-interactive publish mode —
-    # `graph publish` always opens a browser window for wallet connection
-    # and metadata entry before submitting the transaction.
-    if [ -t 0 ]; then
-      echo ""
-      read -rp "  Publish to The Graph Network? (opens browser for wallet signing) [y/N]: " PUBLISH_ANSWER
-      if [[ "$PUBLISH_ANSWER" =~ ^[Yy]$ ]]; then
-        echo ""
-        echo "▶ Publishing subgraph to The Graph Network..."
-        echo "  Opening browser for wallet connection and metadata..."
-        echo ""
-        npx graph publish --protocol-network arbitrum-one
-      fi
-    fi
+    echo ""
+    echo "  To publish to The Graph Network, run from subgraphs/secrets-marketplace/:"
+    echo "    npx graph publish --protocol-network arbitrum-one"
   else
     echo ""
     echo "  WARNING: Deploy failed. Run 'npx graph auth --studio <DEPLOY_KEY>' in subgraphs/secrets-marketplace/ first."
