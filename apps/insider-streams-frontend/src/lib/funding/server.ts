@@ -159,7 +159,7 @@ export async function getFundingServerSnapshot(
     supabase
       .from("balances")
       .select(
-        "available_balance, locked_balance, pending_withdrawal, user_address",
+        "available_balance, locked_balance, pending_withdrawal, total_from_won_bids, user_address",
       )
       .eq("user_address", normalizedAddress)
       .maybeSingle(),

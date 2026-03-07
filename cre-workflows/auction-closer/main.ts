@@ -2,9 +2,11 @@ import { cre, type Runtime, Runner, getNetwork, type CronPayload } from "@chainl
 import { configSchema, CRON_SCHEDULE, type Config } from "./types";
 import { findExpiredAuctions } from "./monitor";
 import { closeAuction } from "./close";
+import { settleWinningBids } from "./supabase";
 
 /**
- * Cron handler — fires on schedule, checks for expired auctions, closes them.
+ * Cron handler — fires on schedule, checks for expired auctions, closes them,
+ * then settles winning bids in Supabase.
  */
 const onCronTrigger = (runtime: Runtime<Config>, payload: CronPayload): string => {
   try {
@@ -20,15 +22,31 @@ const onCronTrigger = (runtime: Runtime<Config>, payload: CronPayload): string =
 
     runtime.log(`Found ${expired.length} expired auction(s) to close`);
 
+    // Phase 1: Close all expired auctions on-chain
+    const closedAuctionIds: string[] = [];
     const results: string[] = [];
     for (const auction of expired) {
       try {
         const txHash = closeAuction(runtime, auction.auctionId);
+        closedAuctionIds.push(auction.auctionId.toString());
         results.push(`Auction ${auction.auctionId}: closed (tx=${txHash})`);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         runtime.log(`Failed to close auction ${auction.auctionId}: ${msg}`);
         results.push(`Auction ${auction.auctionId}: FAILED (${msg})`);
+      }
+    }
+
+    // Phase 2: Settle winning bids in Supabase (batched — 2 HTTP calls total)
+    if (closedAuctionIds.length > 0) {
+      try {
+        const settled = settleWinningBids(runtime, closedAuctionIds);
+        results.push(`Settled ${settled} winning bid(s) in Supabase`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        runtime.log(`Bid settlement failed: ${msg}`);
+        results.push(`Bid settlement: FAILED (${msg})`);
+        // Don't throw — on-chain closes already succeeded
       }
     }
 
