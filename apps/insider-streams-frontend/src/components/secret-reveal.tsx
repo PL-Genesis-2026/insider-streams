@@ -143,10 +143,16 @@ export function SecretRevealCard({ auctionId }: SecretRevealCardProps) {
           event_data: row.event_data,
         },
       });
-    } catch {
+    } catch (err) {
+      const isRejection =
+        err instanceof Error &&
+        (err.name === "UserRejectedRequestError" ||
+          err.message.includes("rejected"));
       setState({
         status: "error",
-        message: "Failed to load secret. Please try again.",
+        message: isRejection
+          ? "Signature request was cancelled."
+          : "Failed to load secret. Please try again.",
       });
     }
   }, [auctionId, walletClient]);
@@ -195,7 +201,7 @@ export function SecretRevealCard({ auctionId }: SecretRevealCardProps) {
             variant="outline"
             size="sm"
             onClick={() => void handleReveal()}
-            disabled={state.status === "loading"}
+            disabled={state.status === "loading" || !walletClient}
           >
             {state.status === "loading" ? (
               <Loader2 className="size-3.5 animate-spin" />
