@@ -4,7 +4,7 @@
 
 ## Workflows
 
-### reputation-score-manager
+### external-prediction-market-settler
 
 Settles SimpleMarket prediction markets using Gemini AI.
 
@@ -30,14 +30,14 @@ Settles SimpleMarket prediction markets using Gemini AI.
 cd cre-workflows
 
 # Interactive (picks up live events)
-cre workflow simulate reputation-score-manager --target local-simulation
+cre workflow simulate external-prediction-market-settler --target local-simulation
 
 # Non-interactive (replay a specific tx)
-cre workflow simulate reputation-score-manager --target local-simulation \
+cre workflow simulate external-prediction-market-settler --target local-simulation \
   --evm-tx-hash <TX_HASH> --evm-event-index 0 --non-interactive --trigger-index 0
 
 # Broadcast (actually settle on-chain)
-cre workflow simulate reputation-score-manager --target local-simulation \
+cre workflow simulate external-prediction-market-settler --target local-simulation \
   --evm-tx-hash <TX_HASH> --evm-event-index 0 --non-interactive --trigger-index 0 --broadcast
 ```
 
@@ -83,7 +83,7 @@ cre workflow simulate secret-marketplace-auction-closer --target local-simulatio
 
 ```
 cre-workflows/
-├── reputation-score-manager/   # Gemini AI market settlement
+├── external-prediction-market-settler/   # Gemini AI market settlement
 ├── secret-marketplace-auction-closer/       # Cron-based auction closing
 ├── project.yaml              # CRE project settings (RPC endpoints)
 ├── secrets.yaml              # Secret values (gitignored)
@@ -92,7 +92,7 @@ cre-workflows/
 
 ## CRE Capabilities Used
 
-| Capability | reputation-score-manager | secret-marketplace-auction-closer |
+| Capability | external-prediction-market-settler | secret-marketplace-auction-closer |
 |------------|----------------------|----------------|
 | EVM Log Trigger | `SettlementRequested` events | — |
 | Cron Trigger | — | Every 30 seconds |
@@ -105,5 +105,5 @@ cre-workflows/
 
 1. [Install CRE CLI](https://docs.chain.link/cre/getting-started/cli-installation/macos-linux)
 2. Copy `.env.example` to `.env` and fill in values
-3. Install deps: `cd reputation-score-manager && bun install` (repeat for `secret-marketplace-auction-closer`)
+3. Install deps: `cd external-prediction-market-settler && bun install` (repeat for `secret-marketplace-auction-closer`)
 4. Run workflows using the commands above

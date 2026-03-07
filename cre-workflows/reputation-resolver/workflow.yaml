@@ -1,0 +1,23 @@
+# ==========================================================================
+# CRE WORKFLOW SETTINGS FILE — reputation-resolver
+# ==========================================================================
+# Checks settled prediction market events and submits per-auction
+# reputation updates to SecretMarketplace.
+
+# ==========================================================================
+local-simulation:
+  user-workflow:
+    workflow-name: "reputation-resolver"
+  workflow-artifacts:
+    workflow-path: "./main.ts"
+    config-path: "./config.json"
+    secrets-path: "../secrets.yaml"
+
+# ==========================================================================
+staging:
+  user-workflow:
+    workflow-name: "reputation-resolver"
+  workflow-artifacts:
+    workflow-path: "./main.ts"
+    config-path: "./config.json"
+    secrets-path: "../secrets.yaml"

@@ -1,5 +1,5 @@
 {
-  "name": "reputation-score-manager",
+  "name": "external-prediction-market-settler",
   "version": "1.0.0",
   "main": "dist/main.js",
   "private": true,
