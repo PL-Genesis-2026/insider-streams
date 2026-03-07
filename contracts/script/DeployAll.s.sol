@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
-import {MockUSDC} from "../src/mock/MockUSDC.sol";
+import {ConfidentialUSDC} from "../src/ConfidentialUSDC.sol";
 import {ExamplePredictionMarket} from "../src/ExamplePredictionMarket.sol";
 import {SecretMarketplace} from "../src/SecretMarketplace.sol";
 
@@ -13,8 +13,8 @@ contract DeployAll is Script {
 
         vm.startBroadcast(deployerPk);
 
-        MockUSDC usdc = new MockUSDC(0);
-        console.log("MockUSDC deployed at:", address(usdc));
+        ConfidentialUSDC usdc = new ConfidentialUSDC("USD Coin", "USDC", vm.addr(deployerPk));
+        console.log("ConfidentialUSDC deployed at:", address(usdc));
 
         ExamplePredictionMarket market = new ExamplePredictionMarket(address(usdc), forwarder);
         console.log("ExamplePredictionMarket deployed at:", address(market));

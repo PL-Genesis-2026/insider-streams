@@ -34,14 +34,21 @@
  * Usage: pnpm e2e:deposits
  */
 
+import "dotenv/config";
+
 import { createClient } from "@supabase/supabase-js";
+import {
+  PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
+  CONFIDENTIAL_USDC_DECIMALS,
+  confidentialUsdcAbi,
+  VAULT_ADDRESS,
+} from "@private-streams/common";
 import type { Database } from "@private-streams/common";
 import {
   createPublicClient,
   createWalletClient,
   http,
-  parseEther,
-  formatEther,
+  formatUnits,
   type Address,
   type Hex,
 } from "viem";
@@ -68,9 +75,9 @@ const RPC_URL = envRequired("RPC_URL");
 const SUPABASE_URL = envRequired("SUPABASE_URL");
 const SUPABASE_KEY = envRequired("SUPABASE_SERVICE_ROLE_KEY");
 
-// Contract addresses (from CLAUDE.md)
-const SIMPLE_TOKEN: Address = "0x1662dA7fd24B5622140401751c9113D7E0237fae";
-const VAULT: Address = "0xE588a6c73933BFD66Af9b4A07d48bcE59c0D2d13";
+// Contract addresses
+const SIMPLE_TOKEN: Address = PRIVATE_CONFIDENTIAL_USDC_ADDRESS;
+const VAULT: Address = VAULT_ADDRESS;
 const PRIVATE_TOKEN_API = "https://convergence2026-token-api.cldev.cloud";
 const CHAIN_ID = 11155111;
 
@@ -82,10 +89,10 @@ const EIP712_DOMAIN = {
   verifyingContract: VAULT as `0x${string}`,
 } as const;
 
-// Amounts
-const VAULT_DEPOSIT = parseEther("3");      // fund bidder's private balance
-const DEPOSIT_AMOUNT = parseEther("2");     // bidder → platform EOA (deposit)
-const WITHDRAWAL_AMOUNT = parseEther("1");  // platform EOA → bidder (withdrawal)
+// Amounts (6 decimals)
+const VAULT_DEPOSIT = 3_000_000n;      // 3 tokens — fund bidder's private balance
+const DEPOSIT_AMOUNT = 2_000_000n;     // 2 tokens — bidder → platform EOA (deposit)
+const WITHDRAWAL_AMOUNT = 1_000_000n;  // 1 token — platform EOA → bidder (withdrawal)
 
 // Project root for CRE invocation
 const __filename = fileURLToPath(import.meta.url);
@@ -94,36 +101,6 @@ const PROJECT_ROOT = resolve(__dirname, "..");
 const CRE_BIN = `${process.env.HOME}/.cre/bin/cre`;
 
 // ─── ABI fragments ───────────────────────────────────────────────────────────
-
-const simpleTokenAbi = [
-  {
-    name: "mint",
-    type: "function",
-    inputs: [
-      { name: "to", type: "address" },
-      { name: "amount", type: "uint256" },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    name: "approve",
-    type: "function",
-    inputs: [
-      { name: "spender", type: "address" },
-      { name: "amount", type: "uint256" },
-    ],
-    outputs: [{ type: "bool" }],
-    stateMutability: "nonpayable",
-  },
-  {
-    name: "balanceOf",
-    type: "function",
-    inputs: [{ name: "account", type: "address" }],
-    outputs: [{ type: "uint256" }],
-    stateMutability: "view",
-  },
-] as const;
 
 const vaultAbi = [
   {
@@ -314,7 +291,7 @@ async function executePrivateTransfer(
   }
 
   const data = (await resp.json()) as { transaction_id: string };
-  console.log(`  Private transfer submitted: ${signer.address.slice(0, 10)}→${recipient.slice(0, 10)} amount=${formatEther(amount)} tx_id=${data.transaction_id}`);
+  console.log(`  Private transfer submitted: ${signer.address.slice(0, 10)}→${recipient.slice(0, 10)} amount=${formatUnits(amount, CONFIDENTIAL_USDC_DECIMALS)} tx_id=${data.transaction_id}`);
   return data.transaction_id;
 }
 
@@ -365,25 +342,25 @@ async function main() {
   step("Mint DEMO tokens to bidder");
   const mintHash = await ownerWallet.writeContract({
     address: SIMPLE_TOKEN,
-    abi: simpleTokenAbi,
+    abi: confidentialUsdcAbi,
     functionName: "mint",
-    args: [bidderAddr, VAULT_DEPOSIT + parseEther("1")], // extra buffer
+    args: [bidderAddr, VAULT_DEPOSIT + 1_000_000n], // extra buffer
   });
   await waitForTx(mintHash, "mint");
 
   const balance = await publicClient.readContract({
     address: SIMPLE_TOKEN,
-    abi: simpleTokenAbi,
+    abi: confidentialUsdcAbi,
     functionName: "balanceOf",
     args: [bidderAddr],
   });
-  console.log(`  Bidder DEMO balance: ${formatEther(balance)}`);
+  console.log(`  Bidder DEMO balance: ${formatUnits(balance, CONFIDENTIAL_USDC_DECIMALS)}`);
 
   // ── Step 2: Vault deposit to fund bidder's private balance ─────────────────
   step("Approve vault + deposit to fund bidder's private balance");
   const approveHash = await bidderWallet.writeContract({
     address: SIMPLE_TOKEN,
-    abi: simpleTokenAbi,
+    abi: confidentialUsdcAbi,
     functionName: "approve",
     args: [VAULT, VAULT_DEPOSIT],
   });
@@ -395,7 +372,7 @@ async function main() {
     functionName: "deposit",
     args: [SIMPLE_TOKEN, VAULT_DEPOSIT],
   });
-  await waitForTx(vaultDepositHash, `vault deposit (${formatEther(VAULT_DEPOSIT)} DEMO)`);
+  await waitForTx(vaultDepositHash, `vault deposit (${formatUnits(VAULT_DEPOSIT, CONFIDENTIAL_USDC_DECIMALS)} DEMO)`);
 
   // Wait for vault deposit to appear in API (ensures bidder has private balance)
   step("Poll API until vault deposit is processed");
@@ -502,13 +479,13 @@ async function main() {
     .eq("user_address", bidderAddr.toLowerCase())
     .single();
   assert(!!balBefore, "Balance not found in balances VIEW for bidder");
-  console.log(`  Available balance: ${formatEther(BigInt(balBefore!.available_balance!))} DEMO`);
-  console.log(`  Locked balance:    ${formatEther(BigInt(balBefore!.locked_balance!))} DEMO`);
-  console.log(`  Pending withdrawal: ${formatEther(BigInt(balBefore!.pending_withdrawal!))} DEMO`);
+  console.log(`  Available balance: ${formatUnits(BigInt(balBefore!.available_balance!), CONFIDENTIAL_USDC_DECIMALS)} DEMO`);
+  console.log(`  Locked balance:    ${formatUnits(BigInt(balBefore!.locked_balance!), CONFIDENTIAL_USDC_DECIMALS)} DEMO`);
+  console.log(`  Pending withdrawal: ${formatUnits(BigInt(balBefore!.pending_withdrawal!), CONFIDENTIAL_USDC_DECIMALS)} DEMO`);
 
   const availBefore = BigInt(balBefore!.available_balance!);
   assert(availBefore >= DEPOSIT_AMOUNT, `Available balance ${availBefore} < deposit ${DEPOSIT_AMOUNT}`);
-  console.log(`  ✓ Available balance includes ${formatEther(DEPOSIT_AMOUNT)} DEMO deposit`);
+  console.log(`  ✓ Available balance includes ${formatUnits(DEPOSIT_AMOUNT, CONFIDENTIAL_USDC_DECIMALS)} DEMO deposit`);
 
   // ── Step 8: Idempotency check — run CRE again ─────────────────────────────
   step("Idempotency check — run CRE simulation again");
@@ -581,9 +558,9 @@ async function main() {
   assert(!!balAfter, "Balance not found after withdrawal");
 
   const availAfter = BigInt(balAfter!.available_balance!);
-  console.log(`  Available balance before: ${formatEther(availBefore)} DEMO`);
-  console.log(`  Available balance after:  ${formatEther(availAfter)} DEMO`);
-  console.log(`  Difference:               ${formatEther(availBefore - availAfter)} DEMO`);
+  console.log(`  Available balance before: ${formatUnits(availBefore, CONFIDENTIAL_USDC_DECIMALS)} DEMO`);
+  console.log(`  Available balance after:  ${formatUnits(availAfter, CONFIDENTIAL_USDC_DECIMALS)} DEMO`);
+  console.log(`  Difference:               ${formatUnits(availBefore - availAfter, CONFIDENTIAL_USDC_DECIMALS)} DEMO`);
 
   assert(
     availAfter < availBefore,
@@ -593,7 +570,7 @@ async function main() {
     availBefore - availAfter === WITHDRAWAL_AMOUNT,
     `Balance decreased by ${availBefore - availAfter}, expected ${WITHDRAWAL_AMOUNT}`,
   );
-  console.log(`  ✓ Balance decreased by exactly ${formatEther(WITHDRAWAL_AMOUNT)} DEMO`);
+  console.log(`  ✓ Balance decreased by exactly ${formatUnits(WITHDRAWAL_AMOUNT, CONFIDENTIAL_USDC_DECIMALS)} DEMO`);
 
   // ── Summary ────────────────────────────────────────────────────────────────
   console.log("\n╔══════════════════════════════════════════════════════╗");
@@ -602,7 +579,7 @@ async function main() {
   console.log(`║  Vault deposit:   ${vaultDepositHash.slice(0, 20)}... (funds private balance)`);
   console.log(`║  Deposit (in):    ${depositTxId} (bidder → platform)`);
   console.log(`║  Withdrawal (out): ${withdrawalTxId} (platform → bidder)`);
-  console.log(`║  Balance:         ${formatEther(availBefore)} → ${formatEther(availAfter)} DEMO`);
+  console.log(`║  Balance:         ${formatUnits(availBefore, CONFIDENTIAL_USDC_DECIMALS)} → ${formatUnits(availAfter, CONFIDENTIAL_USDC_DECIMALS)} DEMO`);
   console.log("╚══════════════════════════════════════════════════════╝");
 }
 

@@ -18,4 +18,9 @@ contract ConfidentialUSDC is ERC20, ERC20Permit, Ownable {
     function mint(address to, uint256 amount) external onlyOwner {
         _mint(to, amount);
     }
+
+    /// @notice Override decimals to 6 (matching USDC).
+    function decimals() public pure override returns (uint8) {
+        return 6;
+    }
 }

@@ -46,10 +46,10 @@ contract SetupAll is Script {
         console.log("2) PolicyEngine impl deployed at:", address(policyEngineImpl));
         console.log("   PolicyEngine proxy deployed at:", address(proxy));
 
-        // 3. Mint 100 tokens to deployer
-        uint256 mintAmount = 100 ether;
+        // 3. Mint 100 tokens to deployer (6 decimals)
+        uint256 mintAmount = 100_000_000;
         token.mint(deployer, mintAmount);
-        console.log("3) Minted 100 tokens to:", deployer);
+        console.log("3) Minted 100 tokens (6 decimals) to:", deployer);
 
         // 4. Approve Vault to spend all tokens
         token.approve(VAULT, type(uint256).max);
@@ -59,8 +59,8 @@ contract SetupAll is Script {
         IVault(VAULT).register(address(token), address(proxy));
         console.log("5) Registered token and PolicyEngine on vault");
 
-        // 6. Deposit 10 tokens into Vault
-        uint256 depositAmount = 10 ether;
+        // 6. Deposit 10 tokens into Vault (6 decimals)
+        uint256 depositAmount = 10_000_000;
         IVault(VAULT).deposit(address(token), depositAmount);
         console.log("6) Deposited 10 tokens into vault");
 

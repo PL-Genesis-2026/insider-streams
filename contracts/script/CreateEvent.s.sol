@@ -6,7 +6,7 @@ import {ExamplePredictionMarket} from "../src/ExamplePredictionMarket.sol";
 
 contract CreateEvent is Script {
     function run() external {
-        address marketAddress = vm.envAddress("SIMPLE_MARKET_ADDRESS");
+        address marketAddress = vm.envAddress("EXAMPLE_PREDICTION_MARKET_ADDRESS");
         string memory question = vm.envString("QUESTION");
         uint256 duration = vm.envOr("DURATION", uint256(3 minutes));
         uint256 deployerPk = vm.envUint("PRIVATE_KEY");

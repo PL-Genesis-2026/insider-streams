@@ -12,11 +12,12 @@
     "e2e:all": "tsx e2e_tests/smoke-test.ts && tsx e2e_tests/error-cases.ts"
   },
   "dependencies": {
+    "@private-streams/common": "workspace:*",
     "axios": "^1.9.0",
-    "ethers": "^6.16.0",
-    "@private-streams/common": "workspace:*"
+    "ethers": "^6.16.0"
   },
   "devDependencies": {
+    "dotenv": "^17.3.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }
