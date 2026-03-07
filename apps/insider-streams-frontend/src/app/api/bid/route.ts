@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import type { Address } from "viem";
+import { recoverTypedDataAddress, type Address } from "viem";
 import {
   secretMarketplaceAbi,
   SECRET_MARKETPLACE_ADDRESS,
@@ -8,10 +8,23 @@ import {
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
 import { getPublicClient, getAdminWalletClient } from "@/lib/viem";
 
+const SIGNATURE_MAX_AGE_SECONDS = 60;
+
+const EIP712_DOMAIN = {
+  name: "InsiderStreams",
+  version: "1",
+  chainId: 11155111,
+} as const;
+
+const EIP712_TYPES = {
+  PlaceBid: [
+    { name: "auctionId", type: "string" },
+    { name: "amount",    type: "string" },
+    { name: "timestamp", type: "uint256" },
+  ],
+} as const;
+
 const bidRequestSchema = z.object({
-  bidderAddress: z
-    .string()
-    .regex(/^0x[a-fA-F0-9]{40}$/, "Invalid Ethereum address"),
   auctionId: z.string().min(1, "auctionId is required"),
   amount: z
     .string()
@@ -23,6 +36,10 @@ const bidRequestSchema = z.object({
         return false;
       }
     }, "amount must be a positive integer string"),
+  timestamp: z.number().int("timestamp must be an integer"),
+  signature: z
+    .string()
+    .regex(/^0x[a-fA-F0-9]+$/, "signature must be a hex string"),
 });
 
 export async function POST(request: Request) {
@@ -48,15 +65,42 @@ export async function POST(request: Request) {
     );
   }
 
-  const { bidderAddress, auctionId, amount } = parsed.data;
+  const { auctionId, amount, timestamp, signature } = parsed.data;
+
+  // 2. Reject stale signatures
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  if (Math.abs(nowSeconds - timestamp) > SIGNATURE_MAX_AGE_SECONDS) {
+    return NextResponse.json(
+      { error: "Signature expired or timestamp too far in the future", code: "STALE_SIGNATURE" },
+      { status: 400 },
+    );
+  }
+
+  // 3. Recover bidder address from EIP-712 signature
+  let bidderAddr: string;
+  try {
+    const recovered = await recoverTypedDataAddress({
+      domain: EIP712_DOMAIN,
+      types: EIP712_TYPES,
+      primaryType: "PlaceBid",
+      message: { auctionId, amount, timestamp: BigInt(timestamp) },
+      signature: signature as `0x${string}`,
+    });
+    bidderAddr = recovered.toLowerCase();
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid signature", code: "INVALID_SIGNATURE" },
+      { status: 400 },
+    );
+  }
+
   const bidAmount = BigInt(amount);
-  const bidderAddr = bidderAddress.toLowerCase();
   const marketplaceAddress = SECRET_MARKETPLACE_ADDRESS as Address;
 
   const publicClient = getPublicClient();
   const supabase = getSupabaseServiceClient();
 
-  // 2. Check auction exists and is open
+  // 4. Check auction exists and is open
   let auctionStatus: number;
   try {
     const auctionData = await publicClient.readContract({
@@ -87,7 +131,7 @@ export async function POST(request: Request) {
     );
   }
 
-  // 3. Check balance
+  // 5. Check balance
   const { data: balanceRow, error: balError } = await supabase
     .from("balances")
     .select("*")
@@ -109,7 +153,7 @@ export async function POST(request: Request) {
     );
   }
 
-  // 4. Check active bid
+  // 6. Check active bid
   const { data: activeBids, error: activeBidError } = await supabase
     .from("private_bids")
     .select("*")
@@ -141,7 +185,7 @@ export async function POST(request: Request) {
     }
   }
 
-  // 5. Call placeBid on-chain
+  // 7. Call placeBid on-chain
   let txHash: `0x${string}`;
   try {
     const walletClient = getAdminWalletClient();
@@ -161,10 +205,10 @@ export async function POST(request: Request) {
     );
   }
 
-  // 6. Update database
+  // 8. Update database
   let bidId: string | undefined;
   try {
-    // 6a. If there was an active bid, mark it as outbid
+    // 8a. If there was an active bid, mark it as outbid
     if (activeBid) {
       const { error: outbidError } = await supabase
         .from("private_bids")
@@ -177,7 +221,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // 6b. Insert new active bid
+    // 8b. Insert new active bid
     const { data: newBid, error: insertError } = await supabase
       .from("private_bids")
       .insert({
@@ -210,7 +254,7 @@ export async function POST(request: Request) {
     });
   }
 
-  // 7. Return success
+  // 9. Return success
   return NextResponse.json({
     success: true,
     bidId: bidId!,
