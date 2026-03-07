@@ -79,6 +79,19 @@ function secretsKey(address: string) {
 // Provider
 // ---------------------------------------------------------------------------
 
+/**
+ * Provides authenticated access to private auction data (seller info, bids,
+ * secrets) for the connected wallet.
+ *
+ * - Signs a message once and reuses it for up to 9.5 min (10 min server TTL)
+ * - Fetches seller, bids, and secrets in parallel on reveal
+ * - Caches via React Query (seller: 30 min, bids: 30 s, secrets: 5 min)
+ * - Components register which auctions are on-screen so the reveal button
+ *   knows what to fetch
+ * - Clears all data on wallet disconnect
+ *
+ * Consume via the `usePrivateData()` hook.
+ */
 export function PrivateDataProvider({ children }: { children: ReactNode }) {
   const { address, isConnected } = useAccount();
   const { data: walletClient } = useWalletClient();
