@@ -21,13 +21,12 @@ type AuctionCreated @entity(immutable: true) {
   transactionHash: Bytes!
 }
 
-type AuctionForceClosed @entity(immutable: true) {
+type AuctionCancelled @entity(immutable: true) {
   id: Bytes!
   auctionId: BigInt! # uint256
-  heldAmount: BigInt! # uint256
+  cancelledBidAmount: BigInt! # uint256
   sellerId: String! # string
   eventId: BigInt! # uint256
-  reputationDelta: Int! # int8
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!
@@ -38,6 +37,7 @@ type BidPlaced @entity(immutable: true) {
   auctionId: BigInt! # uint256
   bidAmount: BigInt! # uint256
   previousBid: BigInt! # uint256
+  auction: Auction # FK for @derivedFrom on Auction.bids
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!
@@ -73,8 +73,8 @@ type ExpectedWorkflowNameUpdated @entity(immutable: true) {
 type ExternalEventResolved @entity(immutable: true) {
   id: Bytes!
   externalEventId: BigInt! # uint256
-  reputationDelta: Int! # int8
   auctionsAffected: BigInt! # uint256
+  resultsApplied: BigInt! # uint256
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!
@@ -98,11 +98,12 @@ type OwnershipTransferred @entity(immutable: true) {
   transactionHash: Bytes!
 }
 
-type ReputationUpdated @entity(immutable: true) {
+type SellerReputationScoreUpdated @entity(immutable: true) {
   id: Bytes!
   sellerId: String! # string
   auctionId: BigInt! # uint256
-  reputationDelta: Int! # int8
+  predictionOutcome: Int! # uint8 (PredictionOutcome enum)
+  scoreChange: Int! # int8
   newScore: BigInt! # int256
   blockNumber: BigInt!
   blockTimestamp: BigInt!
@@ -129,6 +130,46 @@ type MarketplaceUpdated @entity(immutable: true) {
   id: Bytes!
   previousMarketplace: Bytes! # address
   newMarketplace: Bytes! # address
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+enum AuctionStatus {
+  Open
+  Closed
+  Cancelled
+}
+
+type Seller @entity(immutable: false) {
+  id: String!
+  sellerId: String!
+  reputationScore: BigInt!
+  totalAuctionCount: Int!
+  openAuctionCount: Int!
+  auctionsWithCorrectPredictionsCount: Int!
+  auctionsWithWrongPredictionsCount: Int!
+  unscorableAuctionCount: Int!
+  totalEarnings: BigInt!
+  auctions: [Auction!]! @derivedFrom(field: "seller")
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type Auction @entity(immutable: false) {
+  id: String!
+  auctionId: BigInt!
+  eventId: BigInt!
+  sellerId: String!
+  seller: Seller!
+  eventTitle: String!
+  endTime: BigInt!
+  currentBid: BigInt!
+  status: AuctionStatus!
+  predictionOutcome: Int
+  scoreChange: Int
+  bids: [BidPlaced!]! @derivedFrom(field: "auction")
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!

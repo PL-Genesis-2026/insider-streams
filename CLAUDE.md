@@ -14,8 +14,10 @@ private-streams/
 │   └── chainlink-private-token-api-client/  # Typed API client for Compliant Private Token API
 ├── contracts/                       # Foundry — ConfidentialUSDC + ExamplePredictionMarket + SecretMarketplace
 ├── cre-workflows/                   # CRE TypeScript workflows (Bun-managed)
-│   ├── reputation-score-manager/      # Gemini AI settlement workflow
+│   ├── external-prediction-market-settler/      # Gemini AI settlement workflow
 │   ├── secret-marketplace-auction-closer/             # Cron-based auction closer workflow
+│   ├── reputation-resolver/       # Cron-based per-auction reputation resolution workflow
+│   ├── force-close-handler/       # Log-triggered bid refund on AuctionCancelled
 │   └── user-balance-recording-fallback/         # Cron-based private token deposit/withdrawal reconciler
 ├── subgraphs/secrets-marketplace/   # The Graph subgraph
 ├── scripts/                         # E2E test scripts and utilities
@@ -23,7 +25,17 @@ private-streams/
 │   │   ├── simple-market-e2e.ts         # ExamplePredictionMarket + CRE settlement E2E
 │   │   ├── secret-marketplace-auction-closer-e2e.ts        # Auction closer CRE workflow E2E
 │   │   ├── secret-marketplace-e2e.ts    # SecretMarketplace full event lifecycle E2E
+│   │   ├── reputation-resolver-e2e.ts   # Reputation resolver CRE workflow E2E
+│   │   ├── force-close-handler-e2e.ts   # Force close handler CRE workflow E2E
 │   │   └── user-balance-recording-fallback-e2e.ts    # Deposit reconciler workflow E2E
+│   ├── event-watcher/               # Long-running event watcher (systemd service)
+│   │   ├── index.ts                 # Entry point — polls chain, triggers CRE workflows
+│   │   ├── force-close-watcher.ts   # AuctionCancelled log polling
+│   │   ├── settlement-watcher.ts    # SettlementRequested log polling
+│   │   ├── auction-expiry-watcher.ts # Expired auction contract polling
+│   │   ├── cre-runner.ts            # Shared runCRE helper
+│   │   ├── state.ts                 # Block state persistence
+│   │   └── event-watcher.service    # systemd unit file
 │   ├── generate-contract-types.sh   # Compile contracts + regenerate types/ABIs
 │   ├── generate-supabase-types.sh   # Regenerate Supabase TypeScript types
 │   ├── deploy-contracts.sh          # Interactive contract deploy + address replacement
@@ -106,20 +118,43 @@ pnpm test:contracts     # forge test --via-ir --skip SetupAll DeployPolicyEngine
 
 ```bash
 # From cre-workflows/ directory
-cre workflow simulate reputation-score-manager --target local-simulation
-cre workflow simulate reputation-score-manager --target local-simulation --broadcast
+cre workflow simulate external-prediction-market-settler --target local-simulation
+cre workflow simulate external-prediction-market-settler --target local-simulation --broadcast
 
 # Prediction Market (non-interactive, for scripts)
-cre workflow simulate reputation-score-manager --target local-simulation \
+cre workflow simulate external-prediction-market-settler --target local-simulation \
   --evm-tx-hash <TX_HASH> --evm-event-index 0 --non-interactive --trigger-index 0
 
 # Auction Closer (cron-triggered, non-interactive)
 cre workflow simulate secret-marketplace-auction-closer --target local-simulation --non-interactive --trigger-index 0
 cre workflow simulate secret-marketplace-auction-closer --target local-simulation --non-interactive --trigger-index 0 --broadcast
 
+# Reputation Resolver (cron-triggered, non-interactive)
+cre workflow simulate reputation-resolver --target local-simulation --non-interactive --trigger-index 0
+cre workflow simulate reputation-resolver --target local-simulation --non-interactive --trigger-index 0 --broadcast
+
+# Force Close Handler (log-triggered, non-interactive)
+cre workflow simulate force-close-handler --target local-simulation --non-interactive --trigger-index 0 \
+  --evm-tx-hash <TX_HASH> --evm-event-index <EVENT_INDEX>
+
 # Deposit Reconciler (cron-triggered, non-interactive)
 cre workflow simulate user-balance-recording-fallback --target local-simulation --non-interactive --trigger-index 0
 ```
+
+### Event Watcher
+
+Long-running process that polls the chain and triggers CRE workflows on events:
+
+```bash
+pnpm watch    # from scripts/ — starts the event watcher
+```
+
+Watches for:
+- `AuctionCancelled` events → triggers `force-close-handler`
+- `SettlementRequested` events → triggers `external-prediction-market-settler`
+- Expired auctions (via `getOpenAuctions()`) → triggers `secret-marketplace-auction-closer`
+
+Deployed as a systemd service (`event-watcher.service`) on the remote server.
 
 ### E2E Tests
 
@@ -127,8 +162,10 @@ All E2E scripts are TypeScript and run via `tsx` with `--env-file=.env` from the
 
 ```bash
 pnpm e2e:secret-marketplace                      # SecretMarketplace full event lifecycle
-pnpm e2e:reputation-score-manager   # ExamplePredictionMarket + CRE settlement lifecycle
+pnpm e2e:external-prediction-market-settler                # ExamplePredictionMarket + CRE settlement lifecycle
 pnpm e2e:secret-marketplace-auction-closer       # Auction create → bid → expire → CRE close
+pnpm e2e:reputation-resolver                     # Reputation resolver — per-auction reputation after event settlement
+pnpm e2e:force-close-handler                     # Force close handler — bid refund on AuctionCancelled
 pnpm e2e:user-balance-recording-fallback         # Deposit reconciler workflow
 ```
 
@@ -187,6 +224,8 @@ Run codegen:
 turbo run codegen
 ```
 
+After running codegen, always run `turbo run build` to verify all packages compile cleanly with the regenerated types.
+
 After adding or updating GraphQL queries in a specific package, run the local codegen command from that directory:
 
 ```bash
@@ -198,6 +237,14 @@ For the `cre-workflows/secret-marketplace-auction-closer/` package (outside pnpm
 ```bash
 cd cre-workflows/secret-marketplace-auction-closer && bun run codegen
 ```
+
+### Known issue: duplicate identifier in generated enums
+
+The Graph's subgraph schema generates `_orderBy` enums with entries for both direct fields (e.g., `sellerId`) and relationship traversals (e.g., `seller__id`). When an entity has both a field like `sellerId` and a relationship like `seller`, codegen produces duplicate enum keys (e.g., `SellerId` appears twice). This causes TypeScript compilation errors like `Duplicate identifier 'SellerId'`.
+
+**Fix:** All codegen configs use `enumsAsTypes: true` to generate string union types instead of TypeScript enums. This avoids the naming collision. This setting is configured in:
+- `scripts/codegen.ts`
+- `apps/insider-streams-frontend/codegen.ts` (both `graphql.ts` and `sdk.ts` outputs)
 
 ## After Major Contract Changes
 
@@ -252,7 +299,9 @@ The deploy script replaces addresses automatically, but you should verify no sta
 | File                                               | Fields                               |
 | -------------------------------------------------- | ------------------------------------ |
 | `cre-workflows/secret-marketplace-auction-closer/config.json`         | `secretMarketplaceAddress`           |
-| `cre-workflows/reputation-score-manager/config.json` | `simpleMarketAddress`                |
+| `cre-workflows/reputation-resolver/config.json`    | `secretMarketplaceAddress`, `examplePredictionMarketAddress` |
+| `cre-workflows/force-close-handler/config.json`    | `secretMarketplaceAddress`           |
+| `cre-workflows/external-prediction-market-settler/config.json` | `simpleMarketAddress`                |
 | `cre-workflows/user-balance-recording-fallback/config.json`     | `tokenAddress`, `platformEoaAddress` |
 
 After updating CRE workflow configs, the workflow must be redeployed and tested live.
@@ -283,21 +332,18 @@ Ask the user if they want to deploy a new subgraph version. This is a separate s
 ./scripts/deploy-subgraph.sh --skip-deploy         # codegen + build only, no deploy
 ```
 
-The deploy script copies ABIs from Foundry artifacts, runs `graph codegen` and `graph build`, then deploys to Subgraph Studio. After a successful deploy, it asks if you want to publish to The Graph Network — **publishing requires human interaction in a browser** (wallet signing on Arbitrum). The CLI opens the browser and returns immediately; the user must complete the publish flow in their browser.
+The deploy script copies ABIs from Foundry artifacts, runs `graph codegen` and `graph build`, and deploys to Subgraph Studio. After a successful deploy, tell the user to publish the subgraph at https://thegraph.com/studio/subgraph/insider-streams-2/ and then offer to regenerate GraphQL types once they confirm it's published.
 
-After the script completes, tell the user: if the deploy succeeded, click the publish button in the browser when prompted. Once published, offer to regenerate GraphQL types.
-
-### 4. Regenerate GraphQL types
+### 4. Regenerate GraphQL types (after user publishes)
 
 After you receive confirmation from the user that the subgraph is published, regenerate typed GraphQL clients:
 
 ```bash
 turbo run codegen
+turbo run build
 ```
 
-This updates the generated GraphQL types in the frontend, scripts, and CRE workflow packages against the published subgraph schema.
-
-After running codegen, run `turbo run build` and report on any errors.
+This updates the generated GraphQL types in the frontend, scripts, and CRE workflow packages against the published subgraph schema. The build step verifies all packages compile cleanly with the regenerated types.
 
 ## Services
 
@@ -339,7 +385,11 @@ After deploying, follow the full procedure in **"After a Contract Deployment"** 
 - Settlement data is also written to Firestore for the frontend
 - **Secret-marketplace-auction-closer CRE workflow** runs on a 30-second cron, reads `getOpenAuctions()` and `getAuction(id)` to find expired auctions, then submits a signed report with `ACTION_CLOSE_AUCTION` (0x00) to close them
 - `closeAuction()` keeps funds in contract; admin withdraws via `withdrawFunds()`
+- **Reputation-resolver CRE workflow** runs on a 60-second cron (also supports REST trigger for E2E), reads `getUnresolvedEvents()` from SecretMarketplace, checks if each event is settled on ExamplePredictionMarket, fetches seller predictions from Supabase `secrets.event_data`, compares predictions to actual outcomes, and submits per-auction reputation results via `ACTION_RECORD_EVENT_OUTCOME` (0x02). Each `AuctionResult` contains a `PredictionOutcome` enum (NoPrediction=0, PredictionCorrect=1, PredictionWrong=2). Correct predictions get +1 rep, incorrect get -1, omitted get 0 (still marked resolved). Uses 1 HTTP call (Supabase GET) + EVM reads (free).
+- **Force-close-handler CRE workflow** is log-triggered on `AuctionCancelled` events. When an auction is cancelled, it finds active private bids in Supabase for that auction and refunds them (sets `status="refunded"`, `refunded_at=now`). Uses 2 HTTP calls (Supabase GET + PATCH). No on-chain writes.
 - **User-balance-recording-fallback CRE workflow** runs on a 60-second cron, polls the Private Token API for transfers to/from the platform EOA, and records them as deposits or withdrawals in the Supabase `transfers` table
+- `recordEventOutcomeAndUpdateRepScore(eventId, AuctionResult[])` accepts per-auction prediction outcomes — each `AuctionResult` has `{auctionId, predictionOutcome}` where `predictionOutcome` is a `PredictionOutcome` enum (NoPrediction=0, PredictionCorrect=1, PredictionWrong=2). Auctions not in the results array get NoPrediction (0 score change, still marked resolved).
+- **Event watcher** (`scripts/event-watcher/`) is a long-running Node.js process that subscribes to `AuctionCancelled` and `SettlementRequested` events via WebSocket, and polls for expired auctions every 30s via HTTP. On startup, catches up missed blocks using `getLogs`. Triggers the appropriate CRE workflows via `cre workflow simulate`. Deployed as a systemd service on the remote server. Persists last-processed block to `.watcher-state.json`.
 - CRE CLI installed at `~/.cre/bin/cre` (add to PATH: `export PATH="$HOME/.cre/bin:$PATH"`)
 
 ## Reference Docs

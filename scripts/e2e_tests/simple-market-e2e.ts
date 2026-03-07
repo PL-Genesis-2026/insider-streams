@@ -6,8 +6,8 @@
  *   2. Bidder approves USDC + buys YES shares
  *   3. Waits for event closure (3 minutes)
  *   4. Owner requests settlement
- *   5. CRE reputation-score-manager simulation (dry run)
- *   6. CRE reputation-score-manager broadcast (on-chain settlement)
+ *   5. CRE external-prediction-market-settler simulation (dry run)
+ *   6. CRE external-prediction-market-settler broadcast (on-chain settlement)
  *   7. Verifies on-chain event is Settled
  *   8. Verifies Firestore document exists with question + AI response
  *
@@ -18,24 +18,27 @@
  *   FIREBASE_API_KEY     — Firebase API key
  *   FIREBASE_PROJECT_ID  — Firebase project ID
  *
- * Usage: pnpm e2e:reputation-score-manager
+ * Usage: pnpm e2e:external-prediction-market-settler
  */
 
 import "dotenv/config";
 
 import {
   CONFIDENTIAL_USDC_ADDRESS,
-  confidentialUsdcAbi,
   EXAMPLE_PREDICTION_MARKET_ADDRESS,
   examplePredictionMarketAbi,
 } from "@private-streams/common";
-import { parseEventLogs, type Hex } from "viem";
+import type { Hex } from "viem";
 import {
+  MIN_BALANCE,
+  MINT_AMOUNT,
   assert,
   banner,
   createClients,
+  ensureUsdcApproval,
   ensureUsdcBalance,
   envRequired,
+  parseFirstEventLog,
   runCRE,
   step,
   waitForTimestamp,
@@ -57,10 +60,6 @@ const { publicClient, ownerClient, ownerAccount, bidderClient, bidderAccount } =
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const MIN_BALANCE = 10_000_000n; // 10 USDC
-const MINT_AMOUNT = 10_000_000_000n; // 10,000 USDC
-const APPROVAL_AMOUNT = 100_000_000_000n; // 100,000 USDC blanket
-const MIN_ALLOWANCE = 10_000_000n; // 10 USDC — threshold to trigger approve
 const PREDICTION_AMOUNT = 1_000_000n; // 1 USDC
 const EVENT_DURATION = BigInt(60); // 60 seconds
 const QUESTION = "The New York Yankees won the 2009 World Series.";
@@ -90,41 +89,22 @@ async function main() {
 
   // ── Step 2: Approve USDC (only if needed) ──────────────────────────────────
   step("Ensuring USDC approvals...");
-  const ownerAllowance = await publicClient.readContract({
-    address: CONFIDENTIAL_USDC,
-    abi: confidentialUsdcAbi,
-    functionName: "allowance",
-    args: [ownerAccount.address, EXAMPLE_PREDICTION_MARKET_ADDRESS],
-  });
-  if (ownerAllowance < MIN_ALLOWANCE) {
-    const h = await ownerClient.writeContract({
-      address: CONFIDENTIAL_USDC,
-      abi: confidentialUsdcAbi,
-      functionName: "approve",
-      args: [EXAMPLE_PREDICTION_MARKET_ADDRESS, APPROVAL_AMOUNT],
-    });
-    await waitForTx(publicClient, h, "Owner USDC approval");
-  } else {
-    console.log(`  ok Owner allowance sufficient`);
-  }
-
-  const bidderAllowance = await publicClient.readContract({
-    address: CONFIDENTIAL_USDC,
-    abi: confidentialUsdcAbi,
-    functionName: "allowance",
-    args: [bidderAccount!.address, EXAMPLE_PREDICTION_MARKET_ADDRESS],
-  });
-  if (bidderAllowance < MIN_ALLOWANCE) {
-    const h = await bidderClient!.writeContract({
-      address: CONFIDENTIAL_USDC,
-      abi: confidentialUsdcAbi,
-      functionName: "approve",
-      args: [EXAMPLE_PREDICTION_MARKET_ADDRESS, APPROVAL_AMOUNT],
-    });
-    await waitForTx(publicClient, h, "Bidder USDC approval");
-  } else {
-    console.log(`  ok Bidder allowance sufficient`);
-  }
+  await ensureUsdcApproval(
+    publicClient,
+    ownerClient,
+    CONFIDENTIAL_USDC,
+    ownerAccount.address,
+    EXAMPLE_PREDICTION_MARKET_ADDRESS,
+    "Owner",
+  );
+  await ensureUsdcApproval(
+    publicClient,
+    bidderClient!,
+    CONFIDENTIAL_USDC,
+    bidderAccount!.address,
+    EXAMPLE_PREDICTION_MARKET_ADDRESS,
+    "Bidder",
+  );
 
   // ── Step 3: Create event ───────────────────────────────────────────────────
   step("Owner creating event...");
@@ -139,12 +119,7 @@ async function main() {
     createEventHash,
     "Event created",
   );
-  const eventLogs = parseEventLogs({
-    abi: examplePredictionMarketAbi,
-    logs: eventReceipt.logs,
-    eventName: "EventCreated",
-  });
-  const eventId = eventLogs[0].args.eventId;
+  const eventId = parseFirstEventLog(eventReceipt, examplePredictionMarketAbi, "EventCreated").eventId as bigint;
   console.log(`  Event ID: ${eventId}`);
 
   // ── Step 4: Buy YES shares (replaces old makePrediction) ────────────────────
@@ -188,9 +163,9 @@ async function main() {
   console.log(`  Settlement tx: ${settleHash}`);
 
   // ── Step 7: CRE dry run ─────────────────────────────────────────────────────
-  step("Running CRE reputation-score-manager simulation (dry run)...");
+  step("Running CRE external-prediction-market-settler simulation (dry run)...");
   const dryOutput = runCRE({
-    workflow: "reputation-score-manager",
+    workflow: "external-prediction-market-settler",
     evmTxHash: settleHash,
     evmEventIndex: 0,
     triggerIndex: 0,
@@ -208,9 +183,9 @@ async function main() {
   }
 
   // ── Step 8: CRE broadcast ──────────────────────────────────────────────────
-  step("Running CRE reputation-score-manager with broadcast...");
+  step("Running CRE external-prediction-market-settler with broadcast...");
   const broadcastOutput = runCRE({
-    workflow: "reputation-score-manager",
+    workflow: "external-prediction-market-settler",
     evmTxHash: settleHash,
     evmEventIndex: 0,
     triggerIndex: 0,

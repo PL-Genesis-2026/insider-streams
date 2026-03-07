@@ -16,19 +16,19 @@ pnpm dev:insider-streams
 |----------|---------|
 | ConfidentialUSDC | `0xee3A0Cccb31fF816615C18E1d1DB480df8a0f9F1` |
 | ExamplePredictionMarket | `0x83B1F9d683b1a760569C237Bfb89C50112c05e24` |
-| SecretMarketplace | `0x8e99C312489f64D2C94B611A9d8f28A7566cb42D` |
+| SecretMarketplace | `0x6420943F07c8427C4E6f27BDa09cB711e8BB2A93` |
 
 ## Create a Prediction Market
 
 ### With CRE (automated settlement)
 
-The [reputation-score-manager](cre-workflows/reputation-score-manager/) CRE workflow listens for `SettlementRequested` events, queries Gemini AI, and settles the market on-chain automatically.
+The [external-prediction-market-settler](cre-workflows/external-prediction-market-settler/) CRE workflow listens for `SettlementRequested` events, queries Gemini AI, and settles the market on-chain automatically.
 
 ```bash
 # Install CRE CLI: https://docs.chain.link/cre/getting-started/cli-installation/macos-linux
 # Then simulate the workflow:
 cd cre-workflows
-cre workflow simulate reputation-score-manager --target local-simulation --broadcast
+cre workflow simulate external-prediction-market-settler --target local-simulation --broadcast
 ```
 
 See [CRE Workflows README](cre-workflows/README.md) for details.
@@ -49,7 +49,7 @@ forge script script/CreateMarket.s.sol --rpc-url $RPC_URL --broadcast
 ```bash
 cd contracts
 
-SECRET_MARKETPLACE_ADDRESS=0x8e99C312489f64D2C94B611A9d8f28A7566cb42D \
+SECRET_MARKETPLACE_ADDRESS=0x6420943F07c8427C4E6f27BDa09cB711e8BB2A93 \
 EXTERNAL_MARKET_ID=0 \
 RESERVE_PRICE=1000000 \
 AUCTION_DURATION=120 \
@@ -72,25 +72,25 @@ cre workflow simulate secret-marketplace-auction-closer --target local-simulatio
 ```bash
 cd contracts
 
-SECRET_MARKETPLACE_ADDRESS=0x8e99C312489f64D2C94B611A9d8f28A7566cb42D \
+SECRET_MARKETPLACE_ADDRESS=0x6420943F07c8427C4E6f27BDa09cB711e8BB2A93 \
 AUCTION_ID=0 \
 forge script script/secret-marketplace/CloseAuction.s.sol --rpc-url $RPC_URL --broadcast
 ```
 
-### Force Close (owner only)
+### Cancel Auction (owner only)
 
-Force-closes an auction regardless of expiry. Refunds the highest bidder and adjusts seller reputation.
+Cancels an auction regardless of expiry. Refunds the highest bidder and records the prediction outcome.
 
 ```bash
 cd contracts
 
-SECRET_MARKETPLACE_ADDRESS=0x8e99C312489f64D2C94B611A9d8f28A7566cb42D \
+SECRET_MARKETPLACE_ADDRESS=0x6420943F07c8427C4E6f27BDa09cB711e8BB2A93 \
 AUCTION_ID=0 \
-REPUTATION_DELTA=-1 \
-forge script script/secret-marketplace/ForceCloseAuction.s.sol --rpc-url $RPC_URL --broadcast
+PREDICTION_OUTCOME=0 \
+forge script script/secret-marketplace/CancelAuction.s.sol --rpc-url $RPC_URL --broadcast
 ```
 
-No automated CRE workflow exists for force-close yet — it requires new contract functions to determine when force-close is appropriate.
+`PREDICTION_OUTCOME`: 0=NoPrediction, 1=PredictionCorrect, 2=PredictionWrong. The `force-close-handler` CRE workflow handles bid refunds when auctions are force-closed.
 
 ## Regenerate Contract Types
 
@@ -130,7 +130,7 @@ private-streams/
 ├── packages/common/                 # Shared ABIs, types, contract addresses
 ├── contracts/                       # Foundry — Solidity contracts
 ├── cre-workflows/                   # CRE TypeScript workflows
-│   ├── reputation-score-manager/  # AI-powered market settlement
+│   ├── external-prediction-market-settler/  # AI-powered market settlement
 │   └── secret-marketplace-auction-closer/      # Automated auction closing
 ├── subgraphs/secrets-marketplace/   # The Graph subgraph
 └── scripts/                         # E2E tests and utilities

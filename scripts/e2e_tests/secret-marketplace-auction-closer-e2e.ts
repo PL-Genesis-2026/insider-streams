@@ -33,18 +33,24 @@ import {
   CONFIDENTIAL_USDC_ADDRESS,
   SECRET_MARKETPLACE_ADDRESS,
   examplePredictionMarketAbi,
-  confidentialUsdcAbi,
   secretMarketplaceAbi,
 } from "@private-streams/common";
 import type { Database } from "@private-streams/common";
-import { parseEventLogs, formatUnits, type Address, type Hex } from "viem";
+import { formatUnits, type Address, type Hex } from "viem";
 import {
+  MIN_BALANCE,
+  MINT_AMOUNT,
+  USDC_DECIMALS,
   assert,
   banner,
   createClients,
+  ensureUsdcApproval,
   ensureUsdcBalance,
   envRequired,
+  parseFirstEventLog,
+  readSimpleMarketAddress,
   runCRE,
+  setupSupabaseAuctionBid,
   step,
   waitForTimestamp,
   waitForTx,
@@ -68,15 +74,10 @@ const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_KEY);
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const MIN_BALANCE = 10_000_000n; // 10 USDC
-const MINT_AMOUNT = 10_000_000_000n; // 10,000 USDC
-const APPROVAL_AMOUNT = 100_000_000_000n; // 100,000 USDC blanket
-const MIN_ALLOWANCE = 10_000_000n; // 10 USDC — threshold to trigger approve
 const BID_AMOUNT = 2_000_000n; // 2 USDC
 const EVENT_DURATION = BigInt(60); // 60 seconds (market event duration)
 const AUCTION_DURATION = 45; // 45 seconds — needs headroom for Sepolia tx confirmation
-const SELLER_NAME = "E2ETestSeller";
-const USDC_DECIMALS = 6;
+const SELLER_ID = "E2ETestSeller";
 
 // Unique transaction ID for the mock deposit (avoids collisions with real data)
 const DEPOSIT_TX_ID = `e2e-auction-closer-deposit-${Date.now()}`;
@@ -86,11 +87,7 @@ const DEPOSIT_AMOUNT = BID_AMOUNT * 10n; // 20 USDC — headroom
 
 async function main() {
   // Read the ExamplePredictionMarket address from SecretMarketplace
-  const SIMPLE_MARKET = (await publicClient.readContract({
-    address: SECRET_MARKETPLACE,
-    abi: secretMarketplaceAbi,
-    functionName: "marketplace",
-  })) as Address;
+  const SIMPLE_MARKET = await readSimpleMarketAddress(publicClient, SECRET_MARKETPLACE);
 
   banner("Auction Closer E2E Test (with Supabase settlement)");
   console.log(`  Owner (seller):    ${ownerAccount.address}`);
@@ -113,41 +110,22 @@ async function main() {
 
   // ── Step 2: Approve USDC (only if needed) ──────────────────────────────────
   step("Ensuring USDC approvals...");
-  const allowanceSM = await publicClient.readContract({
-    address: CONFIDENTIAL_USDC,
-    abi: confidentialUsdcAbi,
-    functionName: "allowance",
-    args: [ownerAccount.address, SECRET_MARKETPLACE],
-  });
-  if (allowanceSM < MIN_ALLOWANCE) {
-    const h = await ownerClient.writeContract({
-      address: CONFIDENTIAL_USDC,
-      abi: confidentialUsdcAbi,
-      functionName: "approve",
-      args: [SECRET_MARKETPLACE, APPROVAL_AMOUNT],
-    });
-    await waitForTx(publicClient, h, "Owner approved SecretMarketplace");
-  } else {
-    console.log(`  ok SecretMarketplace allowance sufficient`);
-  }
-
-  const allowanceMarket = await publicClient.readContract({
-    address: CONFIDENTIAL_USDC,
-    abi: confidentialUsdcAbi,
-    functionName: "allowance",
-    args: [ownerAccount.address, SIMPLE_MARKET],
-  });
-  if (allowanceMarket < MIN_ALLOWANCE) {
-    const h = await ownerClient.writeContract({
-      address: CONFIDENTIAL_USDC,
-      abi: confidentialUsdcAbi,
-      functionName: "approve",
-      args: [SIMPLE_MARKET, APPROVAL_AMOUNT],
-    });
-    await waitForTx(publicClient, h, "Owner approved ExamplePredictionMarket");
-  } else {
-    console.log(`  ok ExamplePredictionMarket allowance sufficient`);
-  }
+  await ensureUsdcApproval(
+    publicClient,
+    ownerClient,
+    CONFIDENTIAL_USDC,
+    ownerAccount.address,
+    SECRET_MARKETPLACE,
+    "SecretMarketplace",
+  );
+  await ensureUsdcApproval(
+    publicClient,
+    ownerClient,
+    CONFIDENTIAL_USDC,
+    ownerAccount.address,
+    SIMPLE_MARKET,
+    "ExamplePredictionMarket",
+  );
 
   // ── Step 3: Create event ───────────────────────────────────────────────────
   step("Owner creating ExamplePredictionMarket event...");
@@ -162,12 +140,8 @@ async function main() {
     createEventHash,
     "Event created",
   );
-  const eventLogs = parseEventLogs({
-    abi: examplePredictionMarketAbi,
-    logs: eventReceipt.logs,
-    eventName: "EventCreated",
-  });
-  const eventId = eventLogs[0].args.eventId;
+  const eventArgs = parseFirstEventLog(eventReceipt, examplePredictionMarketAbi, "EventCreated");
+  const eventId = eventArgs.eventId as bigint;
   console.log(`  Event ID: ${eventId}`);
 
   // ── Step 4: Create auction ─────────────────────────────────────────────────
@@ -182,19 +156,15 @@ async function main() {
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
     functionName: "createAuction",
-    args: [SELLER_NAME, eventId, "Auction closer E2E test", endTime],
+    args: [SELLER_ID, eventId, "Auction closer E2E test", endTime],
   });
   const auctionReceipt = await waitForTx(
     publicClient,
     createAuctionHash,
     "Auction created",
   );
-  const auctionLogs = parseEventLogs({
-    abi: secretMarketplaceAbi,
-    logs: auctionReceipt.logs,
-    eventName: "AuctionCreated",
-  });
-  const auctionId = auctionLogs[0].args.auctionId;
+  const auctionArgs = parseFirstEventLog(auctionReceipt, secretMarketplaceAbi, "AuctionCreated");
+  const auctionId = auctionArgs.auctionId as bigint;
   const auctionIdStr = auctionId.toString();
   console.log(`  Auction ID: ${auctionId}`);
 
@@ -222,48 +192,16 @@ async function main() {
 
   // ── Step 6: Insert Supabase records (seller, secret, deposit, private_bid) ─
   step("Setting up Supabase records...");
-
-  // Upsert seller (seller_id for the secret)
-  const { error: sellerErr } = await supabase
-    .from("sellers")
-    .upsert({ id: SELLER_NAME, address: ownerAccount.address.toLowerCase() }, { onConflict: "id" });
-  assert(!sellerErr, `Failed to upsert seller: ${sellerErr?.message}`);
-  console.log(`  ok Seller upserted: ${SELLER_NAME} -> ${ownerAccount.address}`);
-
-  // Insert secret (auction_id is PK — FK target for private_bids)
-  const { error: secretErr } = await supabase
-    .from("secrets")
-    .upsert({
-      auction_id: auctionIdStr,
-      secret_data: "E2E test secret data",
-      seller_id: SELLER_NAME,
-    }, { onConflict: "auction_id" });
-  assert(!secretErr, `Failed to insert secret: ${secretErr?.message}`);
-  console.log(`  ok Secret inserted for auction ${auctionIdStr}`);
-
-  // Insert confirmed deposit transfer so bidder has available balance for bidding
-  const { error: depositErr } = await supabase
-    .from("transfers")
-    .insert({
-      transaction_id: DEPOSIT_TX_ID,
-      user_address: bidderAccount!.address.toLowerCase(),
-      amount: DEPOSIT_AMOUNT.toString(),
-      status: "confirmed",
-    });
-  assert(!depositErr, `Failed to insert deposit transfer: ${depositErr?.message}`);
-  console.log(`  ok Deposit: ${formatUnits(DEPOSIT_AMOUNT, USDC_DECIMALS)} USDC for bidder`);
-
-  // Insert active private bid (web2 bid from bidder)
-  const { error: bidErr } = await supabase
-    .from("private_bids")
-    .insert({
-      auction_id: auctionIdStr,
-      bidder_address: bidderAccount!.address.toLowerCase(),
-      amount: BID_AMOUNT.toString(),
-      status: "active",
-    });
-  assert(!bidErr, `Failed to insert private_bid: ${bidErr?.message}`);
-  console.log(`  ok Private bid: ${formatUnits(BID_AMOUNT, USDC_DECIMALS)} USDC from bidder`);
+  await setupSupabaseAuctionBid(supabase, {
+    sellerName: SELLER_ID,
+    sellerAddress: ownerAccount.address,
+    auctionId: auctionIdStr,
+    secretData: "E2E test secret data",
+    bidderAddress: bidderAccount!.address,
+    bidAmount: BID_AMOUNT,
+    depositTxId: DEPOSIT_TX_ID,
+    depositAmount: DEPOSIT_AMOUNT,
+  });
 
   // Capture starting balances for relative assertions
   const { data: buyerBalBefore } = await supabase
