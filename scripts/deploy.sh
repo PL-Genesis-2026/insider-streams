@@ -62,6 +62,7 @@ PREV_BRANCH=""
 PREV_COMMIT=""
 
 # E2E result tracking
+SECRET_MARKETPLACE_RESULT="skipped"
 SECRET_MARKETPLACE_AUCTION_CLOSER_RESULT="skipped"
 SIMPLE_MARKET_RESULT="skipped"
 USER_BALANCE_RECORDING_FALLBACK_RESULT="skipped"
@@ -335,14 +336,34 @@ else
   echo "▶ Phase 3: Running E2E verification..."
   E2E_FAILURES=0
 
-  # 3a: secret-marketplace-auction-closer E2E
+  # 3a: secret-marketplace E2E (on-chain lifecycle)
+  echo ""
+  info "  Running secret-marketplace E2E..."
+  MARKETPLACE_OUTPUT=$(ssh -t "$REMOTE_HOST" bash -c "'
+    set -euo pipefail
+    export NVM_DIR=\"\$HOME/.nvm\" && [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\"; export PATH=\"\$HOME/.cre/bin:\$HOME/.foundry/bin:\$HOME/.bun/bin:\$HOME/.local/bin:\$PATH\"
+    cd \"$REPO_PATH/scripts\"
+    pnpm e2e:secret-marketplace 2>&1
+  '" 2>&1) || true
+
+  if echo "$MARKETPLACE_OUTPUT" | grep -q "PASS"; then
+    SECRET_MARKETPLACE_RESULT="pass"
+    success "secret-marketplace E2E passed"
+  else
+    SECRET_MARKETPLACE_RESULT="fail"
+    fail "secret-marketplace E2E failed"
+    echo "$MARKETPLACE_OUTPUT" | tail -20
+    E2E_FAILURES=$((E2E_FAILURES + 1))
+  fi
+
+  # 3b: secret-marketplace-auction-closer E2E
   echo ""
   info "  Running secret-marketplace-auction-closer E2E..."
   AUCTION_OUTPUT=$(ssh -t "$REMOTE_HOST" bash -c "'
     set -euo pipefail
     export NVM_DIR=\"\$HOME/.nvm\" && [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\"; export PATH=\"\$HOME/.cre/bin:\$HOME/.foundry/bin:\$HOME/.bun/bin:\$HOME/.local/bin:\$PATH\"
-    cd \"$REPO_PATH\"
-    ./scripts/e2e_tests/secret-marketplace-auction-closer-e2e.sh 2>&1
+    cd \"$REPO_PATH/scripts\"
+    pnpm e2e:secret-marketplace-auction-closer 2>&1
   '" 2>&1) || true
 
   if echo "$AUCTION_OUTPUT" | grep -q "PASS"; then
@@ -355,14 +376,14 @@ else
     E2E_FAILURES=$((E2E_FAILURES + 1))
   fi
 
-  # 3b: simple-market E2E
+  # 3c: simple-market E2E
   echo ""
   info "  Running simple-market E2E..."
   MARKET_OUTPUT=$(ssh -t "$REMOTE_HOST" bash -c "'
     set -euo pipefail
     export NVM_DIR=\"\$HOME/.nvm\" && [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\"; export PATH=\"\$HOME/.cre/bin:\$HOME/.foundry/bin:\$HOME/.bun/bin:\$HOME/.local/bin:\$PATH\"
-    cd \"$REPO_PATH\"
-    ./scripts/e2e_tests/simple-market-e2e.sh 2>&1
+    cd \"$REPO_PATH/scripts\"
+    pnpm e2e:reputation-score-manager 2>&1
   '" 2>&1) || true
 
   if echo "$MARKET_OUTPUT" | grep -q "PASS"; then
@@ -375,23 +396,23 @@ else
     E2E_FAILURES=$((E2E_FAILURES + 1))
   fi
 
-  # 3c: user-balance-recording-fallback (CRE simulation only, no E2E script)
+  # 3d: user-balance-recording-fallback E2E
   echo ""
-  info "  Running user-balance-recording-fallback CRE simulation..."
+  info "  Running user-balance-recording-fallback E2E..."
   DEPOSIT_EXIT=0
   DEPOSIT_OUTPUT=$(ssh -t "$REMOTE_HOST" bash -c "'
     set -euo pipefail
     export NVM_DIR=\"\$HOME/.nvm\" && [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\"; export PATH=\"\$HOME/.cre/bin:\$HOME/.foundry/bin:\$HOME/.bun/bin:\$HOME/.local/bin:\$PATH\"
-    cd \"$REPO_PATH/cre-workflows\"
-    cre workflow simulate user-balance-recording-fallback --target local-simulation --non-interactive --trigger-index 0 2>&1
+    cd \"$REPO_PATH/scripts\"
+    pnpm e2e:user-balance-recording-fallback 2>&1
   '" 2>&1) || DEPOSIT_EXIT=$?
 
-  if [ "$DEPOSIT_EXIT" -eq 0 ] && ! echo "$DEPOSIT_OUTPUT" | grep -qi "error\|panic\|fatal"; then
+  if [ "$DEPOSIT_EXIT" -eq 0 ] && echo "$DEPOSIT_OUTPUT" | grep -qi "PASSED\|PASS"; then
     USER_BALANCE_RECORDING_FALLBACK_RESULT="pass"
-    success "user-balance-recording-fallback simulation passed"
+    success "user-balance-recording-fallback E2E passed"
   else
     USER_BALANCE_RECORDING_FALLBACK_RESULT="fail"
-    fail "user-balance-recording-fallback simulation failed"
+    fail "user-balance-recording-fallback E2E failed"
     echo "$DEPOSIT_OUTPUT" | tail -20
     E2E_FAILURES=$((E2E_FAILURES + 1))
   fi
@@ -401,6 +422,7 @@ else
   echo "  ┌──────────────────────────────────────────┬──────────┐"
   echo "  │ Workflow                                 │ Result   │"
   echo "  ├──────────────────────────────────────────┼──────────┤"
+  printf "  │ %-40s │ %-8s │\n" "secret-marketplace" "$SECRET_MARKETPLACE_RESULT"
   printf "  │ %-40s │ %-8s │\n" "secret-marketplace-auction-closer" "$SECRET_MARKETPLACE_AUCTION_CLOSER_RESULT"
   printf "  │ %-40s │ %-8s │\n" "simple-market" "$SIMPLE_MARKET_RESULT"
   printf "  │ %-40s │ %-8s │\n" "user-balance-recording-fallback" "$USER_BALANCE_RECORDING_FALLBACK_RESULT"
@@ -433,6 +455,6 @@ echo "  Branch:    $BRANCH"
 echo "  Commit:    $DEPLOYED_COMMIT"
 echo "  Repo:      $REPO_PATH"
 if [ "$SKIP_E2E" = false ]; then
-  echo "  Workflows: secret-marketplace-auction-closer=$SECRET_MARKETPLACE_AUCTION_CLOSER_RESULT simple-market=$SIMPLE_MARKET_RESULT user-balance-recording-fallback=$USER_BALANCE_RECORDING_FALLBACK_RESULT"
+  echo "  Workflows: secret-marketplace=$SECRET_MARKETPLACE_RESULT auction-closer=$SECRET_MARKETPLACE_AUCTION_CLOSER_RESULT simple-market=$SIMPLE_MARKET_RESULT deposit-reconciler=$USER_BALANCE_RECORDING_FALLBACK_RESULT"
 fi
 echo "═══════════════════════════════════════════════════════"
