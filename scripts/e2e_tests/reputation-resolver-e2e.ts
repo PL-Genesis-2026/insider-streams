@@ -70,8 +70,8 @@ const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_KEY);
 const SELLER_A = "E2EReputationSellerA";
 const SELLER_B = "E2EReputationSellerB";
 const BID_AMOUNT = 1_000_000n; // 1 USDC
-const AUCTION_DURATION = 60; // 60 seconds — needs headroom for setup steps
-const EVENT_DURATION = BigInt(90); // 90 seconds — must outlast auctions
+const AUCTION_DURATION = 120; // 120 seconds — needs headroom for setup steps + remote latency
+const EVENT_DURATION = BigInt(180); // 180 seconds — must outlast auctions
 const DEPOSIT_AMOUNT = BID_AMOUNT * 10n; // 10 USDC headroom
 const QUESTION = "Reputation resolver E2E test event";
 
