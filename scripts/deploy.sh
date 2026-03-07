@@ -66,6 +66,8 @@ SECRET_MARKETPLACE_RESULT="skipped"
 SECRET_MARKETPLACE_AUCTION_CLOSER_RESULT="skipped"
 SIMPLE_MARKET_RESULT="skipped"
 USER_BALANCE_RECORDING_FALLBACK_RESULT="skipped"
+REPUTATION_RESOLVER_RESULT="skipped"
+FORCE_CLOSE_HANDLER_RESULT="skipped"
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 info()    { echo -e "${CYAN}$*${NC}"; }
@@ -102,7 +104,7 @@ do_rollback() {
     pnpm install --frozen-lockfile 2>/dev/null || pnpm install
   " >/dev/null 2>&1
 
-  for workflow in reputation-score-manager secret-marketplace-auction-closer user-balance-recording-fallback; do
+  for workflow in reputation-score-manager secret-marketplace-auction-closer user-balance-recording-fallback reputation-resolver force-close-handler; do
     if ssh "$REMOTE_HOST" "[ -d '$REPO_PATH/cre-workflows/$workflow' ]"; then
       remote_exec "cd cre-workflows/$workflow && bun install" >/dev/null 2>&1
     fi
@@ -315,7 +317,7 @@ success "pnpm dependencies installed"
 
 # Install CRE workflow dependencies (bun)
 info "  Installing CRE workflow dependencies..."
-for workflow in reputation-score-manager secret-marketplace-auction-closer user-balance-recording-fallback; do
+for workflow in reputation-score-manager secret-marketplace-auction-closer user-balance-recording-fallback reputation-resolver force-close-handler; do
   if ssh "$REMOTE_HOST" "[ -d '$REPO_PATH/cre-workflows/$workflow' ]"; then
     remote_exec "cd cre-workflows/$workflow && bun install" >/dev/null 2>&1
     success "$workflow — bun install"
@@ -417,6 +419,48 @@ else
     E2E_FAILURES=$((E2E_FAILURES + 1))
   fi
 
+  # 3e: reputation-resolver E2E
+  echo ""
+  info "  Running reputation-resolver E2E..."
+  REPUTATION_EXIT=0
+  REPUTATION_OUTPUT=$(ssh -t "$REMOTE_HOST" bash -c "'
+    set -euo pipefail
+    export NVM_DIR=\"\$HOME/.nvm\" && [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\"; export PATH=\"\$HOME/.cre/bin:\$HOME/.foundry/bin:\$HOME/.bun/bin:\$HOME/.local/bin:\$PATH\"
+    cd \"$REPO_PATH/scripts\"
+    pnpm e2e:reputation 2>&1
+  '" 2>&1) || REPUTATION_EXIT=$?
+
+  if [ "$REPUTATION_EXIT" -eq 0 ] && echo "$REPUTATION_OUTPUT" | grep -qi "PASS"; then
+    REPUTATION_RESOLVER_RESULT="pass"
+    success "reputation-resolver E2E passed"
+  else
+    REPUTATION_RESOLVER_RESULT="fail"
+    fail "reputation-resolver E2E failed"
+    echo "$REPUTATION_OUTPUT" | tail -20
+    E2E_FAILURES=$((E2E_FAILURES + 1))
+  fi
+
+  # 3f: force-close-handler E2E
+  echo ""
+  info "  Running force-close-handler E2E..."
+  FORCE_CLOSE_EXIT=0
+  FORCE_CLOSE_OUTPUT=$(ssh -t "$REMOTE_HOST" bash -c "'
+    set -euo pipefail
+    export NVM_DIR=\"\$HOME/.nvm\" && [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\"; export PATH=\"\$HOME/.cre/bin:\$HOME/.foundry/bin:\$HOME/.bun/bin:\$HOME/.local/bin:\$PATH\"
+    cd \"$REPO_PATH/scripts\"
+    pnpm e2e:force-close 2>&1
+  '" 2>&1) || FORCE_CLOSE_EXIT=$?
+
+  if [ "$FORCE_CLOSE_EXIT" -eq 0 ] && echo "$FORCE_CLOSE_OUTPUT" | grep -qi "PASS"; then
+    FORCE_CLOSE_HANDLER_RESULT="pass"
+    success "force-close-handler E2E passed"
+  else
+    FORCE_CLOSE_HANDLER_RESULT="fail"
+    fail "force-close-handler E2E failed"
+    echo "$FORCE_CLOSE_OUTPUT" | tail -20
+    E2E_FAILURES=$((E2E_FAILURES + 1))
+  fi
+
   # ─── E2E Results Summary ──────────────────────────────────────────────────
   echo ""
   echo "  ┌──────────────────────────────────────────┬──────────┐"
@@ -426,6 +470,8 @@ else
   printf "  │ %-40s │ %-8s │\n" "secret-marketplace-auction-closer" "$SECRET_MARKETPLACE_AUCTION_CLOSER_RESULT"
   printf "  │ %-40s │ %-8s │\n" "simple-market" "$SIMPLE_MARKET_RESULT"
   printf "  │ %-40s │ %-8s │\n" "user-balance-recording-fallback" "$USER_BALANCE_RECORDING_FALLBACK_RESULT"
+  printf "  │ %-40s │ %-8s │\n" "reputation-resolver" "$REPUTATION_RESOLVER_RESULT"
+  printf "  │ %-40s │ %-8s │\n" "force-close-handler" "$FORCE_CLOSE_HANDLER_RESULT"
   echo "  └──────────────────────────────────────────┴──────────┘"
 
   if [ $E2E_FAILURES -gt 0 ]; then
@@ -455,6 +501,6 @@ echo "  Branch:    $BRANCH"
 echo "  Commit:    $DEPLOYED_COMMIT"
 echo "  Repo:      $REPO_PATH"
 if [ "$SKIP_E2E" = false ]; then
-  echo "  Workflows: secret-marketplace=$SECRET_MARKETPLACE_RESULT auction-closer=$SECRET_MARKETPLACE_AUCTION_CLOSER_RESULT simple-market=$SIMPLE_MARKET_RESULT deposit-reconciler=$USER_BALANCE_RECORDING_FALLBACK_RESULT"
+  echo "  Workflows: secret-marketplace=$SECRET_MARKETPLACE_RESULT auction-closer=$SECRET_MARKETPLACE_AUCTION_CLOSER_RESULT simple-market=$SIMPLE_MARKET_RESULT deposit-reconciler=$USER_BALANCE_RECORDING_FALLBACK_RESULT reputation=$REPUTATION_RESOLVER_RESULT force-close=$FORCE_CLOSE_HANDLER_RESULT"
 fi
 echo "═══════════════════════════════════════════════════════"
