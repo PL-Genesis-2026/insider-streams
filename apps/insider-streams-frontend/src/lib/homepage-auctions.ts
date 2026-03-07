@@ -77,8 +77,8 @@ export async function getHomepageAuctions({
 
     return {
       auctionId: String(a.auctionId),
-      sellerAddress: String(a.seller),
-      marketId: String(a.externalMarketId),
+      sellerAddress: String(a.sellerId),
+      marketId: String(a.eventId),
       status: "Open",
       currentBidUsdc: latestBid
         ? Number(
@@ -103,8 +103,8 @@ export async function getHomepageAuctions({
 
     return {
       auctionId: String(a.auctionId),
-      sellerAddress: String(a.seller),
-      marketId: String(a.externalMarketId),
+      sellerAddress: String(a.sellerId),
+      marketId: String(a.eventId),
       status: "Closed",
       currentBidUsdc: Number(
         formatUnits(BigInt(String(a.winningBid)), CONFIDENTIAL_USDC_DECIMALS),

@@ -1361,7 +1361,15 @@ export const secretMarketplaceAbi = [
     type: 'function',
     inputs: [
       { name: 'externalEventId', internalType: 'uint256', type: 'uint256' },
-      { name: 'delta', internalType: 'int8', type: 'int8' },
+      {
+        name: 'results',
+        internalType: 'struct SecretMarketplace.AuctionResult[]',
+        type: 'tuple[]',
+        components: [
+          { name: 'auctionId', internalType: 'uint256', type: 'uint256' },
+          { name: 'predictionCorrect', internalType: 'bool', type: 'bool' },
+        ],
+      },
     ],
     name: 'resolveExternalEvent',
     outputs: [],
@@ -1652,9 +1660,14 @@ export const secretMarketplaceAbi = [
         type: 'uint256',
         indexed: true,
       },
-      { name: 'delta', internalType: 'int8', type: 'int8', indexed: false },
       {
         name: 'auctionsAffected',
+        internalType: 'uint256',
+        type: 'uint256',
+        indexed: false,
+      },
+      {
+        name: 'resultsApplied',
         internalType: 'uint256',
         type: 'uint256',
         indexed: false,
@@ -1844,6 +1857,14 @@ export const secretMarketplaceAbi = [
   { type: 'error', inputs: [], name: 'AuctionDoesNotExist' },
   { type: 'error', inputs: [], name: 'AuctionNotActive' },
   { type: 'error', inputs: [], name: 'AuctionNotEnded' },
+  {
+    type: 'error',
+    inputs: [
+      { name: 'auctionId', internalType: 'uint256', type: 'uint256' },
+      { name: 'expectedEventId', internalType: 'uint256', type: 'uint256' },
+    ],
+    name: 'AuctionNotLinkedToEvent',
+  },
   { type: 'error', inputs: [], name: 'BidTooLow' },
   { type: 'error', inputs: [], name: 'EndTimeInPast' },
   {
