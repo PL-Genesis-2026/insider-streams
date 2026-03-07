@@ -11,6 +11,7 @@ import { useState } from "react";
 import { cookieToInitialState, WagmiProvider } from "wagmi";
 import { walletConfig } from "@/lib/wallet/config";
 import { SUBGRAPH_URL, SUBGRAPH_REQUEST_HEADERS } from "@/lib/subgraph-config";
+import { PrivateDataProvider } from "@/lib/private-data/private-data-provider";
 
 function makeClient() {
   return new ApolloClient({
@@ -33,7 +34,9 @@ export function Providers({
     <ApolloNextAppProvider makeClient={makeClient}>
       <WagmiProvider config={walletConfig} initialState={initialState}>
         <QueryClientProvider client={queryClient}>
-          {children}
+          <PrivateDataProvider>
+            {children}
+          </PrivateDataProvider>
         </QueryClientProvider>
       </WagmiProvider>
     </ApolloNextAppProvider>

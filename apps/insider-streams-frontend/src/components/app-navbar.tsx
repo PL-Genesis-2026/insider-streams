@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
 import { WalletAccountControl } from "@/components/wallet/wallet-account-control";
+import { RevealPrivateDataButton } from "@/components/reveal-private-data-button";
 
 export function AppNavbar() {
   return (
@@ -20,6 +21,7 @@ export function AppNavbar() {
           <Button asChild variant="outline" size="sm">
             <Link href="/funding">Fund wallet</Link>
           </Button>
+          <RevealPrivateDataButton />
           <WalletAccountControl />
         </div>
       </nav>
