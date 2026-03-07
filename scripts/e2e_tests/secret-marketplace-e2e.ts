@@ -143,8 +143,8 @@ async function main() {
   const eventId = eventArgs.eventId as bigint;
   console.log(`  Event ID: ${eventId}`);
 
-  const now = BigInt(Math.floor(Date.now() / 1000));
-  const endTime = now + BigInt(AUCTION_DURATION);
+  const latestBlock = await publicClient.getBlock({ blockTag: "latest" });
+  const endTime = latestBlock.timestamp + BigInt(AUCTION_DURATION);
   const createAuctionHash = await ownerClient.writeContract({
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,

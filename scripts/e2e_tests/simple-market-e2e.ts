@@ -61,7 +61,7 @@ const { publicClient, ownerClient, ownerAccount, bidderClient, bidderAccount } =
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const PREDICTION_AMOUNT = 1_000_000n; // 1 USDC
-const EVENT_DURATION = BigInt(30); // 30 seconds
+const EVENT_DURATION = BigInt(60); // 60 seconds
 const QUESTION = "The New York Yankees won the 2009 World Series.";
 // SimpleMarket.Outcome: 0=Unresolved, 1=No, 2=Yes
 const OUTCOME_YES = 2;
