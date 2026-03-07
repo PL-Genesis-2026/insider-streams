@@ -1,5 +1,5 @@
 {
-  "name": "deposit-reconciler",
+  "name": "reputation-score-manager",
   "version": "1.0.0",
   "main": "dist/main.js",
   "private": true,

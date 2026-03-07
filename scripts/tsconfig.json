@@ -9,5 +9,5 @@
     "resolveJsonModule": true,
     "skipLibCheck": true
   },
-  "include": ["./*.ts"]
+  "include": ["./*.ts", "./e2e_tests/*.ts"]
 }

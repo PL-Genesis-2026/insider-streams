@@ -8,7 +8,7 @@
  *   3. Bidder does a private transfer TO the platform EOA (owner) — this is
  *      the "deposit" the CRE picks up (API type="transfer", is_incoming=true)
  *   4. Poll API until the incoming transfer appears
- *   5. Run CRE deposit-reconciler simulation
+ *   5. Run CRE user-balance-recording-fallback simulation
  *   6. Verify Supabase has the deposit in the unified transfers table
  *   7. Check balances VIEW shows the deposited amount as available
  *   8. Run CRE again — verify idempotency (no duplicates)
@@ -31,7 +31,7 @@
  *   SUPABASE_URL                — Supabase project URL
  *   SUPABASE_SERVICE_ROLE_KEY   — Supabase service role key
  *
- * Usage: pnpm e2e:deposits
+ * Usage: pnpm e2e:user-balance-recording-fallback
  */
 
 import "dotenv/config";
@@ -97,7 +97,7 @@ const WITHDRAWAL_AMOUNT = 1_000_000n; // 1 token — platform EOA → bidder (wi
 // Project root for CRE invocation
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const PROJECT_ROOT = resolve(__dirname, "..");
+const PROJECT_ROOT = resolve(__dirname, "../..");
 const CRE_BIN = `${process.env.HOME}/.cre/bin/cre`;
 
 // ─── ABI fragments ───────────────────────────────────────────────────────────
@@ -307,11 +307,11 @@ async function executePrivateTransfer(
   return data.transaction_id;
 }
 
-/** Run CRE deposit-reconciler simulation — throws on failure */
+/** Run CRE user-balance-recording-fallback simulation — throws on failure */
 function runCRESimulation(): string {
-  console.log("  Running CRE deposit-reconciler simulation...");
+  console.log("  Running CRE user-balance-recording-fallback simulation...");
   const output = execSync(
-    `${CRE_BIN} workflow simulate deposit-reconciler --target local-simulation --non-interactive --trigger-index 0`,
+    `${CRE_BIN} workflow simulate user-balance-recording-fallback --target local-simulation --non-interactive --trigger-index 0`,
     {
       cwd: `${PROJECT_ROOT}/cre-workflows`,
       encoding: "utf-8",
@@ -491,8 +491,8 @@ async function main() {
     10_000,
   );
 
-  // ── Step 5: Run CRE deposit-reconciler simulation ──────────────────────────
-  step("Run CRE deposit-reconciler simulation (first run)");
+  // ── Step 5: Run CRE user-balance-recording-fallback simulation ──────────────
+  step("Run CRE user-balance-recording-fallback simulation (first run)");
   runCRESimulation();
 
   // ── Step 6: Verify deposit in Supabase ─────────────────────────────────────

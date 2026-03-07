@@ -17,7 +17,7 @@
 # ==========================================================================
 local-simulation:
   user-workflow:
-    workflow-name: "prediction-market-demo"
+    workflow-name: "reputation-score-manager"
   workflow-artifacts:
     workflow-path: "./main.ts"
     config-path: "./config.json"
@@ -26,7 +26,7 @@ local-simulation:
 # ==========================================================================
 staging:
   user-workflow:
-    workflow-name: "prediction-market-demo"
+    workflow-name: "reputation-score-manager"
   workflow-artifacts:
     workflow-path: "./main.ts"
     config-path: "./config.json"
