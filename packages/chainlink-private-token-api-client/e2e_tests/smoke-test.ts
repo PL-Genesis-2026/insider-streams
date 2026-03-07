@@ -15,6 +15,9 @@
  *   pnpm e2e
  */
 
+import { config } from "dotenv";
+config({ path: "../../.env" });
+
 import { PRIVATE_CONFIDENTIAL_USDC_ADDRESS } from "@private-streams/common";
 import { PrivateTokenApiClient } from "../src/index.js";
 

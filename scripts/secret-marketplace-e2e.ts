@@ -18,6 +18,8 @@
  * Usage: pnpm e2e
  */
 
+import "dotenv/config";
+
 import {
   CONFIDENTIAL_USDC_ADDRESS,
   confidentialUsdcAbi,

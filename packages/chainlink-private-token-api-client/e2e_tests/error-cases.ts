@@ -18,6 +18,9 @@
  *   pnpm e2e:errors
  */
 
+import { config } from "dotenv";
+config({ path: "../../.env" });
+
 import { PRIVATE_CONFIDENTIAL_USDC_ADDRESS } from "@private-streams/common";
 import { AxiosError } from "axios";
 import { PrivateTokenApiClient } from "../src/index.js";

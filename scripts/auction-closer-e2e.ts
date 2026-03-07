@@ -18,6 +18,8 @@
  * Usage: pnpm e2e:auction-closer
  */
 
+import "dotenv/config";
+
 import {
   CONFIDENTIAL_USDC_ADDRESS,
   SECRET_MARKETPLACE_ADDRESS,

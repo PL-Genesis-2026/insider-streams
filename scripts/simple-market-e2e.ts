@@ -21,6 +21,8 @@
  * Usage: pnpm e2e:simple-market
  */
 
+import "dotenv/config";
+
 import {
   CONFIDENTIAL_USDC_ADDRESS,
   confidentialUsdcAbi,
