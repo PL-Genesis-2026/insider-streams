@@ -378,7 +378,7 @@ export function CreateAuctionDraftForm() {
   }
 
   return (
-    <section className="mx-auto grid w-full max-w-7xl gap-8 px-6 pb-20 md:px-10 lg:grid-cols-[minmax(0,1.08fr)_360px]">
+    <section className="mx-auto w-full max-w-2xl px-6 pb-20 md:px-10">
       <Card className="border-border/70 bg-background/92">
         <CardHeader className="border-b border-border/60">
           <CardTitle>Create auction</CardTitle>
@@ -547,8 +547,8 @@ export function CreateAuctionDraftForm() {
                 Signal details
               </h2>
               <p className="text-sm leading-7 text-muted-foreground">
-                Buyers should understand the category of information without
-                seeing the actual secret.
+                This is the private content revealed to the winning bidder
+                after purchase.
               </p>
             </div>
 
@@ -655,63 +655,6 @@ export function CreateAuctionDraftForm() {
           </div>
         </CardContent>
       </Card>
-
-      <div className="grid gap-6">
-        <Card className="border-border/70 bg-background/88">
-          <CardHeader className="border-b border-border/60">
-            <Badge variant="secondary" className="w-fit">
-              How it works
-            </Badge>
-            <CardTitle className="text-[1.85rem]">Seller identity</CardTitle>
-            <CardDescription>
-              Your seller identity is auto-generated and permanently linked to
-              your wallet the first time you create an auction.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3 text-sm leading-7 text-muted-foreground">
-            <p>Connect wallet to start</p>
-            <p>Seller ID assigned on first auction</p>
-            <p>Reputation accumulates on that identity</p>
-            <p>Same ID used for every future listing</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/70 bg-background/88">
-          <CardHeader className="border-b border-border/60">
-            <Badge variant="secondary" className="w-fit">
-              Public
-            </Badge>
-            <CardTitle className="text-[1.85rem]">
-              Visible in the listing
-            </CardTitle>
-            <CardDescription>
-              Safe metadata that can land in the contract and subgraph.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3 text-sm leading-7 text-muted-foreground">
-            <p>Auto-assigned seller ID and reputation</p>
-            <p>Event title and market close</p>
-            <p>Auction timing</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/70 bg-background/88">
-          <CardHeader className="border-b border-border/60">
-            <Badge variant="outline" className="w-fit">
-              Private
-            </Badge>
-            <CardTitle className="text-[1.85rem]">Offchain only</CardTitle>
-            <CardDescription>
-              Data that should stay in authenticated API and Supabase paths.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3 text-sm leading-7 text-muted-foreground">
-            <p>Wallet ownership</p>
-            <p>Seller&apos;s position (YES / NO)</p>
-            <p>Secret payload</p>
-          </CardContent>
-        </Card>
-      </div>
     </section>
   );
 }
