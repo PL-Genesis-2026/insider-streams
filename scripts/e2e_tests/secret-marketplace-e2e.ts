@@ -285,12 +285,12 @@ async function main() {
   await waitForTx(closeHash, "[EVENT: AuctionClosed]");
 
   // ── Step 6: Resolve external event ───────────────────────────────────────
-  console.log("\n>> Step 6: Resolve external event (delta=+1)...");
+  console.log("\n>> Step 6: Resolve external event (per-auction results)...");
   const resolveHash = await ownerClient.writeContract({
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
     functionName: "resolveExternalEvent",
-    args: [eventId, 1],
+    args: [eventId, [{ auctionId, predictionCorrect: true }]],
   });
   await waitForTx(
     resolveHash,

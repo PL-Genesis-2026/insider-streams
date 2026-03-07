@@ -73,8 +73,8 @@ type ExpectedWorkflowNameUpdated @entity(immutable: true) {
 type ExternalEventResolved @entity(immutable: true) {
   id: Bytes!
   externalEventId: BigInt! # uint256
-  reputationDelta: Int! # int8
   auctionsAffected: BigInt! # uint256
+  resultsApplied: BigInt! # uint256
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!

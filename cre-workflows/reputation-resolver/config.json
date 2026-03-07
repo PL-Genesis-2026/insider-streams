@@ -3,8 +3,9 @@
   "evms": [
     {
       "secretMarketplaceAddress": "0xCE8607e616D7b76C69Be5464ee2f89DCD21aC854",
+      "examplePredictionMarketAddress": "0x83B1F9d683b1a760569C237Bfb89C50112c05e24",
       "chainSelectorName": "ethereum-testnet-sepolia",
-      "gasLimit": "500000"
+      "gasLimit": "800000"
     }
   ]
 }
