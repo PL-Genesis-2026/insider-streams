@@ -1,6 +1,5 @@
 import "server-only";
 
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
   PrivateTokenApiClient,
   type Transaction as PrivateTokenTransaction,
@@ -12,6 +11,7 @@ import {
 import { getAddress, isAddress, isAddressEqual, type Address } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { env } from "@/env";
+import { getSupabaseServiceClient } from "@/lib/supabase/server";
 import type {
   FundingServerSnapshot,
 } from "./types";
@@ -36,8 +36,6 @@ function toRawTransactionJson(transaction: PrivateTokenTransaction) {
     is_sender_hidden: transaction.is_sender_hidden ?? null,
   };
 }
-
-let serviceRoleClient: SupabaseClient<Database> | undefined;
 
 function toCanonicalAddress(address: string): Lowercase<Address> {
   if (!isAddress(address)) {
@@ -73,31 +71,6 @@ function getPlatformRecipientAddress() {
   }
 
   return privateKeyToAccount(privateKey).address;
-}
-
-function getServiceRoleKey() {
-  if (!env.SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error("Server funding sync is missing SUPABASE_SERVICE_ROLE_KEY.");
-  }
-
-  return env.SUPABASE_SERVICE_ROLE_KEY;
-}
-
-function getServiceRoleSupabaseClient() {
-  if (!serviceRoleClient) {
-    serviceRoleClient = createClient<Database>(
-      env.NEXT_PUBLIC_SUPABASE_URL,
-      getServiceRoleKey(),
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
-      },
-    );
-  }
-
-  return serviceRoleClient;
 }
 
 function mapTransactionToTransferInsert(
@@ -153,7 +126,7 @@ export async function getFundingServerSnapshot(
   address: string,
 ): Promise<FundingServerSnapshot> {
   const normalizedAddress = toCanonicalAddress(address);
-  const supabase = getServiceRoleSupabaseClient();
+  const supabase = getSupabaseServiceClient();
 
   const [balanceResult, transferResult] = await Promise.all([
     supabase
@@ -206,7 +179,7 @@ export async function reconcileFundingServerSnapshot(
   let reconciledCount = 0;
 
   if (rows.length > 0) {
-    const supabase = getServiceRoleSupabaseClient();
+    const supabase = getSupabaseServiceClient();
     const { data, error } = await supabase
       .from("transfers")
       .upsert(rows, {
