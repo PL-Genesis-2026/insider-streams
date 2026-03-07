@@ -3,7 +3,7 @@
  *
  * Tests the full lifecycle of tracking user balances via private transfers:
  *
- *   1. Mint DEMO tokens to bidder (the "user" depositing into the platform)
+ *   1. Mint USDC tokens to bidder (the "user" depositing into the platform)
  *   2. Approve vault + vault-deposit to fund bidder's private balance
  *   3. Bidder does a private transfer TO the platform EOA (owner) — this is
  *      the "deposit" the CRE picks up (API type="transfer", is_incoming=true)
@@ -90,9 +90,9 @@ const EIP712_DOMAIN = {
 } as const;
 
 // Amounts (6 decimals)
-const VAULT_DEPOSIT = 3_000_000n;      // 3 tokens — fund bidder's private balance
-const DEPOSIT_AMOUNT = 2_000_000n;     // 2 tokens — bidder → platform EOA (deposit)
-const WITHDRAWAL_AMOUNT = 1_000_000n;  // 1 token — platform EOA → bidder (withdrawal)
+const VAULT_DEPOSIT = 3_000_000n; // 3 tokens — fund bidder's private balance
+const DEPOSIT_AMOUNT = 2_000_000n; // 2 tokens — bidder → platform EOA (deposit)
+const WITHDRAWAL_AMOUNT = 1_000_000n; // 1 token — platform EOA → bidder (withdrawal)
 
 // Project root for CRE invocation
 const __filename = fileURLToPath(import.meta.url);
@@ -185,7 +185,15 @@ async function poll<T>(
  * Fetches from the OWNER's perspective (the platform EOA).
  */
 async function fetchApiTransactions(): Promise<
-  { id: string; type: string; tx_hash?: string; is_incoming?: boolean; token?: string; sender?: string; recipient?: string }[]
+  {
+    id: string;
+    type: string;
+    tx_hash?: string;
+    is_incoming?: boolean;
+    token?: string;
+    sender?: string;
+    recipient?: string;
+  }[]
 > {
   const timestamp = Math.floor(Date.now() / 1000);
 
@@ -224,7 +232,9 @@ async function fetchApiTransactions(): Promise<
     throw new Error(`POST /transactions failed (${resp.status}): ${body}`);
   }
 
-  const data = (await resp.json()) as { transactions?: Record<string, unknown>[] };
+  const data = (await resp.json()) as {
+    transactions?: Record<string, unknown>[];
+  };
   return (data.transactions ?? []) as {
     id: string;
     type: string;
@@ -291,7 +301,9 @@ async function executePrivateTransfer(
   }
 
   const data = (await resp.json()) as { transaction_id: string };
-  console.log(`  Private transfer submitted: ${signer.address.slice(0, 10)}→${recipient.slice(0, 10)} amount=${formatUnits(amount, CONFIDENTIAL_USDC_DECIMALS)} tx_id=${data.transaction_id}`);
+  console.log(
+    `  Private transfer submitted: ${signer.address.slice(0, 10)}→${recipient.slice(0, 10)} amount=${formatUnits(amount, CONFIDENTIAL_USDC_DECIMALS)} tx_id=${data.transaction_id}`,
+  );
   return data.transaction_id;
 }
 
@@ -304,12 +316,17 @@ function runCRESimulation(): string {
       cwd: `${PROJECT_ROOT}/cre-workflows`,
       encoding: "utf-8",
       timeout: 120_000,
-      env: { ...process.env, PATH: `${process.env.HOME}/.cre/bin:${process.env.PATH}` },
+      env: {
+        ...process.env,
+        PATH: `${process.env.HOME}/.cre/bin:${process.env.PATH}`,
+      },
     },
   );
   // Print relevant lines
   const lines = output.split("\n");
-  const userLogs = lines.filter((l) => l.includes("[USER LOG]") || l.includes("Workflow Simulation Result"));
+  const userLogs = lines.filter(
+    (l) => l.includes("[USER LOG]") || l.includes("Workflow Simulation Result"),
+  );
   for (const line of userLogs) {
     console.log(`  CRE: ${line.trim()}`);
   }
@@ -324,7 +341,7 @@ async function main() {
   console.log("╚══════════════════════════════════════════════════════╝");
   console.log(`  Owner (platform EOA): ${ownerAddr}`);
   console.log(`  Bidder (user):        ${bidderAddr}`);
-  console.log(`  Token (DEMO):         ${SIMPLE_TOKEN}`);
+  console.log(`  Token (USDC):         ${SIMPLE_TOKEN}`);
   console.log(`  Vault:                ${VAULT}`);
   console.log(`  API:                  ${PRIVATE_TOKEN_API}`);
   console.log(`  Supabase:             ${SUPABASE_URL}`);
@@ -338,8 +355,8 @@ async function main() {
     .eq("user_address", bidderAddr.toLowerCase());
   console.log(`  Existing deposit count for bidder: ${existingDepositCount}`);
 
-  // ── Step 1: Mint DEMO tokens to bidder ─────────────────────────────────────
-  step("Mint DEMO tokens to bidder");
+  // ── Step 1: Mint USDC tokens to bidder ─────────────────────────────────────
+  step("Mint USDC tokens to bidder");
   const mintHash = await ownerWallet.writeContract({
     address: SIMPLE_TOKEN,
     abi: confidentialUsdcAbi,
@@ -354,7 +371,9 @@ async function main() {
     functionName: "balanceOf",
     args: [bidderAddr],
   });
-  console.log(`  Bidder DEMO balance: ${formatUnits(balance, CONFIDENTIAL_USDC_DECIMALS)}`);
+  console.log(
+    `  Bidder DEMO balance: ${formatUnits(balance, CONFIDENTIAL_USDC_DECIMALS)}`,
+  );
 
   // ── Step 2: Vault deposit to fund bidder's private balance ─────────────────
   step("Approve vault + deposit to fund bidder's private balance");
@@ -372,7 +391,10 @@ async function main() {
     functionName: "deposit",
     args: [SIMPLE_TOKEN, VAULT_DEPOSIT],
   });
-  await waitForTx(vaultDepositHash, `vault deposit (${formatUnits(VAULT_DEPOSIT, CONFIDENTIAL_USDC_DECIMALS)} DEMO)`);
+  await waitForTx(
+    vaultDepositHash,
+    `vault deposit (${formatUnits(VAULT_DEPOSIT, CONFIDENTIAL_USDC_DECIMALS)} DEMO)`,
+  );
 
   // Wait for vault deposit to appear in API (ensures bidder has private balance)
   step("Poll API until vault deposit is processed");
@@ -411,9 +433,13 @@ async function main() {
       });
 
       if (!resp.ok) return null;
-      const data = (await resp.json()) as { transactions?: { type: string; tx_hash?: string }[] };
+      const data = (await resp.json()) as {
+        transactions?: { type: string; tx_hash?: string }[];
+      };
       const found = (data.transactions ?? []).find(
-        (t) => t.type === "deposit" && t.tx_hash?.toLowerCase() === vaultDepositHash.toLowerCase(),
+        (t) =>
+          t.type === "deposit" &&
+          t.tx_hash?.toLowerCase() === vaultDepositHash.toLowerCase(),
       );
       if (found) {
         console.log(`  ✓ Vault deposit visible in API`);
@@ -429,7 +455,11 @@ async function main() {
 
   // ── Step 3: Bidder → Owner private transfer (deposit into platform) ────────
   step("Bidder does private transfer TO platform EOA (deposit)");
-  const depositTxId = await executePrivateTransfer(bidderAccount, ownerAddr, DEPOSIT_AMOUNT);
+  const depositTxId = await executePrivateTransfer(
+    bidderAccount,
+    ownerAddr,
+    DEPOSIT_AMOUNT,
+  );
 
   // ── Step 4: Poll API until incoming transfer appears ───────────────────────
   step("Poll API for incoming private transfer (deposit)");
@@ -443,7 +473,9 @@ async function main() {
           t.id === depositTxId,
       );
       if (found) {
-        console.log(`  ✓ Found incoming transfer: id=${found.id}, sender=${found.sender}, is_incoming=${found.is_incoming}`);
+        console.log(
+          `  ✓ Found incoming transfer: id=${found.id}, sender=${found.sender}, is_incoming=${found.is_incoming}`,
+        );
         return found;
       }
       console.log(`  Transfer ${depositTxId} not yet visible...`);
@@ -468,7 +500,9 @@ async function main() {
     .single();
   assert(!!dep, `Deposit (${depositTxId}) not found in Supabase`);
   console.log(`  ✓ Deposit: amount=${dep!.amount}, status=${dep!.status}`);
-  console.log(`  ✓ sender_address=${dep!.sender_address}, user_address=${dep!.user_address}`);
+  console.log(
+    `  ✓ sender_address=${dep!.sender_address}, user_address=${dep!.user_address}`,
+  );
 
   // ── Step 7: Check balances VIEW ────────────────────────────────────────────
   step("Check balances VIEW");
@@ -479,13 +513,24 @@ async function main() {
     .eq("user_address", bidderAddr.toLowerCase())
     .single();
   assert(!!balBefore, "Balance not found in balances VIEW for bidder");
-  console.log(`  Available balance: ${formatUnits(BigInt(balBefore!.available_balance!), CONFIDENTIAL_USDC_DECIMALS)} DEMO`);
-  console.log(`  Locked balance:    ${formatUnits(BigInt(balBefore!.locked_balance!), CONFIDENTIAL_USDC_DECIMALS)} DEMO`);
-  console.log(`  Pending withdrawal: ${formatUnits(BigInt(balBefore!.pending_withdrawal!), CONFIDENTIAL_USDC_DECIMALS)} DEMO`);
+  console.log(
+    `  Available balance: ${formatUnits(BigInt(balBefore!.available_balance!), CONFIDENTIAL_USDC_DECIMALS)} DEMO`,
+  );
+  console.log(
+    `  Locked balance:    ${formatUnits(BigInt(balBefore!.locked_balance!), CONFIDENTIAL_USDC_DECIMALS)} DEMO`,
+  );
+  console.log(
+    `  Pending withdrawal: ${formatUnits(BigInt(balBefore!.pending_withdrawal!), CONFIDENTIAL_USDC_DECIMALS)} DEMO`,
+  );
 
   const availBefore = BigInt(balBefore!.available_balance!);
-  assert(availBefore >= DEPOSIT_AMOUNT, `Available balance ${availBefore} < deposit ${DEPOSIT_AMOUNT}`);
-  console.log(`  ✓ Available balance includes ${formatUnits(DEPOSIT_AMOUNT, CONFIDENTIAL_USDC_DECIMALS)} DEMO deposit`);
+  assert(
+    availBefore >= DEPOSIT_AMOUNT,
+    `Available balance ${availBefore} < deposit ${DEPOSIT_AMOUNT}`,
+  );
+  console.log(
+    `  ✓ Available balance includes ${formatUnits(DEPOSIT_AMOUNT, CONFIDENTIAL_USDC_DECIMALS)} DEMO deposit`,
+  );
 
   // ── Step 8: Idempotency check — run CRE again ─────────────────────────────
   step("Idempotency check — run CRE simulation again");
@@ -502,12 +547,21 @@ async function main() {
     .select("*", { count: "exact", head: true })
     .eq("status", "confirmed")
     .eq("user_address", bidderAddr.toLowerCase());
-  assert(countBefore === countAfter, `Deposit count changed: ${countBefore} → ${countAfter}`);
-  console.log(`  ✓ Deposit count unchanged (${countAfter}) — idempotency works`);
+  assert(
+    countBefore === countAfter,
+    `Deposit count changed: ${countBefore} → ${countAfter}`,
+  );
+  console.log(
+    `  ✓ Deposit count unchanged (${countAfter}) — idempotency works`,
+  );
 
   // ── Step 9: Owner → Bidder private transfer (withdrawal from platform) ─────
   step("Owner does private transfer TO bidder (withdrawal)");
-  const withdrawalTxId = await executePrivateTransfer(ownerAccount, bidderAddr, WITHDRAWAL_AMOUNT);
+  const withdrawalTxId = await executePrivateTransfer(
+    ownerAccount,
+    bidderAddr,
+    WITHDRAWAL_AMOUNT,
+  );
   console.log(`  Withdrawal transaction_id: ${withdrawalTxId}`);
 
   // ── Step 10: Poll API until outgoing transfer appears ──────────────────────
@@ -522,7 +576,9 @@ async function main() {
           t.id === withdrawalTxId,
       );
       if (found) {
-        console.log(`  ✓ Found outgoing transfer: id=${found.id}, is_incoming=${found.is_incoming}`);
+        console.log(
+          `  ✓ Found outgoing transfer: id=${found.id}, is_incoming=${found.is_incoming}`,
+        );
         return found;
       }
       console.log(`  Transfer ${withdrawalTxId} not yet visible...`);
@@ -545,8 +601,13 @@ async function main() {
     .eq("transaction_id", withdrawalTxId)
     .single();
   assert(!!transfer, `Withdrawal ${withdrawalTxId} not found in Supabase`);
-  assert(transfer!.status === "completed", `Expected status=completed, got ${transfer!.status}`);
-  console.log(`  ✓ Withdrawal: amount=${transfer!.amount}, status=${transfer!.status}`);
+  assert(
+    transfer!.status === "completed",
+    `Expected status=completed, got ${transfer!.status}`,
+  );
+  console.log(
+    `  ✓ Withdrawal: amount=${transfer!.amount}, status=${transfer!.status}`,
+  );
 
   // ── Step 13: Check balances VIEW — available decreased ─────────────────────
   step("Check balances VIEW after withdrawal");
@@ -558,9 +619,15 @@ async function main() {
   assert(!!balAfter, "Balance not found after withdrawal");
 
   const availAfter = BigInt(balAfter!.available_balance!);
-  console.log(`  Available balance before: ${formatUnits(availBefore, CONFIDENTIAL_USDC_DECIMALS)} DEMO`);
-  console.log(`  Available balance after:  ${formatUnits(availAfter, CONFIDENTIAL_USDC_DECIMALS)} DEMO`);
-  console.log(`  Difference:               ${formatUnits(availBefore - availAfter, CONFIDENTIAL_USDC_DECIMALS)} DEMO`);
+  console.log(
+    `  Available balance before: ${formatUnits(availBefore, CONFIDENTIAL_USDC_DECIMALS)} DEMO`,
+  );
+  console.log(
+    `  Available balance after:  ${formatUnits(availAfter, CONFIDENTIAL_USDC_DECIMALS)} DEMO`,
+  );
+  console.log(
+    `  Difference:               ${formatUnits(availBefore - availAfter, CONFIDENTIAL_USDC_DECIMALS)} DEMO`,
+  );
 
   assert(
     availAfter < availBefore,
@@ -570,16 +637,22 @@ async function main() {
     availBefore - availAfter === WITHDRAWAL_AMOUNT,
     `Balance decreased by ${availBefore - availAfter}, expected ${WITHDRAWAL_AMOUNT}`,
   );
-  console.log(`  ✓ Balance decreased by exactly ${formatUnits(WITHDRAWAL_AMOUNT, CONFIDENTIAL_USDC_DECIMALS)} DEMO`);
+  console.log(
+    `  ✓ Balance decreased by exactly ${formatUnits(WITHDRAWAL_AMOUNT, CONFIDENTIAL_USDC_DECIMALS)} DEMO`,
+  );
 
   // ── Summary ────────────────────────────────────────────────────────────────
   console.log("\n╔══════════════════════════════════════════════════════╗");
   console.log("║     ALL TESTS PASSED ✓                              ║");
   console.log("╠══════════════════════════════════════════════════════╣");
-  console.log(`║  Vault deposit:   ${vaultDepositHash.slice(0, 20)}... (funds private balance)`);
+  console.log(
+    `║  Vault deposit:   ${vaultDepositHash.slice(0, 20)}... (funds private balance)`,
+  );
   console.log(`║  Deposit (in):    ${depositTxId} (bidder → platform)`);
   console.log(`║  Withdrawal (out): ${withdrawalTxId} (platform → bidder)`);
-  console.log(`║  Balance:         ${formatUnits(availBefore, CONFIDENTIAL_USDC_DECIMALS)} → ${formatUnits(availAfter, CONFIDENTIAL_USDC_DECIMALS)} DEMO`);
+  console.log(
+    `║  Balance:         ${formatUnits(availBefore, CONFIDENTIAL_USDC_DECIMALS)} → ${formatUnits(availAfter, CONFIDENTIAL_USDC_DECIMALS)} DEMO`,
+  );
   console.log("╚══════════════════════════════════════════════════════╝");
 }
 
