@@ -1,22 +1,30 @@
+import { z } from "zod";
 import type { Database } from "@private-streams/common";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseClient } from "./client";
 
 type SecretsRow = Database["public"]["Tables"]["secrets"]["Row"];
 
-export type EventData = {
-  marketplace: string;
-  event: string;
-  marketId: number;
-  outcome: "yes" | "no";
-};
+const eventDataSchema = z.object({
+  marketplace: z.string(),
+  event: z.string(),
+  marketId: z.number(),
+  outcome: z.enum(["yes", "no"]),
+});
+
+export type EventData = z.infer<typeof eventDataSchema>;
 
 export type SecretRow = Omit<SecretsRow, "event_data"> & {
   event_data: EventData | null;
 };
 
-const SECRET_COLUMNS =
+const FULL_COLUMNS =
   "auction_id, secret_data, event_data, seller_id, buyer, created_at, updated_at" as const;
+
+function parseEventData(raw: unknown): EventData | null {
+  const result = eventDataSchema.safeParse(raw);
+  return result.success ? result.data : null;
+}
 
 /**
  * Default Supabase client (anon key). Server-side callers that need to bypass
@@ -32,7 +40,7 @@ export async function getSecretByAuctionId(
 ): Promise<SecretRow | null> {
   const { data, error } = await client
     .from("secrets")
-    .select(SECRET_COLUMNS)
+    .select(FULL_COLUMNS)
     .eq("auction_id", auctionId)
     .maybeSingle();
 
@@ -42,7 +50,12 @@ export async function getSecretByAuctionId(
     );
   }
 
-  return (data as SecretRow) ?? null;
+  if (!data) return null;
+
+  return {
+    ...data,
+    event_data: parseEventData(data.event_data),
+  } as SecretRow;
 }
 
 export async function getSecretsByAuctionIds(
@@ -55,12 +68,16 @@ export async function getSecretsByAuctionIds(
 
   const { data, error } = await client
     .from("secrets")
-    .select(SECRET_COLUMNS)
+    .select(FULL_COLUMNS)
     .in("auction_id", auctionIds);
 
   if (error) {
     throw new Error(`Failed to load secrets for auctions: ${error.message}`);
   }
 
-  return (data ?? []) as SecretRow[];
+  return (data ?? []).map((row) => ({
+    ...row,
+    event_data: parseEventData(row.event_data),
+  })) as SecretRow[];
 }
+

@@ -1,8 +1,6 @@
 import { CONFIDENTIAL_USDC_DECIMALS } from "@private-streams/common";
 import { formatUnits } from "viem";
 import { graphqlClient } from "@/lib/graphql";
-import { getSecretByAuctionId } from "@/lib/supabase/secrets";
-import { getSupabaseServiceClient } from "@/lib/supabase/server";
 import type { AuctionDetailSubgraphQuery } from "../__generated__/sdk";
 import { getSdk } from "../__generated__/sdk";
 
@@ -44,8 +42,6 @@ export type AuctionDetailData = {
   sellerAddress: string;
   marketId: string;
   title?: string;
-  marketplace?: string;
-  outcome?: "yes" | "no";
   endTime?: string;
   createdAt?: string;
   status: "Open" | "Closed" | "Cancelled";
@@ -55,8 +51,6 @@ export type AuctionDetailData = {
   closedAuction?: AuctionDetailClose;
   cancelledAuction?: AuctionDetailCancelledAuction;
   reputationUpdates: AuctionDetailReputationUpdate[];
-  hasSecret: boolean;
-  secretUpdatedAt?: string;
   sellerReputationScore?: number;
   sellerTotalAuctions?: number;
   sellerCorrectPredictions?: number;
@@ -138,27 +132,11 @@ export async function getAuctionDetail({
 
   const currentBidBigInt = scalarToBigInt(auction.currentBid);
 
-  // Fetch secret server-side to extract public metadata (title, marketplace, outcome).
-  // The secret_data itself is NOT passed to the client — it is fetched on demand
-  // via /api/secrets after user interaction.
-  let secret;
-  try {
-    const client = getSupabaseServiceClient();
-    secret = await getSecretByAuctionId(auctionId, client);
-  } catch (error) {
-    console.error(
-      `Failed to load Supabase secret for auction ${auctionId}`,
-      error,
-    );
-  }
-
   return {
     auctionId,
     sellerAddress: String(auction.sellerId),
     marketId: String(auction.eventId),
-    title: secret?.event_data?.event ?? auction.eventTitle,
-    marketplace: secret?.event_data?.marketplace,
-    outcome: secret?.event_data?.outcome,
+    title: auction.eventTitle,
     endTime: scalarToIso(auction.endTime),
     createdAt: scalarToIso(auction.blockTimestamp),
     status: auction.status as "Open" | "Closed" | "Cancelled",
@@ -173,8 +151,6 @@ export async function getAuctionDetail({
       ? mapCancelledAuction(cancelledAuction)
       : undefined,
     reputationUpdates: result.reputationUpdates.map(mapReputationUpdate),
-    hasSecret: secret != null,
-    secretUpdatedAt: secret?.updated_at,
     sellerReputationScore: Number(auction.seller.reputationScore),
     sellerTotalAuctions: auction.seller.totalAuctionCount,
     sellerCorrectPredictions:

@@ -9,25 +9,30 @@ type EventCardProps = {
   href?: string;
 };
 
+// Contract: enum Outcome { None=0, No=1, Yes=2, Inconclusive=3 }
 function outcomeLabel(outcome: number): string {
   switch (outcome) {
     case 1:
-      return "Yes";
-    case 2:
       return "No";
+    case 2:
+      return "Yes";
+    case 3:
+      return "Inconclusive";
     default:
-      return "Unresolved";
+      return "Unknown";
   }
 }
 
 function outcomeBadgeClass(outcome: number): string {
   switch (outcome) {
-    case 1:
-      return "bg-green-500/20 text-green-400 border-green-500/30";
     case 2:
+      return "bg-green-500/20 text-green-400 border-green-500/30";
+    case 1:
       return "bg-red-500/20 text-red-400 border-red-500/30";
-    default:
+    case 3:
       return "bg-yellow-500/20 text-yellow-400 border-yellow-500/30";
+    default:
+      return "bg-gray-500/20 text-gray-400 border-gray-500/30";
   }
 }
 
