@@ -31,6 +31,8 @@ dataSources:
         - SecurityWarning
         - SellerRegistered
         - MarketplaceUpdated
+        - Auction
+        - Seller
       abis:
         - name: SecretMarketplace
           file: ./abis/SecretMarketplace.json

@@ -77,20 +77,20 @@ AUCTION_ID=0 \
 forge script script/secret-marketplace/CloseAuction.s.sol --rpc-url $RPC_URL --broadcast
 ```
 
-### Force Close (owner only)
+### Cancel Auction (owner only)
 
-Force-closes an auction regardless of expiry. Refunds the highest bidder and adjusts seller reputation.
+Cancels an auction regardless of expiry. Refunds the highest bidder and records the prediction outcome.
 
 ```bash
 cd contracts
 
 SECRET_MARKETPLACE_ADDRESS=0x6420943F07c8427C4E6f27BDa09cB711e8BB2A93 \
 AUCTION_ID=0 \
-REPUTATION_DELTA=-1 \
-forge script script/secret-marketplace/ForceCloseAuction.s.sol --rpc-url $RPC_URL --broadcast
+PREDICTION_OUTCOME=0 \
+forge script script/secret-marketplace/CancelAuction.s.sol --rpc-url $RPC_URL --broadcast
 ```
 
-No automated CRE workflow exists for force-close yet — it requires new contract functions to determine when force-close is appropriate.
+`PREDICTION_OUTCOME`: 0=NoPrediction, 1=PredictionCorrect, 2=PredictionWrong. The `force-close-handler` CRE workflow handles bid refunds when auctions are force-closed.
 
 ## Regenerate Contract Types
 

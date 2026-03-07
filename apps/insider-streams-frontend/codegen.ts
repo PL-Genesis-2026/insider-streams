@@ -36,12 +36,18 @@ const config: CodegenConfig = {
   generates: {
     // TypedDocumentNode constants — for Apollo Client useQuery/useMutation
     "src/__generated__/graphql.ts": {
-      config: sharedConfig,
+      config: {
+        ...sharedConfig,
+        enumsAsTypes: true,
+      },
       plugins: ["typescript", "typescript-operations", "typed-document-node"],
     },
     // getSdk() — for graphql-request in Next.js API routes
     "src/__generated__/sdk.ts": {
-      config: sharedConfig,
+      config: {
+        ...sharedConfig,
+        enumsAsTypes: true,
+      },
       plugins: [
         "typescript",
         "typescript-operations",
