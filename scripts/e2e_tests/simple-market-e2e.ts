@@ -6,8 +6,8 @@
  *   2. Bidder approves USDC + buys YES shares
  *   3. Waits for event closure (3 minutes)
  *   4. Owner requests settlement
- *   5. CRE prediction-market-demo simulation (dry run)
- *   6. CRE prediction-market-demo broadcast (on-chain settlement)
+ *   5. CRE reputation-score-manager simulation (dry run)
+ *   6. CRE reputation-score-manager broadcast (on-chain settlement)
  *   7. Verifies on-chain event is Settled
  *   8. Verifies Firestore document exists with question + AI response
  *
@@ -18,7 +18,7 @@
  *   FIREBASE_API_KEY     — Firebase API key
  *   FIREBASE_PROJECT_ID  — Firebase project ID
  *
- * Usage: pnpm e2e:simple-market
+ * Usage: pnpm e2e:reputation-score-manager
  */
 
 import "dotenv/config";
@@ -188,9 +188,9 @@ async function main() {
   console.log(`  Settlement tx: ${settleHash}`);
 
   // ── Step 7: CRE dry run ─────────────────────────────────────────────────────
-  step("Running CRE prediction-market-demo simulation (dry run)...");
+  step("Running CRE reputation-score-manager simulation (dry run)...");
   const dryOutput = runCRE({
-    workflow: "prediction-market-demo",
+    workflow: "reputation-score-manager",
     evmTxHash: settleHash,
     evmEventIndex: 0,
     triggerIndex: 0,
@@ -208,9 +208,9 @@ async function main() {
   }
 
   // ── Step 8: CRE broadcast ──────────────────────────────────────────────────
-  step("Running CRE prediction-market-demo with broadcast...");
+  step("Running CRE reputation-score-manager with broadcast...");
   const broadcastOutput = runCRE({
-    workflow: "prediction-market-demo",
+    workflow: "reputation-score-manager",
     evmTxHash: settleHash,
     evmEventIndex: 0,
     triggerIndex: 0,

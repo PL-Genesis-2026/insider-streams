@@ -1,5 +1,5 @@
 # ==========================================================================
-# CRE WORKFLOW SETTINGS FILE — deposit-reconciler
+# CRE WORKFLOW SETTINGS FILE — user-balance-recording-fallback
 # ==========================================================================
 # Polls the Private Token API for incoming transfers to the platform EOA
 # and records them as deposits in Supabase.
@@ -7,7 +7,7 @@
 # ==========================================================================
 local-simulation:
   user-workflow:
-    workflow-name: "deposit-reconciler"
+    workflow-name: "user-balance-recording-fallback"
   workflow-artifacts:
     workflow-path: "./main.ts"
     config-path: "./config.json"
@@ -16,7 +16,7 @@ local-simulation:
 # ==========================================================================
 staging:
   user-workflow:
-    workflow-name: "deposit-reconciler"
+    workflow-name: "user-balance-recording-fallback"
   workflow-artifacts:
     workflow-path: "./main.ts"
     config-path: "./config.json"
