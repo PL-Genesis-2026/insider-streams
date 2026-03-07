@@ -3,28 +3,12 @@ import { loadEnvConfig } from "@next/env";
 
 loadEnvConfig(process.cwd());
 
-const subgraphUrl = process.env.NEXT_PUBLIC_SUBGRAPH_URL;
-const usesGraphGateway =
-  subgraphUrl?.includes("gateway.thegraph.com/api/subgraphs/id/") ?? false;
+// Codegen always uses the Studio URL (no auth required).
+// The gateway URL (NEXT_PUBLIC_SUBGRAPH_URL) is only for runtime queries.
+const STUDIO_URL =
+  "https://api.studio.thegraph.com/query/1743303/insider-streams-2/version/latest";
 
-if (!subgraphUrl) {
-  throw new Error("NEXT_PUBLIC_SUBGRAPH_URL is required for GraphQL codegen.");
-}
-
-const schema =
-  usesGraphGateway && process.env.THE_GRAPH_API_KEY
-    ? ["http://127.0.0.1:3001/api/subgraph"]
-    : process.env.THE_GRAPH_API_KEY
-      ? [
-          {
-            [subgraphUrl]: {
-              headers: {
-                Authorization: `Bearer ${process.env.THE_GRAPH_API_KEY}`,
-              },
-            },
-          },
-        ]
-      : [subgraphUrl];
+const schema = [STUDIO_URL];
 
 const sharedConfig = {
   scalars: {

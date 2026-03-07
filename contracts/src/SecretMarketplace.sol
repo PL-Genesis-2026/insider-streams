@@ -49,6 +49,11 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
         bool registered;
     }
 
+    struct AuctionResult {
+        uint256 auctionId;
+        bool predictionCorrect;
+    }
+
     // ===========================
     // ======== EVENTS ===========
     // ===========================
@@ -88,8 +93,8 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
 
     event ExternalEventResolved(
         uint256 indexed externalEventId,
-        int8 delta,
-        uint256 auctionsAffected
+        uint256 auctionsAffected,
+        uint256 resultsApplied
     );
 
     event ReputationUpdated(
@@ -116,6 +121,7 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
     error AuctionDoesNotExist();
     error EventDoesNotExist(uint256 eventId);
     error EventAlreadyResolved(uint256 eventId);
+    error AuctionNotLinkedToEvent(uint256 auctionId, uint256 expectedEventId);
     error UnknownAction(uint8 action);
 
     // ===========================
@@ -274,9 +280,9 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
         _forceCloseAuction(auctionId, reputationDelta);
     }
 
-    /// @notice Resolve an external event — updates reputation for all linked auctions. Admin/CRE only.
-    function resolveExternalEvent(uint256 externalEventId, int8 delta) external onlyAdminOrCRE {
-        _resolveExternalEvent(externalEventId, delta);
+    /// @notice Resolve an external event — updates reputation per auction based on prediction correctness. Admin/CRE only.
+    function resolveExternalEvent(uint256 externalEventId, AuctionResult[] calldata results) external onlyAdminOrCRE {
+        _resolveExternalEvent(externalEventId, results);
     }
 
     // ===========================
@@ -294,8 +300,8 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
             (uint256 auctionId, int8 reputationDelta) = abi.decode(payload, (uint256, int8));
             _forceCloseAuction(auctionId, reputationDelta);
         } else if (action == ACTION_RESOLVE_EVENT) {
-            (uint256 externalEventId, int8 delta) = abi.decode(payload, (uint256, int8));
-            _resolveExternalEvent(externalEventId, delta);
+            (uint256 externalEventId, AuctionResult[] memory results) = abi.decode(payload, (uint256, AuctionResult[]));
+            _resolveExternalEvent(externalEventId, results);
         } else {
             revert UnknownAction(action);
         }
@@ -341,7 +347,7 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
         }
     }
 
-    function _resolveExternalEvent(uint256 externalEventId, int8 delta) internal {
+    function _resolveExternalEvent(uint256 externalEventId, AuctionResult[] memory results) internal {
         if (eventResolved[externalEventId]) revert EventAlreadyResolved(externalEventId);
 
         eventResolved[externalEventId] = true;
@@ -350,28 +356,39 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
         uint256[] storage auctionIds = eventAuctions[externalEventId];
         uint256 count = auctionIds.length;
 
+        // Phase 1: Force-close any still-open auctions (no reputation update here)
         for (uint256 i = 0; i < count; i++) {
             uint256 aid = auctionIds[i];
             Auction storage a = _auctions[aid];
-
-            // Force-close any still-open auctions
             if (a.status == AuctionStatus.Open) {
                 a.status = AuctionStatus.ForceClosed;
                 _removeOpenAuction(aid);
                 emit AuctionForceClosed(aid, a.currentBid, a.seller, externalEventId, 0);
             }
+        }
 
-            // Update reputation if not already resolved
+        // Phase 2: Apply per-auction reputation from results array
+        for (uint256 i = 0; i < results.length; i++) {
+            uint256 aid = results[i].auctionId;
+            Auction storage a = _auctions[aid];
+            if (a.eventId != externalEventId) revert AuctionNotLinkedToEvent(aid, externalEventId);
             if (!a.reputationResolved) {
                 a.reputationResolved = true;
-                if (delta != 0) {
-                    _sellers[a.seller].reputationScore += delta;
-                    emit ReputationUpdated(a.seller, aid, delta, _sellers[a.seller].reputationScore);
-                }
+                int8 delta = results[i].predictionCorrect ? int8(1) : int8(-1);
+                _sellers[a.seller].reputationScore += delta;
+                emit ReputationUpdated(a.seller, aid, delta, _sellers[a.seller].reputationScore);
             }
         }
 
-        emit ExternalEventResolved(externalEventId, delta, count);
+        // Phase 3: Mark remaining auctions as resolved with 0 delta
+        for (uint256 i = 0; i < count; i++) {
+            Auction storage a = _auctions[auctionIds[i]];
+            if (!a.reputationResolved) {
+                a.reputationResolved = true;
+            }
+        }
+
+        emit ExternalEventResolved(externalEventId, count, results.length);
     }
 
     // ===========================

@@ -16,6 +16,8 @@ private-streams/
 ├── cre-workflows/                   # CRE TypeScript workflows (Bun-managed)
 │   ├── reputation-score-manager/      # Gemini AI settlement workflow
 │   ├── secret-marketplace-auction-closer/             # Cron-based auction closer workflow
+│   ├── reputation-resolver/       # Cron-based per-auction reputation resolution workflow
+│   ├── force-close-handler/       # Log-triggered bid refund on AuctionForceClosed
 │   └── user-balance-recording-fallback/         # Cron-based private token deposit/withdrawal reconciler
 ├── subgraphs/secrets-marketplace/   # The Graph subgraph
 ├── scripts/                         # E2E test scripts and utilities
@@ -23,6 +25,8 @@ private-streams/
 │   │   ├── simple-market-e2e.ts         # ExamplePredictionMarket + CRE settlement E2E
 │   │   ├── secret-marketplace-auction-closer-e2e.ts        # Auction closer CRE workflow E2E
 │   │   ├── secret-marketplace-e2e.ts    # SecretMarketplace full event lifecycle E2E
+│   │   ├── reputation-resolver-e2e.ts   # Reputation resolver CRE workflow E2E
+│   │   ├── force-close-handler-e2e.ts   # Force close handler CRE workflow E2E
 │   │   └── user-balance-recording-fallback-e2e.ts    # Deposit reconciler workflow E2E
 │   ├── generate-contract-types.sh   # Compile contracts + regenerate types/ABIs
 │   ├── generate-supabase-types.sh   # Regenerate Supabase TypeScript types
@@ -117,6 +121,14 @@ cre workflow simulate reputation-score-manager --target local-simulation \
 cre workflow simulate secret-marketplace-auction-closer --target local-simulation --non-interactive --trigger-index 0
 cre workflow simulate secret-marketplace-auction-closer --target local-simulation --non-interactive --trigger-index 0 --broadcast
 
+# Reputation Resolver (cron-triggered, non-interactive)
+cre workflow simulate reputation-resolver --target local-simulation --non-interactive --trigger-index 0
+cre workflow simulate reputation-resolver --target local-simulation --non-interactive --trigger-index 0 --broadcast
+
+# Force Close Handler (log-triggered, non-interactive)
+cre workflow simulate force-close-handler --target local-simulation --non-interactive --trigger-index 0 \
+  --evm-tx-hash <TX_HASH> --evm-event-index <EVENT_INDEX>
+
 # Deposit Reconciler (cron-triggered, non-interactive)
 cre workflow simulate user-balance-recording-fallback --target local-simulation --non-interactive --trigger-index 0
 ```
@@ -127,8 +139,10 @@ All E2E scripts are TypeScript and run via `tsx` with `--env-file=.env` from the
 
 ```bash
 pnpm e2e:secret-marketplace                      # SecretMarketplace full event lifecycle
-pnpm e2e:reputation-score-manager   # ExamplePredictionMarket + CRE settlement lifecycle
+pnpm e2e:reputation-score-manager                # ExamplePredictionMarket + CRE settlement lifecycle
 pnpm e2e:secret-marketplace-auction-closer       # Auction create → bid → expire → CRE close
+pnpm e2e:reputation                              # Reputation resolver — per-auction reputation after event settlement
+pnpm e2e:force-close                             # Force close handler — bid refund on AuctionForceClosed
 pnpm e2e:user-balance-recording-fallback         # Deposit reconciler workflow
 ```
 
@@ -252,6 +266,8 @@ The deploy script replaces addresses automatically, but you should verify no sta
 | File                                               | Fields                               |
 | -------------------------------------------------- | ------------------------------------ |
 | `cre-workflows/secret-marketplace-auction-closer/config.json`         | `secretMarketplaceAddress`           |
+| `cre-workflows/reputation-resolver/config.json`    | `secretMarketplaceAddress`, `examplePredictionMarketAddress` |
+| `cre-workflows/force-close-handler/config.json`    | `secretMarketplaceAddress`           |
 | `cre-workflows/reputation-score-manager/config.json` | `simpleMarketAddress`                |
 | `cre-workflows/user-balance-recording-fallback/config.json`     | `tokenAddress`, `platformEoaAddress` |
 
@@ -339,7 +355,10 @@ After deploying, follow the full procedure in **"After a Contract Deployment"** 
 - Settlement data is also written to Firestore for the frontend
 - **Secret-marketplace-auction-closer CRE workflow** runs on a 30-second cron, reads `getOpenAuctions()` and `getAuction(id)` to find expired auctions, then submits a signed report with `ACTION_CLOSE_AUCTION` (0x00) to close them
 - `closeAuction()` keeps funds in contract; admin withdraws via `withdrawFunds()`
+- **Reputation-resolver CRE workflow** runs on a 60-second cron (also supports REST trigger for E2E), reads `getUnresolvedEvents()` from SecretMarketplace, checks if each event is settled on ExamplePredictionMarket, fetches seller predictions from Supabase `secrets.event_data`, compares predictions to actual outcomes, and submits per-auction reputation results via `ACTION_RESOLVE_EVENT` (0x02). Correct predictions get +1 rep, incorrect get -1, omitted get 0 (still marked resolved). Uses 1 HTTP call (Supabase GET) + EVM reads (free).
+- **Force-close-handler CRE workflow** is log-triggered on `AuctionForceClosed` events. When an auction is force-closed, it finds active private bids in Supabase for that auction and refunds them (sets `status="refunded"`, `refunded_at=now`). Uses 2 HTTP calls (Supabase GET + PATCH). No on-chain writes.
 - **User-balance-recording-fallback CRE workflow** runs on a 60-second cron, polls the Private Token API for transfers to/from the platform EOA, and records them as deposits or withdrawals in the Supabase `transfers` table
+- `resolveExternalEvent(eventId, AuctionResult[])` accepts per-auction correctness results — each `AuctionResult` has `{auctionId, predictionCorrect}`. Replaces the old blanket `int8 delta` approach. Auctions not in the results array are marked as resolved with 0 delta.
 - CRE CLI installed at `~/.cre/bin/cre` (add to PATH: `export PATH="$HOME/.cre/bin:$PATH"`)
 
 ## Reference Docs
