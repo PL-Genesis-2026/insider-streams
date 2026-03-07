@@ -173,22 +173,9 @@ if [ "$SKIP_DEPLOY" = false ]; then
     NEXT_VERSION=$(node -p "require('./package.json').version")
     echo "  Bumped subgraph version: v$CURRENT_VERSION → v$NEXT_VERSION"
 
-    # ─── Publish prompt (only in interactive mode) ─────────────────────────
-    # Publishing is an on-chain transaction on Arbitrum that requires wallet
-    # signing. The Graph CLI has no headless/non-interactive publish mode —
-    # `graph publish` always opens a browser window for wallet connection
-    # and metadata entry before submitting the transaction.
-    if [ -t 0 ]; then
-      echo ""
-      read -rp "  Publish to The Graph Network? (opens browser for wallet signing) [y/N]: " PUBLISH_ANSWER
-      if [[ "$PUBLISH_ANSWER" =~ ^[Yy]$ ]]; then
-        echo ""
-        echo "▶ Publishing subgraph to The Graph Network..."
-        echo "  Opening browser for wallet connection and metadata..."
-        echo ""
-        npx graph publish --protocol-network arbitrum-one
-      fi
-    fi
+    echo ""
+    echo "  To publish to The Graph Network, run from subgraphs/secrets-marketplace/:"
+    echo "    npx graph publish --protocol-network arbitrum-one"
   else
     echo ""
     echo "  WARNING: Deploy failed. Run 'npx graph auth --studio <DEPLOY_KEY>' in subgraphs/secrets-marketplace/ first."

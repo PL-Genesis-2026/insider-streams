@@ -740,7 +740,7 @@ export type ExternalEventResolved = {
   blockTimestamp: Scalars['BigInt']['output'];
   externalEventId: Scalars['BigInt']['output'];
   id: Scalars['Bytes']['output'];
-  reputationDelta: Scalars['Int']['output'];
+  resultsApplied: Scalars['BigInt']['output'];
   transactionHash: Scalars['Bytes']['output'];
 };
 
@@ -791,14 +791,14 @@ export type ExternalEventResolved_Filter = {
   id_not_contains?: InputMaybe<Scalars['Bytes']['input']>;
   id_not_in?: InputMaybe<Array<Scalars['Bytes']['input']>>;
   or?: InputMaybe<Array<InputMaybe<ExternalEventResolved_Filter>>>;
-  reputationDelta?: InputMaybe<Scalars['Int']['input']>;
-  reputationDelta_gt?: InputMaybe<Scalars['Int']['input']>;
-  reputationDelta_gte?: InputMaybe<Scalars['Int']['input']>;
-  reputationDelta_in?: InputMaybe<Array<Scalars['Int']['input']>>;
-  reputationDelta_lt?: InputMaybe<Scalars['Int']['input']>;
-  reputationDelta_lte?: InputMaybe<Scalars['Int']['input']>;
-  reputationDelta_not?: InputMaybe<Scalars['Int']['input']>;
-  reputationDelta_not_in?: InputMaybe<Array<Scalars['Int']['input']>>;
+  resultsApplied?: InputMaybe<Scalars['BigInt']['input']>;
+  resultsApplied_gt?: InputMaybe<Scalars['BigInt']['input']>;
+  resultsApplied_gte?: InputMaybe<Scalars['BigInt']['input']>;
+  resultsApplied_in?: InputMaybe<Array<Scalars['BigInt']['input']>>;
+  resultsApplied_lt?: InputMaybe<Scalars['BigInt']['input']>;
+  resultsApplied_lte?: InputMaybe<Scalars['BigInt']['input']>;
+  resultsApplied_not?: InputMaybe<Scalars['BigInt']['input']>;
+  resultsApplied_not_in?: InputMaybe<Array<Scalars['BigInt']['input']>>;
   transactionHash?: InputMaybe<Scalars['Bytes']['input']>;
   transactionHash_contains?: InputMaybe<Scalars['Bytes']['input']>;
   transactionHash_gt?: InputMaybe<Scalars['Bytes']['input']>;
@@ -817,7 +817,7 @@ export enum ExternalEventResolved_OrderBy {
   BlockTimestamp = 'blockTimestamp',
   ExternalEventId = 'externalEventId',
   Id = 'id',
-  ReputationDelta = 'reputationDelta',
+  ResultsApplied = 'resultsApplied',
   TransactionHash = 'transactionHash'
 }
 
