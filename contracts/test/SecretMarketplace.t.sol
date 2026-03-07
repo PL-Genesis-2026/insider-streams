@@ -51,25 +51,25 @@ contract SecretMarketplaceTest is Test {
     }
 
     function _createAuction(
-        string memory seller, uint256 eventId, string memory eventTitle, uint256 endTime
+        string memory sellerId, uint256 eventId, string memory eventTitle, uint256 endTime
     ) internal returns (uint256) {
-        return sm.createAuction(seller, eventId, eventTitle, endTime);
+        return sm.createAuction(sellerId, eventId, eventTitle, endTime);
     }
 
     function _placeBid(uint256 auctionId, uint256 amount) internal {
         sm.placeBid(auctionId, amount);
     }
 
-    function _results(uint256 auctionId, bool correct) internal pure returns (SecretMarketplace.AuctionResult[] memory) {
+    function _results(uint256 auctionId, SecretMarketplace.PredictionOutcome outcome) internal pure returns (SecretMarketplace.AuctionResult[] memory) {
         SecretMarketplace.AuctionResult[] memory r = new SecretMarketplace.AuctionResult[](1);
-        r[0] = SecretMarketplace.AuctionResult(auctionId, correct);
+        r[0] = SecretMarketplace.AuctionResult(auctionId, outcome);
         return r;
     }
 
-    function _results2(uint256 a1, bool c1, uint256 a2, bool c2) internal pure returns (SecretMarketplace.AuctionResult[] memory) {
+    function _results2(uint256 a1, SecretMarketplace.PredictionOutcome o1, uint256 a2, SecretMarketplace.PredictionOutcome o2) internal pure returns (SecretMarketplace.AuctionResult[] memory) {
         SecretMarketplace.AuctionResult[] memory r = new SecretMarketplace.AuctionResult[](2);
-        r[0] = SecretMarketplace.AuctionResult(a1, c1);
-        r[1] = SecretMarketplace.AuctionResult(a2, c2);
+        r[0] = SecretMarketplace.AuctionResult(a1, o1);
+        r[1] = SecretMarketplace.AuctionResult(a2, o2);
         return r;
     }
 
@@ -140,7 +140,7 @@ contract SecretMarketplaceTest is Test {
 
         assertEq(id, 0);
         SecretMarketplace.Auction memory a = sm.getAuction(id);
-        assertEq(a.seller, "Alice");
+        assertEq(a.sellerId, "Alice");
         assertEq(a.eventId, 0);
         assertEq(a.eventTitle, "Test Event");
         assertEq(uint8(a.status), uint8(SecretMarketplace.AuctionStatus.Open));
@@ -353,74 +353,74 @@ contract SecretMarketplaceTest is Test {
     }
 
     // ===========================
-    // ====== FORCE CLOSE ========
+    // ====== CANCEL AUCTION =====
     // ===========================
 
-    function test_forceCloseAuction_fundsStayInContract() public {
+    function test_cancelAuction_fundsStayInContract() public {
         uint256 id = _createDefaultAuction();
         _placeBid(id, BID_AMOUNT);
 
-        sm.forceCloseAuction(id, int8(1));
+        sm.cancelAuction(id, SecretMarketplace.PredictionOutcome.PredictionCorrect);
 
         assertEq(usdc.balanceOf(address(sm)), BID_AMOUNT);
         SecretMarketplace.Auction memory a = sm.getAuction(id);
-        assertEq(uint8(a.status), uint8(SecretMarketplace.AuctionStatus.ForceClosed));
+        assertEq(uint8(a.status), uint8(SecretMarketplace.AuctionStatus.Cancelled));
     }
 
-    function test_forceCloseAuction_updatesReputation_positive() public {
+    function test_cancelAuction_predictionCorrect_increasesScore() public {
         _createAuction("Alice", 0, "Event", block.timestamp + 1 hours);
         _placeBid(0, BID_AMOUNT);
 
-        sm.forceCloseAuction(0, int8(1));
+        sm.cancelAuction(0, SecretMarketplace.PredictionOutcome.PredictionCorrect);
 
         SecretMarketplace.Seller memory s = sm.getSeller("Alice");
         assertEq(s.reputationScore, 1);
     }
 
-    function test_forceCloseAuction_updatesReputation_negative() public {
+    function test_cancelAuction_predictionWrong_decreasesScore() public {
         _createAuction("Alice", 0, "Event", block.timestamp + 1 hours);
         _placeBid(0, BID_AMOUNT);
 
-        sm.forceCloseAuction(0, int8(-1));
+        sm.cancelAuction(0, SecretMarketplace.PredictionOutcome.PredictionWrong);
 
         SecretMarketplace.Seller memory s = sm.getSeller("Alice");
         assertEq(s.reputationScore, -1);
     }
 
-    function test_forceCloseAuction_zeroDelta_noReputationChange() public {
+    function test_cancelAuction_noPrediction_scoreUnchanged() public {
         _createAuction("Alice", 0, "Event", block.timestamp + 1 hours);
         _placeBid(0, BID_AMOUNT);
 
-        sm.forceCloseAuction(0, int8(0));
+        sm.cancelAuction(0, SecretMarketplace.PredictionOutcome.NoPrediction);
 
         SecretMarketplace.Seller memory s = sm.getSeller("Alice");
         assertEq(s.reputationScore, 0);
     }
 
-    function test_forceCloseAuction_revert_notAdminOrCRE() public {
+    function test_cancelAuction_revert_notAdminOrCRE() public {
         _createDefaultAuction();
 
         vm.expectRevert();
         vm.prank(nobody);
-        sm.forceCloseAuction(0, int8(1));
+        sm.cancelAuction(0, SecretMarketplace.PredictionOutcome.PredictionCorrect);
     }
 
-    function test_forceCloseAuction_creCanCall() public {
+    function test_cancelAuction_creCanCall() public {
         _createDefaultAuction();
         _placeBid(0, BID_AMOUNT);
 
         vm.prank(creAddress);
-        sm.forceCloseAuction(0, int8(1));
+        sm.cancelAuction(0, SecretMarketplace.PredictionOutcome.PredictionCorrect);
 
         SecretMarketplace.Auction memory a = sm.getAuction(0);
-        assertEq(uint8(a.status), uint8(SecretMarketplace.AuctionStatus.ForceClosed));
+        assertEq(uint8(a.status), uint8(SecretMarketplace.AuctionStatus.Cancelled));
     }
 
     // ===========================
-    // === RESOLVE EVENT =========
+    // == RECORD EVENT OUTCOME ===
     // ===========================
 
-    function test_resolveExternalEvent_updatesReputationForAllAuctions() public {
+    function test_recordEventOutcome_updatesReputationForAllAuctions() public {
         _createAuction("Alice", 0, "Event", block.timestamp + 1 hours);
         _createAuction("Bob", 0, "Event", block.timestamp + 1 hours);
         _placeBid(0, BID_AMOUNT);
@@ -432,7 +432,10 @@ contract SecretMarketplaceTest is Test {
         sm.closeAuction(1);
 
         // Resolve event — both predicted correctly
-        sm.resolveExternalEvent(0, _results2(0, true, 1, true));
+        sm.recordEventOutcomeAndUpdateRepScore(0, _results2(
+            0, SecretMarketplace.PredictionOutcome.PredictionCorrect,
+            1, SecretMarketplace.PredictionOutcome.PredictionCorrect
+        ));
 
         SecretMarketplace.Seller memory s1 = sm.getSeller("Alice");
         SecretMarketplace.Seller memory s2 = sm.getSeller("Bob");
@@ -440,15 +443,15 @@ contract SecretMarketplaceTest is Test {
         assertEq(s2.reputationScore, 1);
     }
 
-    function test_resolveExternalEvent_forceClosesOpenAuctions() public {
+    function test_recordEventOutcome_cancelsOpenAuctions() public {
         _createAuction("Alice", 0, "Event", block.timestamp + 1 hours);
         _placeBid(0, BID_AMOUNT);
 
-        sm.resolveExternalEvent(0, _results(0, true));
+        sm.recordEventOutcomeAndUpdateRepScore(0, _results(0, SecretMarketplace.PredictionOutcome.PredictionCorrect));
 
-        // Auction force-closed
+        // Auction cancelled
         SecretMarketplace.Auction memory a = sm.getAuction(0);
-        assertEq(uint8(a.status), uint8(SecretMarketplace.AuctionStatus.ForceClosed));
+        assertEq(uint8(a.status), uint8(SecretMarketplace.AuctionStatus.Cancelled));
 
         // Funds stay in contract
         assertEq(usdc.balanceOf(address(sm)), BID_AMOUNT);
@@ -458,20 +461,20 @@ contract SecretMarketplaceTest is Test {
         assertEq(s.reputationScore, 1);
     }
 
-    function test_resolveExternalEvent_skipsAlreadyResolvedReputation() public {
+    function test_recordEventOutcome_skipsAlreadyResolvedReputation() public {
         _createAuction("Alice", 0, "Event", block.timestamp + 1 hours);
         _placeBid(0, BID_AMOUNT);
 
-        // Force-close first (resolves reputation for this auction)
-        sm.forceCloseAuction(0, int8(1));
+        // Cancel first (resolves reputation for this auction)
+        sm.cancelAuction(0, SecretMarketplace.PredictionOutcome.PredictionCorrect);
         assertEq(sm.getSeller("Alice").reputationScore, 1);
 
         // Now resolve the event — should NOT double-count
-        sm.resolveExternalEvent(0, _results(0, true));
+        sm.recordEventOutcomeAndUpdateRepScore(0, _results(0, SecretMarketplace.PredictionOutcome.PredictionCorrect));
         assertEq(sm.getSeller("Alice").reputationScore, 1); // still 1, not 2
     }
 
-    function test_resolveExternalEvent_removesFromUnresolvedList() public {
+    function test_recordEventOutcome_removesFromUnresolvedList() public {
         _createAuction("Alice", 0, "E0", block.timestamp + 1 hours);
         _createAuction("Bob", 1, "E1", block.timestamp + 1 hours);
 
@@ -479,36 +482,36 @@ contract SecretMarketplaceTest is Test {
 
         vm.warp(block.timestamp + 2 hours);
         sm.closeAuction(0);
-        sm.resolveExternalEvent(0, _results(0, true));
+        sm.recordEventOutcomeAndUpdateRepScore(0, _results(0, SecretMarketplace.PredictionOutcome.PredictionCorrect));
 
         assertEq(sm.getUnresolvedEvents().length, 1);
         assertEq(sm.getUnresolvedEvents()[0], 1);
     }
 
-    function test_resolveExternalEvent_revert_alreadyResolved() public {
+    function test_recordEventOutcome_revert_alreadyResolved() public {
         _createAuction("Alice", 0, "Event", block.timestamp + 1 hours);
         vm.warp(block.timestamp + 2 hours);
         sm.closeAuction(0);
-        sm.resolveExternalEvent(0, _results(0, true));
+        sm.recordEventOutcomeAndUpdateRepScore(0, _results(0, SecretMarketplace.PredictionOutcome.PredictionCorrect));
 
         vm.expectRevert(abi.encodeWithSelector(SecretMarketplace.EventAlreadyResolved.selector, 0));
-        sm.resolveExternalEvent(0, _results(0, false));
+        sm.recordEventOutcomeAndUpdateRepScore(0, _results(0, SecretMarketplace.PredictionOutcome.PredictionWrong));
     }
 
-    function test_resolveExternalEvent_revert_notAdminOrCRE() public {
+    function test_recordEventOutcome_revert_notAdminOrCRE() public {
         _createAuction("Alice", 0, "Event", block.timestamp + 1 hours);
 
         vm.expectRevert();
         vm.prank(nobody);
-        sm.resolveExternalEvent(0, _results(0, true));
+        sm.recordEventOutcomeAndUpdateRepScore(0, _results(0, SecretMarketplace.PredictionOutcome.PredictionCorrect));
     }
 
-    function test_resolveExternalEvent_emptyResults_noReputationChange() public {
+    function test_recordEventOutcome_emptyResults_noReputationChange() public {
         _createAuction("Alice", 0, "Event", block.timestamp + 1 hours);
         vm.warp(block.timestamp + 2 hours);
         sm.closeAuction(0);
 
-        sm.resolveExternalEvent(0, _emptyResults());
+        sm.recordEventOutcomeAndUpdateRepScore(0, _emptyResults());
         assertEq(sm.getSeller("Alice").reputationScore, 0);
 
         // Auction should still be marked as reputationResolved
@@ -516,7 +519,7 @@ contract SecretMarketplaceTest is Test {
         assertTrue(a.reputationResolved);
     }
 
-    function test_resolveExternalEvent_perAuctionDelta() public {
+    function test_recordEventOutcome_perAuctionOutcome() public {
         _createAuction("Alice", 0, "Event", block.timestamp + 1 hours);
         _createAuction("Bob", 0, "Event", block.timestamp + 1 hours);
         _placeBid(0, BID_AMOUNT);
@@ -527,13 +530,16 @@ contract SecretMarketplaceTest is Test {
         sm.closeAuction(1);
 
         // Alice predicted correctly, Bob predicted incorrectly
-        sm.resolveExternalEvent(0, _results2(0, true, 1, false));
+        sm.recordEventOutcomeAndUpdateRepScore(0, _results2(
+            0, SecretMarketplace.PredictionOutcome.PredictionCorrect,
+            1, SecretMarketplace.PredictionOutcome.PredictionWrong
+        ));
 
         assertEq(sm.getSeller("Alice").reputationScore, 1);
         assertEq(sm.getSeller("Bob").reputationScore, -1);
     }
 
-    function test_resolveExternalEvent_partialResults() public {
+    function test_recordEventOutcome_partialResults() public {
         _createAuction("Alice", 0, "Event", block.timestamp + 1 hours);
         _createAuction("Bob", 0, "Event", block.timestamp + 1 hours);
         _createAuction("Carol", 0, "Event", block.timestamp + 1 hours);
@@ -547,7 +553,10 @@ contract SecretMarketplaceTest is Test {
         sm.closeAuction(2);
 
         // Only pass results for Alice and Bob; Carol has no prediction (omitted)
-        sm.resolveExternalEvent(0, _results2(0, true, 1, false));
+        sm.recordEventOutcomeAndUpdateRepScore(0, _results2(
+            0, SecretMarketplace.PredictionOutcome.PredictionCorrect,
+            1, SecretMarketplace.PredictionOutcome.PredictionWrong
+        ));
 
         assertEq(sm.getSeller("Alice").reputationScore, 1);
         assertEq(sm.getSeller("Bob").reputationScore, -1);
@@ -558,7 +567,7 @@ contract SecretMarketplaceTest is Test {
         assertTrue(a.reputationResolved);
     }
 
-    function test_resolveExternalEvent_revert_auctionNotLinkedToEvent() public {
+    function test_recordEventOutcome_ignoresUnlinkedAuctionResults() public {
         // Auction 0 for event 0, auction 1 for event 1
         _createAuction("Alice", 0, "Event 0", block.timestamp + 1 hours);
         _createAuction("Bob", 1, "Event 1", block.timestamp + 1 hours);
@@ -567,9 +576,12 @@ contract SecretMarketplaceTest is Test {
         sm.closeAuction(0);
         sm.closeAuction(1);
 
-        // Try to resolve event 0 with auction 1 (belongs to event 1)
-        vm.expectRevert(abi.encodeWithSelector(SecretMarketplace.AuctionNotLinkedToEvent.selector, 1, 0));
-        sm.resolveExternalEvent(0, _results(1, true));
+        // Resolve event 0 with a result for auction 1 (belongs to event 1) — simply ignored
+        sm.recordEventOutcomeAndUpdateRepScore(0, _results(1, SecretMarketplace.PredictionOutcome.PredictionCorrect));
+
+        // Alice got NoPrediction (no matching result for auction 0), Bob unaffected
+        assertEq(sm.getSeller("Alice").reputationScore, 0);
+        assertTrue(sm.eventResolved(0));
     }
 
     // ===========================
@@ -589,24 +601,24 @@ contract SecretMarketplaceTest is Test {
         assertEq(uint8(a.status), uint8(SecretMarketplace.AuctionStatus.Closed));
     }
 
-    function test_processReport_forceClose() public {
+    function test_processReport_cancelAuction() public {
         uint256 id = _createDefaultAuction();
         _placeBid(id, BID_AMOUNT);
 
-        bytes memory report = abi.encodePacked(uint8(1), abi.encode(id, int8(1)));
+        bytes memory report = abi.encodePacked(uint8(1), abi.encode(id, uint8(1)));
         vm.prank(forwarder);
         sm.onReport("", report);
 
         SecretMarketplace.Auction memory a = sm.getAuction(id);
-        assertEq(uint8(a.status), uint8(SecretMarketplace.AuctionStatus.ForceClosed));
+        assertEq(uint8(a.status), uint8(SecretMarketplace.AuctionStatus.Cancelled));
     }
 
-    function test_processReport_resolveEvent() public {
+    function test_processReport_recordEventOutcome() public {
         _createAuction("Alice", 0, "Event", block.timestamp + 1 hours);
         vm.warp(block.timestamp + 2 hours);
         sm.closeAuction(0);
 
-        SecretMarketplace.AuctionResult[] memory results = _results(0, true);
+        SecretMarketplace.AuctionResult[] memory results = _results(0, SecretMarketplace.PredictionOutcome.PredictionCorrect);
         bytes memory report = abi.encodePacked(uint8(2), abi.encode(uint256(0), results));
         vm.prank(forwarder);
         sm.onReport("", report);
@@ -661,22 +673,22 @@ contract SecretMarketplaceTest is Test {
         sm.closeAuction(id);
     }
 
-    function test_emits_AuctionForceClosed() public {
+    function test_emits_AuctionCancelled() public {
         uint256 id = _createDefaultAuction();
         _placeBid(id, BID_AMOUNT);
 
         vm.expectEmit(true, false, false, true);
-        emit SecretMarketplace.AuctionForceClosed(id, BID_AMOUNT, "Alice", 0, int8(1));
-        sm.forceCloseAuction(id, int8(1));
+        emit SecretMarketplace.AuctionCancelled(id, BID_AMOUNT, "Alice", 0);
+        sm.cancelAuction(id, SecretMarketplace.PredictionOutcome.PredictionCorrect);
     }
 
-    function test_emits_ReputationUpdated() public {
+    function test_emits_SellerReputationScoreUpdated() public {
         uint256 id = _createDefaultAuction();
         _placeBid(id, BID_AMOUNT);
 
         vm.expectEmit(false, true, false, true);
-        emit SecretMarketplace.ReputationUpdated("Alice", id, int8(1), int256(1));
-        sm.forceCloseAuction(id, int8(1));
+        emit SecretMarketplace.SellerReputationScoreUpdated("Alice", id, SecretMarketplace.PredictionOutcome.PredictionCorrect, int8(1), int256(1));
+        sm.cancelAuction(id, SecretMarketplace.PredictionOutcome.PredictionCorrect);
     }
 
     function test_emits_ExternalEventResolved() public {
@@ -686,7 +698,7 @@ contract SecretMarketplaceTest is Test {
 
         vm.expectEmit(true, false, false, true);
         emit SecretMarketplace.ExternalEventResolved(0, 1, 1);
-        sm.resolveExternalEvent(0, _results(0, true));
+        sm.recordEventOutcomeAndUpdateRepScore(0, _results(0, SecretMarketplace.PredictionOutcome.PredictionCorrect));
     }
 
     // ===========================
@@ -737,7 +749,7 @@ contract SecretMarketplaceTest is Test {
         assertEq(usdc.balanceOf(recipient), BID_AMOUNT);
 
         // 8. Resolve event → reputation +1
-        sm.resolveExternalEvent(0, _results(id, true));
+        sm.recordEventOutcomeAndUpdateRepScore(0, _results(id, SecretMarketplace.PredictionOutcome.PredictionCorrect));
         SecretMarketplace.Seller memory s = sm.getSeller("Insider Alice");
         assertEq(s.reputationScore, 1);
     }

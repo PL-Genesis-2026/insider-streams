@@ -6,7 +6,7 @@
  *   - AuctionCreated
  *   - BidPlaced
  *   - AuctionClosed
- *   - ExternalEventResolved + ReputationUpdated
+ *   - ExternalEventResolved + SellerReputationScoreUpdated
  *
  * Env vars required:
  *   OWNER_PK                    — deploys, creates events, closes auctions, settles
@@ -62,7 +62,7 @@ const { publicClient, ownerClient, ownerAccount } = createClients({
 const BID_AMOUNT = 1_000_000n; // 1 USDC
 const AUCTION_DURATION = 45; // seconds
 const QUESTION = "The New York Yankees won the 2009 World Series.";
-const SELLER_NAME = "Insider Alice";
+const SELLER_ID = "Insider Alice";
 
 // ─── E2E Flow ────────────────────────────────────────────────────────────────
 
@@ -114,18 +114,18 @@ async function main() {
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
     functionName: "getSeller",
-    args: [SELLER_NAME],
+    args: [SELLER_ID],
   });
   if (seller.registered) {
     console.log(
-      `  ok Seller "${SELLER_NAME}" already registered (reputation: ${seller.reputationScore})`,
+      `  ok Seller "${SELLER_ID}" already registered (reputation: ${seller.reputationScore})`,
     );
   } else {
     const registerHash = await ownerClient.writeContract({
       address: SECRET_MARKETPLACE,
       abi: secretMarketplaceAbi,
       functionName: "registerSeller",
-      args: [SELLER_NAME],
+      args: [SELLER_ID],
     });
     await waitForTx(publicClient, registerHash, "[EVENT: SellerRegistered]");
   }
@@ -149,7 +149,7 @@ async function main() {
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
     functionName: "createAuction",
-    args: [SELLER_NAME, eventId, QUESTION, endTime],
+    args: [SELLER_ID, eventId, QUESTION, endTime],
   });
   const auctionReceipt = await waitForTx(
     publicClient,
@@ -196,20 +196,20 @@ async function main() {
   const resolveHash = await ownerClient.writeContract({
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
-    functionName: "resolveExternalEvent",
-    args: [eventId, [{ auctionId, predictionCorrect: true }]],
+    functionName: "recordEventOutcomeAndUpdateRepScore",
+    args: [eventId, [{ auctionId, predictionOutcome: 1 }]],
   });
   await waitForTx(
     publicClient,
     resolveHash,
-    "[EVENT: ExternalEventResolved + ReputationUpdated]",
+    "[EVENT: ExternalEventResolved + SellerReputationScoreUpdated]",
   );
 
   const sellerAfter = await publicClient.readContract({
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
     functionName: "getSeller",
-    args: [SELLER_NAME],
+    args: [SELLER_ID],
   });
   console.log(
     `  Seller reputation after resolve: ${sellerAfter.reputationScore}`,
@@ -222,7 +222,7 @@ async function main() {
   console.log("    [x] BidPlaced");
   console.log("    [x] AuctionClosed");
   console.log("    [x] ExternalEventResolved");
-  console.log("    [x] ReputationUpdated");
+  console.log("    [x] SellerReputationScoreUpdated");
   console.log(`  SecretMarketplace: ${SECRET_MARKETPLACE}`);
 }
 

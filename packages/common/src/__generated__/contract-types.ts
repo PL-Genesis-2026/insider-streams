@@ -1066,6 +1066,13 @@ export const secretMarketplaceAbi = [
   {
     type: 'function',
     inputs: [],
+    name: 'ACTION_CANCEL_AUCTION',
+    outputs: [{ name: '', internalType: 'uint8', type: 'uint8' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    inputs: [],
     name: 'ACTION_CLOSE_AUCTION',
     outputs: [{ name: '', internalType: 'uint8', type: 'uint8' }],
     stateMutability: 'view',
@@ -1073,14 +1080,7 @@ export const secretMarketplaceAbi = [
   {
     type: 'function',
     inputs: [],
-    name: 'ACTION_FORCE_CLOSE_AUCTION',
-    outputs: [{ name: '', internalType: 'uint8', type: 'uint8' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'ACTION_RESOLVE_EVENT',
+    name: 'ACTION_RECORD_EVENT_OUTCOME',
     outputs: [{ name: '', internalType: 'uint8', type: 'uint8' }],
     stateMutability: 'view',
   },
@@ -1100,6 +1100,20 @@ export const secretMarketplaceAbi = [
   },
   {
     type: 'function',
+    inputs: [
+      { name: 'auctionId', internalType: 'uint256', type: 'uint256' },
+      {
+        name: 'predictionOutcome',
+        internalType: 'enum SecretMarketplace.PredictionOutcome',
+        type: 'uint8',
+      },
+    ],
+    name: 'cancelAuction',
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
     inputs: [{ name: 'auctionId', internalType: 'uint256', type: 'uint256' }],
     name: 'closeAuction',
     outputs: [],
@@ -1108,7 +1122,7 @@ export const secretMarketplaceAbi = [
   {
     type: 'function',
     inputs: [
-      { name: 'seller', internalType: 'string', type: 'string' },
+      { name: 'sellerId', internalType: 'string', type: 'string' },
       { name: 'eventId', internalType: 'uint256', type: 'uint256' },
       { name: 'eventTitle', internalType: 'string', type: 'string' },
       { name: 'endTime', internalType: 'uint256', type: 'uint256' },
@@ -1136,16 +1150,6 @@ export const secretMarketplaceAbi = [
   },
   {
     type: 'function',
-    inputs: [
-      { name: 'auctionId', internalType: 'uint256', type: 'uint256' },
-      { name: 'reputationDelta', internalType: 'int8', type: 'int8' },
-    ],
-    name: 'forceCloseAuction',
-    outputs: [],
-    stateMutability: 'nonpayable',
-  },
-  {
-    type: 'function',
     inputs: [{ name: 'auctionId', internalType: 'uint256', type: 'uint256' }],
     name: 'getAuction',
     outputs: [
@@ -1154,7 +1158,7 @@ export const secretMarketplaceAbi = [
         internalType: 'struct SecretMarketplace.Auction',
         type: 'tuple',
         components: [
-          { name: 'seller', internalType: 'string', type: 'string' },
+          { name: 'sellerId', internalType: 'string', type: 'string' },
           { name: 'endTime', internalType: 'uint256', type: 'uint256' },
           { name: 'currentBid', internalType: 'uint256', type: 'uint256' },
           { name: 'eventId', internalType: 'uint256', type: 'uint256' },
@@ -1223,7 +1227,7 @@ export const secretMarketplaceAbi = [
   },
   {
     type: 'function',
-    inputs: [{ name: 'sellerName', internalType: 'string', type: 'string' }],
+    inputs: [{ name: 'sellerId', internalType: 'string', type: 'string' }],
     name: 'getSeller',
     outputs: [
       {
@@ -1240,7 +1244,7 @@ export const secretMarketplaceAbi = [
   },
   {
     type: 'function',
-    inputs: [{ name: 'sellerName', internalType: 'string', type: 'string' }],
+    inputs: [{ name: 'sellerId', internalType: 'string', type: 'string' }],
     name: 'getSellerAuctions',
     outputs: [{ name: '', internalType: 'uint256[]', type: 'uint256[]' }],
     stateMutability: 'view',
@@ -1335,7 +1339,29 @@ export const secretMarketplaceAbi = [
   },
   {
     type: 'function',
-    inputs: [{ name: 'name', internalType: 'string', type: 'string' }],
+    inputs: [
+      { name: 'externalEventId', internalType: 'uint256', type: 'uint256' },
+      {
+        name: 'results',
+        internalType: 'struct SecretMarketplace.AuctionResult[]',
+        type: 'tuple[]',
+        components: [
+          { name: 'auctionId', internalType: 'uint256', type: 'uint256' },
+          {
+            name: 'predictionOutcome',
+            internalType: 'enum SecretMarketplace.PredictionOutcome',
+            type: 'uint8',
+          },
+        ],
+      },
+    ],
+    name: 'recordEventOutcomeAndUpdateRepScore',
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    inputs: [{ name: 'sellerId', internalType: 'string', type: 'string' }],
     name: 'registerSeller',
     outputs: [],
     stateMutability: 'nonpayable',
@@ -1354,24 +1380,6 @@ export const secretMarketplaceAbi = [
       { name: 'callerConfirmation', internalType: 'address', type: 'address' },
     ],
     name: 'renounceRole',
-    outputs: [],
-    stateMutability: 'nonpayable',
-  },
-  {
-    type: 'function',
-    inputs: [
-      { name: 'externalEventId', internalType: 'uint256', type: 'uint256' },
-      {
-        name: 'results',
-        internalType: 'struct SecretMarketplace.AuctionResult[]',
-        type: 'tuple[]',
-        components: [
-          { name: 'auctionId', internalType: 'uint256', type: 'uint256' },
-          { name: 'predictionCorrect', internalType: 'bool', type: 'bool' },
-        ],
-      },
-    ],
-    name: 'resolveExternalEvent',
     outputs: [],
     stateMutability: 'nonpayable',
   },
@@ -1474,13 +1482,44 @@ export const secretMarketplaceAbi = [
         indexed: true,
       },
       {
+        name: 'cancelledBidAmount',
+        internalType: 'uint256',
+        type: 'uint256',
+        indexed: false,
+      },
+      {
+        name: 'sellerId',
+        internalType: 'string',
+        type: 'string',
+        indexed: false,
+      },
+      {
+        name: 'eventId',
+        internalType: 'uint256',
+        type: 'uint256',
+        indexed: false,
+      },
+    ],
+    name: 'AuctionCancelled',
+  },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      {
+        name: 'auctionId',
+        internalType: 'uint256',
+        type: 'uint256',
+        indexed: true,
+      },
+      {
         name: 'winningBid',
         internalType: 'uint256',
         type: 'uint256',
         indexed: false,
       },
       {
-        name: 'seller',
+        name: 'sellerId',
         internalType: 'string',
         type: 'string',
         indexed: false,
@@ -1511,7 +1550,7 @@ export const secretMarketplaceAbi = [
         indexed: true,
       },
       {
-        name: 'seller',
+        name: 'sellerId',
         internalType: 'string',
         type: 'string',
         indexed: false,
@@ -1530,43 +1569,6 @@ export const secretMarketplaceAbi = [
       },
     ],
     name: 'AuctionCreated',
-  },
-  {
-    type: 'event',
-    anonymous: false,
-    inputs: [
-      {
-        name: 'auctionId',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: true,
-      },
-      {
-        name: 'heldAmount',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: false,
-      },
-      {
-        name: 'seller',
-        internalType: 'string',
-        type: 'string',
-        indexed: false,
-      },
-      {
-        name: 'eventId',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: false,
-      },
-      {
-        name: 'reputationDelta',
-        internalType: 'int8',
-        type: 'int8',
-        indexed: false,
-      },
-    ],
-    name: 'AuctionForceClosed',
   },
   {
     type: 'event',
@@ -1736,32 +1738,6 @@ export const secretMarketplaceAbi = [
     type: 'event',
     anonymous: false,
     inputs: [
-      {
-        name: 'seller',
-        internalType: 'string',
-        type: 'string',
-        indexed: false,
-      },
-      {
-        name: 'auctionId',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: true,
-      },
-      { name: 'delta', internalType: 'int8', type: 'int8', indexed: false },
-      {
-        name: 'newScore',
-        internalType: 'int256',
-        type: 'int256',
-        indexed: false,
-      },
-    ],
-    name: 'ReputationUpdated',
-  },
-  {
-    type: 'event',
-    anonymous: false,
-    inputs: [
       { name: 'role', internalType: 'bytes32', type: 'bytes32', indexed: true },
       {
         name: 'previousAdminRole',
@@ -1836,13 +1812,50 @@ export const secretMarketplaceAbi = [
     anonymous: false,
     inputs: [
       {
-        name: 'seller',
+        name: 'sellerId',
         internalType: 'string',
         type: 'string',
         indexed: false,
       },
     ],
     name: 'SellerRegistered',
+  },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      {
+        name: 'sellerId',
+        internalType: 'string',
+        type: 'string',
+        indexed: false,
+      },
+      {
+        name: 'auctionId',
+        internalType: 'uint256',
+        type: 'uint256',
+        indexed: true,
+      },
+      {
+        name: 'predictionOutcome',
+        internalType: 'enum SecretMarketplace.PredictionOutcome',
+        type: 'uint8',
+        indexed: false,
+      },
+      {
+        name: 'scoreChange',
+        internalType: 'int8',
+        type: 'int8',
+        indexed: false,
+      },
+      {
+        name: 'newScore',
+        internalType: 'int256',
+        type: 'int256',
+        indexed: false,
+      },
+    ],
+    name: 'SellerReputationScoreUpdated',
   },
   { type: 'error', inputs: [], name: 'AccessControlBadConfirmation' },
   {
@@ -1857,14 +1870,6 @@ export const secretMarketplaceAbi = [
   { type: 'error', inputs: [], name: 'AuctionDoesNotExist' },
   { type: 'error', inputs: [], name: 'AuctionNotActive' },
   { type: 'error', inputs: [], name: 'AuctionNotEnded' },
-  {
-    type: 'error',
-    inputs: [
-      { name: 'auctionId', internalType: 'uint256', type: 'uint256' },
-      { name: 'expectedEventId', internalType: 'uint256', type: 'uint256' },
-    ],
-    name: 'AuctionNotLinkedToEvent',
-  },
   { type: 'error', inputs: [], name: 'BidTooLow' },
   { type: 'error', inputs: [], name: 'EndTimeInPast' },
   {

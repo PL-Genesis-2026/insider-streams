@@ -77,7 +77,7 @@ const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_KEY);
 const BID_AMOUNT = 2_000_000n; // 2 USDC
 const EVENT_DURATION = BigInt(60); // 60 seconds (market event duration)
 const AUCTION_DURATION = 45; // 45 seconds — needs headroom for Sepolia tx confirmation
-const SELLER_NAME = "E2ETestSeller";
+const SELLER_ID = "E2ETestSeller";
 
 // Unique transaction ID for the mock deposit (avoids collisions with real data)
 const DEPOSIT_TX_ID = `e2e-auction-closer-deposit-${Date.now()}`;
@@ -156,7 +156,7 @@ async function main() {
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
     functionName: "createAuction",
-    args: [SELLER_NAME, eventId, "Auction closer E2E test", endTime],
+    args: [SELLER_ID, eventId, "Auction closer E2E test", endTime],
   });
   const auctionReceipt = await waitForTx(
     publicClient,
@@ -193,7 +193,7 @@ async function main() {
   // ── Step 6: Insert Supabase records (seller, secret, deposit, private_bid) ─
   step("Setting up Supabase records...");
   await setupSupabaseAuctionBid(supabase, {
-    sellerName: SELLER_NAME,
+    sellerName: SELLER_ID,
     sellerAddress: ownerAccount.address,
     auctionId: auctionIdStr,
     secretData: "E2E test secret data",

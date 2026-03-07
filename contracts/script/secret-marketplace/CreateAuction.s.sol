@@ -8,7 +8,7 @@ contract CreateAuction is Script {
     function run() external {
         address auctionAddress = vm.envAddress("SECRET_MARKETPLACE_ADDRESS");
         uint256 eventId = vm.envUint("EVENT_ID");
-        string memory seller = vm.envString("SELLER_NAME");
+        string memory sellerId = vm.envString("SELLER_ID");
         string memory eventTitle = vm.envString("EVENT_TITLE");
         uint256 duration = vm.envUint("AUCTION_DURATION"); // seconds from now
         uint256 deployerPk = vm.envUint("PRIVATE_KEY");
@@ -18,7 +18,7 @@ contract CreateAuction is Script {
         vm.startBroadcast(deployerPk);
 
         uint256 auctionId = SecretMarketplace(auctionAddress).createAuction(
-            seller, eventId, eventTitle, endTime
+            sellerId, eventId, eventTitle, endTime
         );
         console.log("Auction created with ID:", auctionId);
 

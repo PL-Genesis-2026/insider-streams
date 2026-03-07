@@ -3,19 +3,19 @@ import { keccak256, toHex, decodeEventLog, parseAbi } from "viem";
 import { configSchema, type Config } from "./types";
 import { refundActiveBids } from "./supabase";
 
-/** ABI for the AuctionForceClosed event CRE listens for. */
+/** ABI for the AuctionCancelled event CRE listens for. */
 const eventAbi = parseAbi([
-  "event AuctionForceClosed(uint256 indexed auctionId, uint256 heldAmount, string seller, uint256 eventId, int8 reputationDelta)",
+  "event AuctionCancelled(uint256 indexed auctionId, uint256 cancelledBidAmount, string sellerId, uint256 eventId)",
 ]);
-const eventSignature = "AuctionForceClosed(uint256,uint256,string,uint256,int8)";
+const eventSignature = "AuctionCancelled(uint256,uint256,string,uint256)";
 
 /**
- * Handles AuctionForceClosed events from the SecretMarketplace contract.
- * Refunds active bids in Supabase for force-closed auctions.
+ * Handles AuctionCancelled events from the SecretMarketplace contract.
+ * Refunds active bids in Supabase for cancelled auctions.
  */
 const onLogTrigger = (runtime: Runtime<Config>, log: EVMLog): string => {
   try {
-    // Decode the AuctionForceClosed event
+    // Decode the AuctionCancelled event
     const topics = log.topics.map((t) => bytesToHex(t)) as [
       `0x${string}`,
       ...`0x${string}`[],
@@ -26,17 +26,17 @@ const onLogTrigger = (runtime: Runtime<Config>, log: EVMLog): string => {
     runtime.log(`Event name: ${decoded.eventName}`);
 
     const auctionId = decoded.args.auctionId as bigint;
-    const heldAmount = decoded.args.heldAmount as bigint;
-    const seller = decoded.args.seller as string;
+    const cancelledBidAmount = decoded.args.cancelledBidAmount as bigint;
+    const sellerId = decoded.args.sellerId as string;
 
     runtime.log(
-      `AuctionForceClosed: auction=${auctionId}, held=${heldAmount}, seller=${seller}`,
+      `AuctionCancelled: auction=${auctionId}, cancelledBid=${cancelledBidAmount}, sellerId=${sellerId}`,
     );
 
     // Refund active bids in Supabase
     const refunded = refundActiveBids(runtime, [auctionId.toString()]);
 
-    const summary = `Refunded ${refunded} bid(s) for force-closed auction ${auctionId}`;
+    const summary = `Refunded ${refunded} bid(s) for cancelled auction ${auctionId}`;
     runtime.log(summary);
     return summary;
   } catch (err) {
@@ -47,7 +47,7 @@ const onLogTrigger = (runtime: Runtime<Config>, log: EVMLog): string => {
 };
 
 /**
- * Workflow init — registers log trigger for AuctionForceClosed events.
+ * Workflow init — registers log trigger for AuctionCancelled events.
  */
 const initWorkflow = (config: Config) => {
   const network = getNetwork({
@@ -63,14 +63,14 @@ const initWorkflow = (config: Config) => {
     network.chainSelector.selector,
   );
 
-  // Compute topic hash for AuctionForceClosed event
-  const forceClosedHash = keccak256(toHex(eventSignature));
+  // Compute topic hash for AuctionCancelled event
+  const cancelledHash = keccak256(toHex(eventSignature));
 
   return [
     cre.handler(
       evmClient.logTrigger({
         addresses: [config.evms[0].secretMarketplaceAddress],
-        topics: [{ values: [forceClosedHash] }],
+        topics: [{ values: [cancelledHash] }],
         confidence: "CONFIDENCE_LEVEL_FINALIZED",
       }),
       onLogTrigger,

@@ -3,7 +3,7 @@
  * via WebSocket and triggers CRE workflows in real-time.
  *
  * Watchers:
- *   1. force-close:    AuctionForceClosed events → force-close-handler CRE  (WebSocket)
+ *   1. force-close:    AuctionCancelled events → force-close-handler CRE  (WebSocket)
  *   2. settlement:     SettlementRequested events → external-prediction-market-settler CRE  (WebSocket)
  *   3. auction-expiry: getOpenAuctions() polling  → secret-marketplace-auction-closer CRE  (HTTP poll)
  *
@@ -79,7 +79,7 @@ function startSubscriptions(): void {
   log("main", "Starting WebSocket subscriptions...");
 
   unwatchForceClose = watchForceClose(wsClient, httpClient);
-  log("main", "Subscribed to AuctionForceClosed events");
+  log("main", "Subscribed to AuctionCancelled events");
 
   unwatchSettlement = watchSettlement(wsClient, httpClient);
   log("main", "Subscribed to SettlementRequested events");
