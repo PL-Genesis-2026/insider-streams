@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { SecretRevealCard } from "@/components/secret-reveal";
+import { AuctionDetailPrivate } from "@/components/auction-detail-private";
 import { AuctionBidGate } from "@/components/funding/auction-bid-gate";
 import {
   getAuctionDetail,
@@ -261,6 +262,7 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
 
   return (
     <main className="theme-ember-editorial min-h-screen text-foreground">
+      <AuctionDetailPrivate auctionId={auction.auctionId}>
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 py-8 md:px-10">
         <nav className="flex items-center gap-3 text-sm text-muted-foreground">
           <Button asChild variant="ghost" size="xs">
@@ -461,6 +463,7 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
           </aside>
         </div>
       </div>
+      </AuctionDetailPrivate>
     </main>
   );
 }
