@@ -65,6 +65,9 @@ importers:
       embla-carousel-react:
         specifier: ^8.6.0
         version: 8.6.0(react@19.2.4)
+      fast-json-stable-stringify:
+        specifier: ^2.1.0
+        version: 2.1.0
       graphql:
         specifier: ^16.13.1
         version: 16.13.1
@@ -236,9 +239,15 @@ importers:
 
   packages/common:
     dependencies:
+      '@supabase/supabase-js':
+        specifier: ^2.98.0
+        version: 2.98.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       '@wagmi/cli':
         specifier: ^2.10.0
         version: 2.10.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      fast-json-stable-stringify:
+        specifier: ^2.1.0
+        version: 2.1.0
       viem:
         specifier: ^2.47.0
         version: 2.47.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@4.3.6)
@@ -255,6 +264,9 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.98.0
         version: 2.98.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
+      fast-json-stable-stringify:
+        specifier: ^2.1.0
+        version: 2.1.0
       graphql:
         specifier: ^16.13.1
         version: 16.13.1

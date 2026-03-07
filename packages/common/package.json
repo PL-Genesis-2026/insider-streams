@@ -10,7 +10,9 @@
     "build": "tsc"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.98.0",
     "@wagmi/cli": "^2.10.0",
+    "fast-json-stable-stringify": "^2.1.0",
     "viem": "^2.47.0"
   },
   "devDependencies": {
