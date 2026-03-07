@@ -33,14 +33,18 @@
 
 import { createClient } from "@supabase/supabase-js";
 import {
-  MOCK_USDC_ADDRESS,
+  CONFIDENTIAL_USDC_ADDRESS,
+  PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
   SECRET_MARKETPLACE_ADDRESS,
-  mockUsdcAbi,
+  VAULT_ADDRESS,
+  CONFIDENTIAL_USDC_DECIMALS,
+  confidentialUsdcAbi,
   secretMarketplaceAbi,
   examplePredictionMarketAbi,
 } from "@private-streams/common";
 import type { Database } from "@private-streams/common";
 import { parseEventLogs, formatUnits, type Address, type Hex } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import {
   banner,
   step,
@@ -51,8 +55,9 @@ import {
   ensureUsdcBalance,
   sleep,
   resetStepCounter,
-} from "./e2e-helpers.js";
-import { expectContractError } from "./e2e-helpers.js";
+  expectContractError,
+  runCRE,
+} from "./e2e_tests/e2e-helpers.js";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -62,8 +67,8 @@ const RPC_URL = envRequired("RPC_URL");
 const SUPABASE_URL = envRequired("SUPABASE_URL");
 const SUPABASE_KEY = envRequired("SUPABASE_SERVICE_ROLE_KEY");
 
-const MOCK_USDC = (process.env.MOCK_USDC_ADDRESS ??
-  MOCK_USDC_ADDRESS) as Address;
+const MOCK_USDC = (process.env.CONFIDENTIAL_USDC_ADDRESS ??
+  CONFIDENTIAL_USDC_ADDRESS) as Address;
 const SECRET_MARKETPLACE = (process.env.SECRET_MARKETPLACE_ADDRESS ??
   SECRET_MARKETPLACE_ADDRESS) as Address;
 
@@ -77,7 +82,8 @@ const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_KEY);
 const BID_1 = 1_000_000n; // 1 USDC
 const BID_2 = 2_000_000n; // 2 USDC
 const BID_3 = 5_000_000n; // 5 USDC
-const SEED_DEPOSIT = 50_000_000n; // 50 USDC — synthetic deposit for bidder balance
+const VAULT_DEPOSIT_AMOUNT = 55_000_000n; // 55 USDC vaulted — covers the 50 USDC transfer + buffer
+const DEPOSIT_AMOUNT = 50_000_000n; // 50 USDC private-transferred to platform EOA
 const AUCTION_DURATION = 120; // seconds
 const EVENT_DURATION = BigInt(180); // seconds
 
@@ -95,7 +101,137 @@ const SUBGRAPH_URL =
 // ─── Tracking for cleanup ────────────────────────────────────────────────────
 
 const createdBidIds: string[] = [];
-const createdTransferIds: string[] = [];
+
+// ─── Private Token API helpers ───────────────────────────────────────────────
+
+const PRIVATE_TOKEN_API = "https://convergence2026-token-api.cldev.cloud";
+
+const PRIVATE_TOKEN_DOMAIN = {
+  name: "CompliantPrivateTokenDemo",
+  version: "0.0.1",
+  chainId: 11155111,
+  verifyingContract: VAULT_ADDRESS as `0x${string}`,
+} as const;
+
+const vaultAbi = [
+  {
+    name: "deposit",
+    type: "function" as const,
+    inputs: [
+      { name: "token", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+] as const;
+
+async function doVaultDeposit(
+  walletClient: ReturnType<typeof createClients>["ownerClient"],
+  amount: bigint,
+): Promise<Hex> {
+  const approveHash = await walletClient.writeContract({
+    address: PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
+    abi: confidentialUsdcAbi,
+    functionName: "approve",
+    args: [VAULT_ADDRESS, amount],
+  });
+  await waitForTx(publicClient, approveHash, "Approve vault");
+
+  const depositHash = await walletClient.writeContract({
+    address: VAULT_ADDRESS,
+    abi: vaultAbi,
+    functionName: "deposit",
+    args: [PRIVATE_CONFIDENTIAL_USDC_ADDRESS, amount],
+  });
+  await waitForTx(publicClient, depositHash, `Vault deposit (${formatUnits(amount, CONFIDENTIAL_USDC_DECIMALS)} USDC)`);
+  return depositHash;
+}
+
+async function pollForApiTx(
+  signer: ReturnType<typeof privateKeyToAccount>,
+  predicate: (tx: Record<string, unknown>) => boolean,
+  label: string,
+): Promise<void> {
+  for (let i = 1; i <= 30; i++) {
+    console.log(`  Polling ${label} (attempt ${i}/30)...`);
+    const timestamp = Math.floor(Date.now() / 1000);
+    const sig = await signer.signTypedData({
+      domain: PRIVATE_TOKEN_DOMAIN,
+      types: {
+        "List Transactions": [
+          { name: "account", type: "address" },
+          { name: "timestamp", type: "uint256" },
+          { name: "cursor", type: "string" },
+          { name: "limit", type: "uint256" },
+        ],
+      },
+      primaryType: "List Transactions",
+      message: { account: signer.address, timestamp: BigInt(timestamp), cursor: "", limit: 100n },
+    });
+    const resp = await fetch(`${PRIVATE_TOKEN_API}/transactions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ account: signer.address, timestamp, auth: sig, limit: 100 }),
+    });
+    if (resp.ok) {
+      const data = (await resp.json()) as { transactions?: Record<string, unknown>[] };
+      if ((data.transactions ?? []).find(predicate)) {
+        console.log(`  ok Found: ${label}`);
+        return;
+      }
+    }
+    if (i < 30) await sleep(10_000);
+  }
+  throw new Error(`Timed out polling for: ${label}`);
+}
+
+async function doPrivateTransfer(
+  signer: ReturnType<typeof privateKeyToAccount>,
+  recipient: Address,
+  amount: bigint,
+): Promise<string> {
+  const timestamp = Math.floor(Date.now() / 1000);
+  const sig = await signer.signTypedData({
+    domain: PRIVATE_TOKEN_DOMAIN,
+    types: {
+      "Private Token Transfer": [
+        { name: "sender", type: "address" },
+        { name: "recipient", type: "address" },
+        { name: "token", type: "address" },
+        { name: "amount", type: "uint256" },
+        { name: "flags", type: "string[]" },
+        { name: "timestamp", type: "uint256" },
+      ],
+    },
+    primaryType: "Private Token Transfer",
+    message: {
+      sender: signer.address,
+      recipient,
+      token: PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
+      amount,
+      flags: [],
+      timestamp: BigInt(timestamp),
+    },
+  });
+  const resp = await fetch(`${PRIVATE_TOKEN_API}/private-transfer`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      account: signer.address,
+      recipient,
+      token: PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
+      amount: amount.toString(),
+      flags: [],
+      timestamp,
+      auth: sig,
+    }),
+  });
+  if (!resp.ok) throw new Error(`POST /private-transfer failed (${resp.status}): ${await resp.text()}`);
+  const data = (await resp.json()) as { transaction_id: string };
+  console.log(`  Private transfer: ${signer.address.slice(0, 10)}→${recipient.slice(0, 10)} ${formatUnits(amount, CONFIDENTIAL_USDC_DECIMALS)} USDC tx_id=${data.transaction_id}`);
+  return data.transaction_id;
+}
 
 // ─── E2E Flow ────────────────────────────────────────────────────────────────
 
@@ -140,14 +276,14 @@ async function main() {
     // Approve SecretMarketplace
     const allowanceSM = await publicClient.readContract({
       address: MOCK_USDC,
-      abi: mockUsdcAbi,
+      abi: confidentialUsdcAbi,
       functionName: "allowance",
       args: [ownerAccount.address, SECRET_MARKETPLACE],
     });
     if (allowanceSM < MIN_ALLOWANCE) {
       const h = await ownerClient.writeContract({
         address: MOCK_USDC,
-        abi: mockUsdcAbi,
+        abi: confidentialUsdcAbi,
         functionName: "approve",
         args: [SECRET_MARKETPLACE, APPROVAL_AMOUNT],
       });
@@ -159,14 +295,14 @@ async function main() {
     // Approve ExamplePredictionMarket
     const allowanceMarket = await publicClient.readContract({
       address: MOCK_USDC,
-      abi: mockUsdcAbi,
+      abi: confidentialUsdcAbi,
       functionName: "allowance",
       args: [ownerAccount.address, SIMPLE_MARKET],
     });
     if (allowanceMarket < MIN_ALLOWANCE) {
       const h = await ownerClient.writeContract({
         address: MOCK_USDC,
-        abi: mockUsdcAbi,
+        abi: confidentialUsdcAbi,
         functionName: "approve",
         args: [SIMPLE_MARKET, APPROVAL_AMOUNT],
       });
@@ -175,37 +311,33 @@ async function main() {
       console.log(`  ok ExamplePredictionMarket allowance sufficient`);
     }
 
-    // ── Step 3: Seed bidder deposits in Supabase ───────────────────────────────
-    step("Seeding bidder deposits in Supabase...");
-    const timestamp = Date.now();
+    // ── Step 3: Real deposits via Private Token API + CRE reconciler ───────────
+    // Each bidder: mint private USDC → vault deposit → private transfer to platform EOA
+    // → CRE user-balance-recording-fallback writes it to Supabase transfers table.
+    // NOTE: both wallets need ETH on Sepolia for vault approve + deposit gas.
+    step("Funding bidders via real Private Token deposit flow...");
     const ownerAddr = ownerAccount.address.toLowerCase();
     const bidderAddr = bidderAccount!.address.toLowerCase();
 
-    // Seed deposit for owner (bidder 1)
-    const ownerTxId = `test-bid-seed-owner-${timestamp}`;
-    const { error: ownerInsertErr } = await supabase.from("transfers").insert({
-      transaction_id: ownerTxId,
-      user_address: ownerAddr,
-      amount: SEED_DEPOSIT.toString(),
-      status: "confirmed",
-      credited_at: new Date().toISOString(),
-    });
-    assert(!ownerInsertErr, `Failed to seed owner deposit: ${ownerInsertErr?.message}`);
-    createdTransferIds.push(ownerTxId);
-    console.log(`  ok Seeded ${formatUnits(SEED_DEPOSIT, 6)} USDC deposit for owner (${ownerAddr.slice(0, 10)}...)`);
+    // Mint PRIVATE_CONFIDENTIAL_USDC to both accounts (owner can mint)
+    await ensureUsdcBalance(publicClient, ownerClient, PRIVATE_CONFIDENTIAL_USDC_ADDRESS, ownerAccount.address, VAULT_DEPOSIT_AMOUNT, VAULT_DEPOSIT_AMOUNT + 1_000_000n);
+    await ensureUsdcBalance(publicClient, ownerClient, PRIVATE_CONFIDENTIAL_USDC_ADDRESS, bidderAccount!.address, VAULT_DEPOSIT_AMOUNT, VAULT_DEPOSIT_AMOUNT + 1_000_000n);
 
-    // Seed deposit for bidder (bidder 2)
-    const bidderTxId = `test-bid-seed-bidder-${timestamp}`;
-    const { error: bidderInsertErr } = await supabase.from("transfers").insert({
-      transaction_id: bidderTxId,
-      user_address: bidderAddr,
-      amount: SEED_DEPOSIT.toString(),
-      status: "confirmed",
-      credited_at: new Date().toISOString(),
-    });
-    assert(!bidderInsertErr, `Failed to seed bidder deposit: ${bidderInsertErr?.message}`);
-    createdTransferIds.push(bidderTxId);
-    console.log(`  ok Seeded ${formatUnits(SEED_DEPOSIT, 6)} USDC deposit for bidder (${bidderAddr.slice(0, 10)}...)`);
+    // Owner: vault deposit → poll until visible → private transfer to platform EOA
+    const ownerVaultHash = await doVaultDeposit(ownerClient, VAULT_DEPOSIT_AMOUNT);
+    await pollForApiTx(ownerAccount, (tx) => tx["type"] === "deposit" && (tx["tx_hash"] as string)?.toLowerCase() === ownerVaultHash.toLowerCase(), "owner vault deposit in API");
+    const ownerDepositTxId = await doPrivateTransfer(ownerAccount, ownerAccount.address as Address, DEPOSIT_AMOUNT);
+    await pollForApiTx(ownerAccount, (tx) => tx["type"] === "transfer" && tx["is_incoming"] === true && tx["id"] === ownerDepositTxId, "owner incoming transfer in API");
+
+    // Bidder: vault deposit → poll until visible → private transfer to platform EOA
+    const bidderVaultHash = await doVaultDeposit(bidderClient!, VAULT_DEPOSIT_AMOUNT);
+    await pollForApiTx(bidderAccount!, (tx) => tx["type"] === "deposit" && (tx["tx_hash"] as string)?.toLowerCase() === bidderVaultHash.toLowerCase(), "bidder vault deposit in API");
+    const bidderDepositTxId = await doPrivateTransfer(bidderAccount!, ownerAccount.address as Address, DEPOSIT_AMOUNT);
+    await pollForApiTx(ownerAccount, (tx) => tx["type"] === "transfer" && tx["is_incoming"] === true && tx["id"] === bidderDepositTxId, "bidder incoming transfer in API");
+
+    // Run CRE reconciler once — picks up both transfers and writes to Supabase
+    runCRE({ workflow: "user-balance-recording-fallback", triggerIndex: 0 });
+    console.log(`  ok Deposits recorded in Supabase`);
 
     // ── Step 4: Verify balances view ───────────────────────────────────────────
     step("Verifying balances view...");
@@ -673,17 +805,6 @@ async function cleanup() {
     }
   }
 
-  if (createdTransferIds.length > 0) {
-    const { error } = await supabase
-      .from("transfers")
-      .delete()
-      .in("transaction_id", createdTransferIds);
-    if (error) {
-      console.log(`  WARN Failed to cleanup transfers: ${error.message}`);
-    } else {
-      console.log(`  ok Deleted ${createdTransferIds.length} test rows from transfers`);
-    }
-  }
 }
 
 main()
