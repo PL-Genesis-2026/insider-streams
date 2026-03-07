@@ -56,10 +56,19 @@ export function findSettledUnresolvedEvents(
 
   if (unresolvedIds.length === 0) return [];
 
+  // CRE enforces a 15 ChainRead call limit per workflow invocation.
+  // Each event costs 1 read (getEvent) + 1 read if settled (getEventAuctions).
+  // Cap at 7 events per invocation: 1 (getUnresolvedEvents) + 7*2 = 15 max.
+  const MAX_EVENTS = 7;
+  const eventsToCheck = unresolvedIds.slice(0, MAX_EVENTS);
+  if (unresolvedIds.length > MAX_EVENTS) {
+    runtime.log(`Processing first ${MAX_EVENTS} of ${unresolvedIds.length} events (ChainRead limit)`);
+  }
+
   // Step 2: Check each event on ExamplePredictionMarket
   const settledEvents: SettledEvent[] = [];
 
-  for (const eventId of unresolvedIds) {
+  for (const eventId of eventsToCheck) {
     const getEventCallData = encodeFunctionData({
       abi: examplePredictionMarketAbi,
       functionName: "getEvent",
