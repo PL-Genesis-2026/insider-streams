@@ -1,5 +1,5 @@
 {
-  "name": "auction-closer",
+  "name": "secret-marketplace-auction-closer",
   "version": "1.0.0",
   "main": "dist/main.js",
   "private": true,

@@ -14,15 +14,16 @@ private-streams/
 │   └── chainlink-private-token-api-client/  # Typed API client for Compliant Private Token API
 ├── contracts/                       # Foundry — ConfidentialUSDC + ExamplePredictionMarket + SecretMarketplace
 ├── cre-workflows/                   # CRE TypeScript workflows (Bun-managed)
-│   ├── prediction-market-demo/      # Gemini AI settlement workflow
-│   ├── auction-closer/             # Cron-based auction closer workflow
-│   └── deposit-reconciler/         # Cron-based private token deposit/withdrawal reconciler
+│   ├── reputation-score-manager/      # Gemini AI settlement workflow
+│   ├── secret-marketplace-auction-closer/             # Cron-based auction closer workflow
+│   └── user-balance-recording-fallback/         # Cron-based private token deposit/withdrawal reconciler
 ├── subgraphs/secrets-marketplace/   # The Graph subgraph
 ├── scripts/                         # E2E test scripts and utilities
-│   ├── simple-market-e2e.ts         # ExamplePredictionMarket + CRE settlement E2E
-│   ├── auction-closer-e2e.ts        # Auction closer CRE workflow E2E
-│   ├── secret-marketplace-e2e.ts    # SecretMarketplace full event lifecycle E2E
-│   ├── deposit-reconciler-e2e.ts    # Deposit reconciler workflow E2E
+│   ├── e2e_tests/                   # E2E test scripts
+│   │   ├── simple-market-e2e.ts         # ExamplePredictionMarket + CRE settlement E2E
+│   │   ├── secret-marketplace-auction-closer-e2e.ts        # Auction closer CRE workflow E2E
+│   │   ├── secret-marketplace-e2e.ts    # SecretMarketplace full event lifecycle E2E
+│   │   └── user-balance-recording-fallback-e2e.ts    # Deposit reconciler workflow E2E
 │   ├── generate-contract-types.sh   # Compile contracts + regenerate types/ABIs
 │   ├── generate-supabase-types.sh   # Regenerate Supabase TypeScript types
 │   ├── deploy-contracts.sh          # Interactive contract deploy + address replacement
@@ -105,19 +106,19 @@ pnpm test:contracts     # forge test --via-ir --skip SetupAll DeployPolicyEngine
 
 ```bash
 # From cre-workflows/ directory
-cre workflow simulate prediction-market-demo --target local-simulation
-cre workflow simulate prediction-market-demo --target local-simulation --broadcast
+cre workflow simulate reputation-score-manager --target local-simulation
+cre workflow simulate reputation-score-manager --target local-simulation --broadcast
 
 # Prediction Market (non-interactive, for scripts)
-cre workflow simulate prediction-market-demo --target local-simulation \
+cre workflow simulate reputation-score-manager --target local-simulation \
   --evm-tx-hash <TX_HASH> --evm-event-index 0 --non-interactive --trigger-index 0
 
 # Auction Closer (cron-triggered, non-interactive)
-cre workflow simulate auction-closer --target local-simulation --non-interactive --trigger-index 0
-cre workflow simulate auction-closer --target local-simulation --non-interactive --trigger-index 0 --broadcast
+cre workflow simulate secret-marketplace-auction-closer --target local-simulation --non-interactive --trigger-index 0
+cre workflow simulate secret-marketplace-auction-closer --target local-simulation --non-interactive --trigger-index 0 --broadcast
 
 # Deposit Reconciler (cron-triggered, non-interactive)
-cre workflow simulate deposit-reconciler --target local-simulation --non-interactive --trigger-index 0
+cre workflow simulate user-balance-recording-fallback --target local-simulation --non-interactive --trigger-index 0
 ```
 
 ### E2E Tests
@@ -125,10 +126,10 @@ cre workflow simulate deposit-reconciler --target local-simulation --non-interac
 All E2E scripts are TypeScript and run via `tsx` with `--env-file=.env` from the `scripts/` directory.
 
 ```bash
-pnpm e2e                  # SecretMarketplace full event lifecycle
-pnpm e2e:simple-market    # ExamplePredictionMarket + CRE settlement lifecycle
-pnpm e2e:auction-closer   # Auction create → bid → expire → CRE close
-pnpm e2e:deposits         # Deposit reconciler workflow
+pnpm e2e:secret-marketplace                      # SecretMarketplace full event lifecycle
+pnpm e2e:reputation-score-manager   # ExamplePredictionMarket + CRE settlement lifecycle
+pnpm e2e:secret-marketplace-auction-closer       # Auction create → bid → expire → CRE close
+pnpm e2e:user-balance-recording-fallback         # Deposit reconciler workflow
 ```
 
 ### Supabase
@@ -178,7 +179,7 @@ After a new subgraph is published, regenerate typed GraphQL clients:
 | -------------------------------- | --------------------------------------------------------------------- | ---------------------- |
 | `apps/insider-streams-frontend/` | `client` preset (`gql()` tag)                                         | Frontend typed queries |
 | `scripts/`                       | `typescript` + `typescript-operations` + `typescript-graphql-request` | Backend `getSdk()`     |
-| `cre-workflows/auction-closer/`  | Same as scripts                                                       | Backend `getSdk()`     |
+| `cre-workflows/secret-marketplace-auction-closer/`  | Same as scripts                                                       | Backend `getSdk()`     |
 
 Run codegen:
 
@@ -192,10 +193,10 @@ After adding or updating GraphQL queries in a specific package, run the local co
 pnpm run codegen   # from frontend, scripts, or CRE workflow directory
 ```
 
-For the `cre-workflows/auction-closer/` package (outside pnpm workspace):
+For the `cre-workflows/secret-marketplace-auction-closer/` package (outside pnpm workspace):
 
 ```bash
-cd cre-workflows/auction-closer && bun run codegen
+cd cre-workflows/secret-marketplace-auction-closer && bun run codegen
 ```
 
 ## After Major Contract Changes
@@ -243,16 +244,16 @@ The deploy script replaces addresses automatically, but you should verify no sta
 
 | File                            | Variables with hardcoded defaults                                |
 | ------------------------------- | ---------------------------------------------------------------- |
-| `scripts/simple-market-e2e.ts`  | `CONFIDENTIAL_USDC_ADDRESS`, `EXAMPLE_PREDICTION_MARKET_ADDRESS` |
-| `scripts/auction-closer-e2e.ts` | `CONFIDENTIAL_USDC_ADDRESS`, `SECRET_MARKETPLACE_ADDRESS`        |
+| `scripts/e2e_tests/simple-market-e2e.ts`  | `CONFIDENTIAL_USDC_ADDRESS`, `EXAMPLE_PREDICTION_MARKET_ADDRESS` |
+| `scripts/e2e_tests/secret-marketplace-auction-closer-e2e.ts` | `CONFIDENTIAL_USDC_ADDRESS`, `SECRET_MARKETPLACE_ADDRESS`        |
 
 **CRE workflow configs:**
 
 | File                                               | Fields                               |
 | -------------------------------------------------- | ------------------------------------ |
-| `cre-workflows/auction-closer/config.json`         | `secretMarketplaceAddress`           |
-| `cre-workflows/prediction-market-demo/config.json` | `simpleMarketAddress`                |
-| `cre-workflows/deposit-reconciler/config.json`     | `tokenAddress`, `platformEoaAddress` |
+| `cre-workflows/secret-marketplace-auction-closer/config.json`         | `secretMarketplaceAddress`           |
+| `cre-workflows/reputation-score-manager/config.json` | `simpleMarketAddress`                |
+| `cre-workflows/user-balance-recording-fallback/config.json`     | `tokenAddress`, `platformEoaAddress` |
 
 After updating CRE workflow configs, the workflow must be redeployed and tested live.
 
@@ -336,9 +337,9 @@ After deploying, follow the full procedure in **"After a Contract Deployment"** 
 - `forceSettle(eventId, outcome, confidenceBps, evidenceURI)` allows settling events without waiting for closure (debug/testing only; reverts if already settled)
 - CRE workflow listens for `SettlementRequested` events, calls Gemini AI with Google Search grounding, submits signed report on-chain
 - Settlement data is also written to Firestore for the frontend
-- **Auction-closer CRE workflow** runs on a 30-second cron, reads `getOpenAuctions()` and `getAuction(id)` to find expired auctions, then submits a signed report with `ACTION_CLOSE_AUCTION` (0x00) to close them
+- **Secret-marketplace-auction-closer CRE workflow** runs on a 30-second cron, reads `getOpenAuctions()` and `getAuction(id)` to find expired auctions, then submits a signed report with `ACTION_CLOSE_AUCTION` (0x00) to close them
 - `closeAuction()` keeps funds in contract; admin withdraws via `withdrawFunds()`
-- **Deposit-reconciler CRE workflow** runs on a 60-second cron, polls the Private Token API for transfers to/from the platform EOA, and records them as deposits or withdrawals in the Supabase `transfers` table
+- **User-balance-recording-fallback CRE workflow** runs on a 60-second cron, polls the Private Token API for transfers to/from the platform EOA, and records them as deposits or withdrawals in the Supabase `transfers` table
 - CRE CLI installed at `~/.cre/bin/cre` (add to PATH: `export PATH="$HOME/.cre/bin:$PATH"`)
 
 ## Reference Docs
