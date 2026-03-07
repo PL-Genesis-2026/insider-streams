@@ -50,6 +50,7 @@ export type PrivateDataContextValue = {
   // Actions
   revealForAuctions: (auctionIds: string[]) => Promise<void>;
   registerVisibleAuctions: (key: string, ids: string[]) => void;
+  unregisterVisibleAuctions: (key: string) => void;
   getVisibleAuctionIds: () => string[];
 };
 
@@ -122,6 +123,10 @@ export function PrivateDataProvider({ children }: { children: ReactNode }) {
     },
     [],
   );
+
+  const unregisterVisibleAuctions = useCallback((key: string) => {
+    visibleAuctionsRef.current.delete(key);
+  }, []);
 
   const getVisibleAuctionIds = useCallback((): string[] => {
     const all = new Set<string>();
@@ -271,6 +276,7 @@ export function PrivateDataProvider({ children }: { children: ReactNode }) {
     getSecret,
     revealForAuctions,
     registerVisibleAuctions,
+    unregisterVisibleAuctions,
     getVisibleAuctionIds,
   };
 
