@@ -90,6 +90,7 @@ export function handleAuctionCreated(event: AuctionCreatedEvent): void {
   auction.eventTitle = event.params.eventTitle
   auction.endTime = event.params.endTime
   auction.currentBid = BigInt.fromI32(0)
+  auction.bidCount = 0
   auction.status = "Open"
   auction.blockNumber = event.block.number
   auction.blockTimestamp = event.block.timestamp
@@ -154,6 +155,7 @@ export function handleBidPlaced(event: BidPlacedEvent): void {
   let auction = Auction.load(event.params.auctionId.toString())
   if (auction != null) {
     auction.currentBid = event.params.bidAmount
+    auction.bidCount = auction.bidCount + 1
     auction.save()
   }
 }

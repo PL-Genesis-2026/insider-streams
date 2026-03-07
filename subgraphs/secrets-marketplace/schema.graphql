@@ -166,6 +166,7 @@ type Auction @entity(immutable: false) {
   eventTitle: String!
   endTime: BigInt!
   currentBid: BigInt!
+  bidCount: Int!
   status: AuctionStatus!
   predictionOutcome: Int
   scoreChange: Int

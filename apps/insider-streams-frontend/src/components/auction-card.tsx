@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowRight } from "lucide-react";
 import { formatDistanceToNowStrict, isPast } from "date-fns";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +12,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 export type AuctionCardData = {
@@ -17,10 +26,15 @@ export type AuctionCardData = {
   marketId: string;
   status: string;
   currentBidUsdc?: number;
+  bidCount?: number;
   endTime?: string;
   marketplace?: string;
   title?: string;
   outcome?: "yes" | "no";
+  sellerReputationScore?: number;
+  sellerTotalAuctions?: number;
+  sellerCorrectPredictions?: number;
+  sellerWrongPredictions?: number;
 };
 
 type AuctionCardProps = {
@@ -42,7 +56,7 @@ function shortenAddress(address: string) {
 }
 
 function closesInLabel(endTime: string | undefined, status: string) {
-  if (status !== "Open") return status;
+  if (status !== "Open") return undefined;
   if (!endTime) return "Unknown";
   const end = new Date(endTime);
   if (isPast(end)) return "Ended";
@@ -63,6 +77,8 @@ function MetaRail({ auction }: { auction: AuctionCardData }) {
       ? "secondary"
       : "accent";
 
+  const timeLabel = closesInLabel(auction.endTime, auction.status);
+
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-[0.24em] text-accent">
@@ -70,9 +86,9 @@ function MetaRail({ auction }: { auction: AuctionCardData }) {
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant={statusVariant}>{auction.status}</Badge>
-        <span className="text-sm text-muted-foreground">
-          {closesInLabel(auction.endTime, auction.status)}
-        </span>
+        {timeLabel && (
+          <span className="text-sm text-muted-foreground">{timeLabel}</span>
+        )}
       </div>
     </div>
   );
@@ -89,6 +105,11 @@ function BidModule({ auction }: { auction: AuctionCardData }) {
           ? "No bids yet"
           : usdFormat.format(auction.currentBidUsdc)}
       </p>
+      {auction.bidCount !== undefined && (
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          {auction.bidCount} bid{auction.bidCount === 1 ? "" : "s"}
+        </p>
+      )}
       <div className="mt-5 border-t border-border pt-4">
         <p className="text-xs uppercase tracking-[0.22em] text-accent">
           Market
@@ -101,16 +122,70 @@ function BidModule({ auction }: { auction: AuctionCardData }) {
   );
 }
 
-function TraceRow({ auction }: { auction: AuctionCardData }) {
+function ReputationBadge({ auction }: { auction: AuctionCardData }) {
+  if (auction.sellerReputationScore === undefined) return null;
+
+  const correct = auction.sellerCorrectPredictions ?? 0;
+  const wrong = auction.sellerWrongPredictions ?? 0;
+  const total = auction.sellerTotalAuctions ?? 0;
+
   return (
-    <div className="flex flex-wrap items-center gap-x-6 gap-y-3 text-sm text-muted-foreground">
-      <div>
+    <TooltipProvider delayDuration={1000}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span>
+            <Badge variant="outline" className="cursor-default text-[10px]">
+              Rep: {auction.sellerReputationScore}
+            </Badge>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent
+          side="bottom"
+          className="w-48 space-y-2 bg-popover px-4 py-3 text-popover-foreground shadow-lg"
+        >
+          <p className="text-xs font-medium">Seller reputation</p>
+          <div className="space-y-1 text-[11px]">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Correct</span>
+              <span className="font-medium">{correct}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Wrong</span>
+              <span className="font-medium">{wrong}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Total auctions</span>
+              <span className="font-medium">{total}</span>
+            </div>
+          </div>
+          {/* TODO: Replace with pie chart visualization */}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+function TraceRow({ auction }: { auction: AuctionCardData }) {
+  const router = useRouter();
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-8 gap-y-3 text-sm text-muted-foreground">
+      <div className="flex items-center gap-3">
         <span className="text-xs uppercase tracking-[0.22em] text-accent">
           Seller
         </span>
-        <span className="ml-3 font-medium text-foreground">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            router.push(`/seller/${auction.sellerAddress}`);
+          }}
+          className="relative z-10 font-medium text-foreground transition-colors hover:text-primary"
+        >
           {shortenAddress(auction.sellerAddress)}
-        </span>
+        </button>
+        <ReputationBadge auction={auction} />
       </div>
       <div>
         <span className="text-xs uppercase tracking-[0.22em] text-accent">

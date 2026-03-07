@@ -142,7 +142,7 @@ function buildTimeline(auction: AuctionDetailData) {
     });
   }
 
-  return timeline.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  return timeline.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 }
 
 function Label({ children }: { children: React.ReactNode }) {
@@ -348,7 +348,7 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
               <CardHeader className="pb-0">
                 <div className="flex items-center justify-between">
                   <Label>Bid history</Label>
-                  <span className="text-xs text-muted-foreground/60">{auction.bids.length} bids</span>
+                  <span className="text-xs text-muted-foreground/60">{auction.bidCount} bid{auction.bidCount === 1 ? "" : "s"}</span>
                 </div>
               </CardHeader>
               <CardContent className="space-y-1">
@@ -421,9 +421,21 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
                   <div className="flex size-10 items-center justify-center rounded-full bg-accent/15 text-accent">
                     <User className="size-4" />
                   </div>
-                  <p className="min-w-0 truncate text-sm font-medium text-foreground">
-                    {auction.sellerAddress}
-                  </p>
+                  <div className="min-w-0">
+                    <Link
+                      href={`/seller/${auction.sellerAddress}`}
+                      className="block truncate text-sm font-medium text-foreground transition-colors hover:text-primary"
+                    >
+                      {auction.sellerAddress}
+                    </Link>
+                    {auction.sellerReputationScore !== undefined && (
+                      <div className="mt-1">
+                        <Badge variant="outline" className="text-[10px]">
+                          Rep: {auction.sellerReputationScore}
+                        </Badge>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </CardHeader>
             </Card>
