@@ -69,7 +69,7 @@ const SUPABASE_URL = envRequired("SUPABASE_URL");
 const SUPABASE_KEY = envRequired("SUPABASE_SERVICE_ROLE_KEY");
 
 // Contract addresses (from CLAUDE.md)
-const SIMPLE_TOKEN: Address = "0xB308Ef20527c5215ec2B2B10F52b311f3AAc6EEB";
+const SIMPLE_TOKEN: Address = "0x1662dA7fd24B5622140401751c9113D7E0237fae";
 const VAULT: Address = "0xE588a6c73933BFD66Af9b4A07d48bcE59c0D2d13";
 const PRIVATE_TOKEN_API = "https://convergence2026-token-api.cldev.cloud";
 const CHAIN_ID = 11155111;
