@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useCallback, useState } from "react";
-import { ExternalLink, Eye, EyeOff, Loader2, Lock } from "lucide-react";
+import { ExternalLink, Eye, EyeOff, Loader2 } from "lucide-react";
 import { EXAMPLE_PREDICTION_MARKET_NAME } from "@private-streams/common";
 import { Button } from "@/components/ui/button";
 import { env } from "@/env";

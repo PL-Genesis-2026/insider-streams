@@ -7,6 +7,7 @@ import {
   Instrument_Sans,
 } from "next/font/google";
 import { AppNavbar } from "@/components/app-navbar";
+import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Providers } from "./providers";
 import "./globals.css";
@@ -58,6 +59,7 @@ export default async function RootLayout({
           <TooltipProvider>
             <AppNavbar />
             {children}
+            <Toaster />
           </TooltipProvider>
         </Providers>
       </body>

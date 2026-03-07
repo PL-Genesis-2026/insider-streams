@@ -281,7 +281,7 @@ export default async function AuctionDetailPage({
               <span>Auction #{auction.auctionId}</span>
               <span className="text-muted-foreground/40">/</span>
               <span>
-                {auction.marketplace ?? `Market #${auction.marketId}`}
+                {`${EXAMPLE_PREDICTION_MARKET_NAME} / Market #${auction.marketId}`}
               </span>
             </div>
             <Badge variant={statusVariant}>{auction.status}</Badge>
