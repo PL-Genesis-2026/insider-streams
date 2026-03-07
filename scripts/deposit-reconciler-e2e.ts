@@ -34,6 +34,8 @@
  * Usage: pnpm e2e:deposits
  */
 
+import "dotenv/config";
+
 import { createClient } from "@supabase/supabase-js";
 import {
   PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
