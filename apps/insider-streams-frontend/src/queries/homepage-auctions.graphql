@@ -1,45 +1,28 @@
-query HomepageAuctionLists(
-  $currentTimestamp: BigInt!
-  $openLimit: Int!
-  $closedLimit: Int!
+query HomepageAuctions(
+  $limit: Int!
+  $skip: Int!
+  $where: Auction_filter
 ) {
-  openAuctions: auctionCreateds(
-    first: $openLimit
-    orderBy: endTime
-    orderDirection: asc
-    where: { endTime_gt: $currentTimestamp }
+  auctions(
+    first: $limit
+    skip: $skip
+    orderBy: blockTimestamp
+    orderDirection: desc
+    where: $where
   ) {
     auctionId
     sellerId
     eventId
+    eventTitle
     endTime
-  }
-  closedAuctions: auctionCloseds(
-    first: $closedLimit
-    orderBy: blockTimestamp
-    orderDirection: desc
-  ) {
-    auctionId
-    sellerId
-    winningBid
-    eventId
-  }
-}
-
-query HomepageClosedAuctionReferences($auctionIds: [BigInt!]) {
-  referenceAuctions: auctionCreateds(where: { auctionId_in: $auctionIds }) {
-    auctionId
-    endTime
-  }
-}
-
-query HomepageLatestBid($auctionId: BigInt!) {
-  bidPlaceds(
-    first: 1
-    orderBy: blockTimestamp
-    orderDirection: desc
-    where: { auctionId: $auctionId }
-  ) {
-    bidAmount
+    currentBid
+    bidCount
+    status
+    seller {
+      reputationScore
+      totalAuctionCount
+      auctionsWithCorrectPredictionsCount
+      auctionsWithWrongPredictionsCount
+    }
   }
 }

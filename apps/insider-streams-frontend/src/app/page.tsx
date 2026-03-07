@@ -1,30 +1,8 @@
-export const dynamic = "force-dynamic";
 import Image from "next/image";
-import { AuctionCard } from "@/components/auction-card";
-import { Badge } from "@/components/ui/badge";
 import { LogoMark } from "@/components/logo";
-import { getHomepageAuctions } from "@/lib/homepage-auctions";
+import { AuctionList } from "@/components/auction-list";
 
-const OPEN_AUCTION_CARD_LIMIT = 6;
-const CLOSED_AUCTION_CARD_LIMIT = 4;
-
-export default async function Home() {
-  let data: Awaited<ReturnType<typeof getHomepageAuctions>> | null = null;
-  let auctionsUnavailable = false;
-
-  try {
-    data = await getHomepageAuctions({
-      openLimit: OPEN_AUCTION_CARD_LIMIT,
-      closedLimit: CLOSED_AUCTION_CARD_LIMIT,
-    });
-  } catch (error) {
-    auctionsUnavailable = true;
-    console.error("Failed to load homepage auctions", error);
-  }
-
-  const openAuctions = data?.open ?? [];
-  const closedAuctions = data?.closed ?? [];
-
+export default function Home() {
   return (
     <div className="min-h-screen text-foreground">
       <main>
@@ -69,34 +47,6 @@ export default async function Home() {
               tied to prediction market outcomes. Sellers list what they know,
               buyers bid on the edge.
             </p>
-            <div className="flex flex-wrap items-center gap-x-8 gap-y-4 pt-2 text-sm text-muted-foreground">
-              <div>
-                <span className="font-serif text-[2rem] leading-none font-medium tracking-[-0.04em] text-foreground">
-                  {auctionsUnavailable ? "?" : openAuctions.length}
-                </span>
-                <span className="ml-2 text-xs uppercase tracking-[0.22em] text-accent">
-                  Open
-                </span>
-              </div>
-              <div className="h-6 w-px bg-border" />
-              <div>
-                <span className="font-serif text-[2rem] leading-none font-medium tracking-[-0.04em] text-foreground">
-                  {auctionsUnavailable ? "?" : closedAuctions.length}
-                </span>
-                <span className="ml-2 text-xs uppercase tracking-[0.22em] text-accent">
-                  Closed
-                </span>
-              </div>
-              <div className="h-6 w-px bg-border" />
-              <div>
-                <span className="font-serif text-[2rem] leading-none font-medium tracking-[-0.04em] text-foreground">
-                  {auctionsUnavailable ? "?" : openAuctions.length + closedAuctions.length}
-                </span>
-                <span className="ml-2 text-xs uppercase tracking-[0.22em] text-accent">
-                  Total listings
-                </span>
-              </div>
-            </div>
           </div>
         </section>
 
@@ -104,68 +54,9 @@ export default async function Home() {
           id="auctions"
           className="mx-auto w-full max-w-7xl px-6 pb-16 md:px-10"
         >
-          <div className="flex items-end justify-between gap-6 border-t border-border pt-8 pb-6">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-[0.28em] text-accent">
-                Live auctions
-              </p>
-              <h2 className="mt-2 font-serif text-[2.75rem] leading-[0.92] font-medium tracking-[-0.05em]">
-                Open signals
-              </h2>
-            </div>
-            <Badge variant={auctionsUnavailable ? "outline" : "accent"}>
-              {auctionsUnavailable ? "Subgraph unavailable" : `${openAuctions.length} active`}
-            </Badge>
+          <div className="border-t border-border pt-8">
+            <AuctionList />
           </div>
-
-          {auctionsUnavailable ? (
-            <div className="rounded-[calc(var(--radius)+6px)] border border-destructive/35 bg-destructive/5 p-6 text-sm leading-7 text-muted-foreground">
-              Auctions are temporarily unavailable because the configured subgraph
-              endpoint did not return data.
-            </div>
-          ) : openAuctions.length > 0 ? (
-            <div className="grid gap-5">
-              {openAuctions.map((auction) => (
-                <AuctionCard
-                  key={auction.auctionId}
-                  auction={auction}
-                  href={`/auction/${auction.auctionId}`}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-[calc(var(--radius)+6px)] border border-border bg-muted/30 p-6 text-sm leading-7 text-muted-foreground">
-              No open auctions right now.
-            </div>
-          )}
-
-          {closedAuctions.length > 0 ? (
-            <>
-              <div className="mt-12 flex items-end justify-between gap-6 border-t border-border pt-8 pb-6">
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-[0.28em] text-accent">
-                    Closed
-                  </p>
-                  <h2 className="mt-2 font-serif text-[2.75rem] leading-[0.92] font-medium tracking-[-0.05em]">
-                    Closed auctions
-                  </h2>
-                </div>
-                <Badge variant="secondary">
-                  {closedAuctions.length} closed
-                </Badge>
-              </div>
-
-              <div className="grid gap-5">
-                {closedAuctions.map((auction) => (
-                  <AuctionCard
-                    key={auction.auctionId}
-                    auction={auction}
-                    href={`/auction/${auction.auctionId}`}
-                  />
-                ))}
-              </div>
-            </>
-          ) : null}
         </section>
       </main>
 
