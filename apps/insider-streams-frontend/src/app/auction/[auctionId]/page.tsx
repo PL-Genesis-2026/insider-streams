@@ -21,13 +21,13 @@ import {
   CardHeader,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { SecretRevealCard } from "@/components/secret-reveal";
 import { AuctionBidGate } from "@/components/funding/auction-bid-gate";
 import {
   getAuctionDetail,
   type AuctionDetailBid,
   type AuctionDetailData,
 } from "@/lib/auction-detail";
-import type { JsonValue } from "@/lib/supabase/secrets";
 import { cn } from "@/lib/utils";
 
 type AuctionDetailPageProps = {
@@ -133,12 +133,12 @@ function buildTimeline(auction: AuctionDetailData) {
     });
   }
 
-  if (auction.secretRecord) {
+  if (auction.secretUpdatedAt) {
     timeline.push({
       type: "settled",
       label: "Secret record updated",
       detail: "Supabase secret record updated",
-      timestamp: auction.secretRecord.updatedAt,
+      timestamp: auction.secretUpdatedAt,
     });
   }
 
@@ -250,21 +250,7 @@ function BidRow({
   );
 }
 
-function JsonPreview({ value }: { value?: JsonValue }) {
-  if (value === undefined || value === null) {
-    return (
-      <p className="text-sm leading-7 text-muted-foreground">
-        No secret payload available for this auction yet.
-      </p>
-    );
-  }
-
-  return (
-    <pre className="overflow-x-auto rounded-lg bg-muted/40 p-4 text-xs leading-6 text-muted-foreground">
-      {JSON.stringify(value, null, 2)}
-    </pre>
-  );
-}
+export const dynamic = "force-dynamic";
 
 export default async function AuctionDetailPage({ params }: AuctionDetailPageProps) {
   const { auctionId } = await params;
@@ -381,7 +367,10 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
                 <Label>Secret record</Label>
               </CardHeader>
               <CardContent>
-                <JsonPreview value={auction.secretRecord?.secretData} />
+                <SecretRevealCard
+                  auctionId={auction.auctionId}
+                  hasSecret={auction.hasSecret}
+                />
               </CardContent>
             </Card>
           </div>

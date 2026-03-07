@@ -1,12 +1,8 @@
 import { CONFIDENTIAL_USDC_DECIMALS } from "@private-streams/common";
 import { formatUnits } from "viem";
 import { graphqlClient } from "@/lib/graphql";
-import {
-  type EventData,
-  getSecretByAuctionId,
-  parseSecretData,
-  type JsonValue,
-} from "@/lib/supabase/secrets";
+import { getSecretByAuctionId } from "@/lib/supabase/secrets";
+import { getSupabaseServiceClient } from "@/lib/supabase/server";
 import type { AuctionDetailSubgraphQuery } from "../__generated__/sdk";
 import { getSdk } from "../__generated__/sdk";
 
@@ -43,19 +39,13 @@ export type AuctionDetailReputationUpdate = {
   timestamp: string;
 };
 
-export type AuctionDetailSecretRecord = {
-  eventData?: EventData;
-  secretData?: JsonValue;
-  updatedAt: string;
-};
-
 export type AuctionDetailData = {
   auctionId: string;
   sellerAddress: string;
   marketId: string;
   title?: string;
   marketplace?: string;
-  outcome?: EventData["outcome"];
+  outcome?: "yes" | "no";
   endTime?: string;
   createdAt?: string;
   status: "Open" | "Closed" | "Cancelled";
@@ -65,7 +55,8 @@ export type AuctionDetailData = {
   closedAuction?: AuctionDetailClose;
   cancelledAuction?: AuctionDetailCancelledAuction;
   reputationUpdates: AuctionDetailReputationUpdate[];
-  secretRecord?: AuctionDetailSecretRecord;
+  hasSecret: boolean;
+  secretUpdatedAt?: string;
   sellerReputationScore?: number;
   sellerTotalAuctions?: number;
   sellerCorrectPredictions?: number;
@@ -126,29 +117,6 @@ function mapReputationUpdate(
   };
 }
 
-async function getSecretRecord(
-  auctionId: string,
-): Promise<AuctionDetailSecretRecord | undefined> {
-  try {
-    const secret = await getSecretByAuctionId(auctionId);
-    if (!secret) {
-      return undefined;
-    }
-
-    return {
-      eventData: secret.event_data ?? undefined,
-      secretData: parseSecretData(secret.secret_data),
-      updatedAt: secret.updated_at,
-    };
-  } catch (error) {
-    console.error(
-      `Failed to load Supabase secret for auction ${auctionId}`,
-      error,
-    );
-    return undefined;
-  }
-}
-
 export async function getAuctionDetail({
   auctionId,
   bidLimit,
@@ -169,15 +137,28 @@ export async function getAuctionDetail({
   const cancelledAuction = result.cancelledAuction[0];
 
   const currentBidBigInt = scalarToBigInt(auction.currentBid);
-  const secretRecord = await getSecretRecord(auctionId);
+
+  // Fetch secret server-side to extract public metadata (title, marketplace, outcome).
+  // The secret_data itself is NOT passed to the client — it is fetched on demand
+  // via /api/secrets after user interaction.
+  let secret;
+  try {
+    const client = getSupabaseServiceClient();
+    secret = await getSecretByAuctionId(auctionId, client);
+  } catch (error) {
+    console.error(
+      `Failed to load Supabase secret for auction ${auctionId}`,
+      error,
+    );
+  }
 
   return {
     auctionId,
     sellerAddress: String(auction.sellerId),
     marketId: String(auction.eventId),
-    title: secretRecord?.eventData?.event ?? auction.eventTitle,
-    marketplace: secretRecord?.eventData?.marketplace,
-    outcome: secretRecord?.eventData?.outcome,
+    title: secret?.event_data?.event ?? auction.eventTitle,
+    marketplace: secret?.event_data?.marketplace,
+    outcome: secret?.event_data?.outcome,
     endTime: scalarToIso(auction.endTime),
     createdAt: scalarToIso(auction.blockTimestamp),
     status: auction.status as "Open" | "Closed" | "Cancelled",
@@ -192,7 +173,8 @@ export async function getAuctionDetail({
       ? mapCancelledAuction(cancelledAuction)
       : undefined,
     reputationUpdates: result.reputationUpdates.map(mapReputationUpdate),
-    secretRecord,
+    hasSecret: secret != null,
+    secretUpdatedAt: secret?.updated_at,
     sellerReputationScore: Number(auction.seller.reputationScore),
     sellerTotalAuctions: auction.seller.totalAuctionCount,
     sellerCorrectPredictions:

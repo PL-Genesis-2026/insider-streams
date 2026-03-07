@@ -1,8 +1,0 @@
-{
-  "sepolia": {
-    "ExamplePredictionMarket": {
-      "address": "0x83B1F9d683b1a760569C237Bfb89C50112c05e24",
-      "startBlock": 10400148
-    }
-  }
-}
