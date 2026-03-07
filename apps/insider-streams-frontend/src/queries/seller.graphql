@@ -1,0 +1,24 @@
+query SellerDetail($sellerId: ID!) {
+  seller(id: $sellerId) {
+    sellerId
+    reputationScore
+    totalAuctionCount
+    openAuctionCount
+    auctionsWithCorrectPredictionsCount
+    auctionsWithWrongPredictionsCount
+    unscorableAuctionCount
+    totalEarnings
+    auctions(orderBy: blockTimestamp, orderDirection: desc) {
+      auctionId
+      eventId
+      eventTitle
+      endTime
+      currentBid
+      bidCount
+      status
+      predictionOutcome
+      scoreChange
+      blockTimestamp
+    }
+  }
+}

@@ -1,21 +1,9 @@
 import type { CodegenConfig } from "@graphql-codegen/cli";
 
-const subgraphUrl = process.env.NEXT_PUBLIC_SUBGRAPH_URL;
-if (!subgraphUrl) {
-  throw new Error("NEXT_PUBLIC_SUBGRAPH_URL is required for GraphQL codegen.");
-}
+const STUDIO_URL =
+  "https://api.studio.thegraph.com/query/1743303/insider-streams-2/version/latest";
 
-const schema = process.env.NEXT_PUBLIC_SUBGRAPH_API_KEY
-  ? [
-      {
-        [subgraphUrl]: {
-          headers: {
-            Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUBGRAPH_API_KEY}`,
-          },
-        },
-      },
-    ]
-  : [subgraphUrl];
+const schema = [STUDIO_URL];
 
 const sharedConfig = {
   scalars: {

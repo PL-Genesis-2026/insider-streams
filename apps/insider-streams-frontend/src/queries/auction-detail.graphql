@@ -1,21 +1,33 @@
-query AuctionDetailSubgraph($auctionId: BigInt!, $bidLimit: Int!) {
-  createdAuction: auctionCreateds(
-    first: 1
-    orderBy: blockTimestamp
-    orderDirection: desc
-    where: { auctionId: $auctionId }
-  ) {
+query AuctionDetailSubgraph(
+  $auctionId: ID!
+  $auctionIdBigInt: BigInt!
+  $bidLimit: Int!
+) {
+  auction(id: $auctionId) {
     auctionId
     sellerId
     eventId
+    eventTitle
     endTime
+    currentBid
+    bidCount
+    status
+    predictionOutcome
+    scoreChange
     blockTimestamp
+    seller {
+      reputationScore
+      totalAuctionCount
+      totalEarnings
+      auctionsWithCorrectPredictionsCount
+      auctionsWithWrongPredictionsCount
+    }
   }
   bids: bidPlaceds(
     first: $bidLimit
     orderBy: blockTimestamp
     orderDirection: desc
-    where: { auctionId: $auctionId }
+    where: { auctionId: $auctionIdBigInt }
   ) {
     bidAmount
     previousBid
@@ -24,30 +36,22 @@ query AuctionDetailSubgraph($auctionId: BigInt!, $bidLimit: Int!) {
   }
   closedAuction: auctionCloseds(
     first: 1
-    orderBy: blockTimestamp
-    orderDirection: desc
-    where: { auctionId: $auctionId }
+    where: { auctionId: $auctionIdBigInt }
   ) {
-    sellerId
     winningBid
-    eventId
     blockTimestamp
   }
   cancelledAuction: auctionCancelleds(
     first: 1
-    orderBy: blockTimestamp
-    orderDirection: desc
-    where: { auctionId: $auctionId }
+    where: { auctionId: $auctionIdBigInt }
   ) {
-    sellerId
     cancelledBidAmount
-    eventId
     blockTimestamp
   }
   reputationUpdates: sellerReputationScoreUpdateds(
     orderBy: blockTimestamp
     orderDirection: desc
-    where: { auctionId: $auctionId }
+    where: { auctionId: $auctionIdBigInt }
   ) {
     predictionOutcome
     scoreChange
