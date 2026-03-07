@@ -9,6 +9,7 @@
     "e2e:deposits": "tsx --env-file=.env deposit-reconciler-e2e.ts",
     "e2e:auction-closer": "tsx --env-file=.env auction-closer-e2e.ts",
     "e2e:simple-market": "tsx --env-file=.env simple-market-e2e.ts",
+    "e2e:bid-workflow": "tsx --env-file=.env bid-workflow-e2e.ts",
     "codegen": "graphql-codegen --config codegen.ts"
   },
   "dependencies": {
