@@ -6,10 +6,10 @@ query AuctionDetailSubgraph($auctionId: BigInt!, $bidLimit: Int!) {
     where: { auctionId: $auctionId }
   ) {
     auctionId
-    seller
-    reservePrice
+    sellerId
+    eventId
+    eventTitle
     endTime
-    externalMarketId
     blockTimestamp
   }
   bids: bidPlaceds(
@@ -18,8 +18,8 @@ query AuctionDetailSubgraph($auctionId: BigInt!, $bidLimit: Int!) {
     orderDirection: desc
     where: { auctionId: $auctionId }
   ) {
-    bidder
     bidAmount
+    previousBid
     blockTimestamp
     transactionHash
   }
@@ -29,10 +29,9 @@ query AuctionDetailSubgraph($auctionId: BigInt!, $bidLimit: Int!) {
     orderDirection: desc
     where: { auctionId: $auctionId }
   ) {
-    seller
-    buyer
+    sellerId
     winningBid
-    externalMarketId
+    eventId
     blockTimestamp
   }
   forceClosedAuction: auctionForceCloseds(
@@ -41,21 +40,10 @@ query AuctionDetailSubgraph($auctionId: BigInt!, $bidLimit: Int!) {
     orderDirection: desc
     where: { auctionId: $auctionId }
   ) {
-    seller
-    refundedBidder
-    refundAmount
-    externalMarketId
+    sellerId
+    heldAmount
+    eventId
     reputationDelta
-    blockTimestamp
-  }
-  tradeExecuted: tradeExecuteds(
-    first: 1
-    orderBy: blockTimestamp
-    orderDirection: desc
-    where: { auctionId: $auctionId }
-  ) {
-    buyer
-    automaticBetAmount
     blockTimestamp
   }
   reputationUpdates: reputationUpdateds(
@@ -63,7 +51,7 @@ query AuctionDetailSubgraph($auctionId: BigInt!, $bidLimit: Int!) {
     orderDirection: desc
     where: { auctionId: $auctionId }
   ) {
-    delta
+    reputationDelta
     newScore
     blockTimestamp
   }

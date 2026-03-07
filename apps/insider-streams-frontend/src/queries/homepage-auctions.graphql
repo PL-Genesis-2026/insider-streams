@@ -11,10 +11,10 @@ query HomepageAuctionLists(
   ) {
     id
     auctionId
-    seller
-    reservePrice
+    sellerId
+    eventId
+    eventTitle
     endTime
-    externalMarketId
     blockTimestamp
     transactionHash
   }
@@ -25,10 +25,9 @@ query HomepageAuctionLists(
   ) {
     id
     auctionId
-    seller
-    buyer
+    sellerId
     winningBid
-    externalMarketId
+    eventId
     blockTimestamp
     transactionHash
   }
@@ -38,10 +37,10 @@ query HomepageClosedAuctionReferences($auctionIds: [BigInt!]) {
   referenceAuctions: auctionCreateds(where: { auctionId_in: $auctionIds }) {
     id
     auctionId
-    seller
-    reservePrice
+    sellerId
+    eventId
+    eventTitle
     endTime
-    externalMarketId
     blockTimestamp
     transactionHash
   }

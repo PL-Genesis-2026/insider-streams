@@ -8,12 +8,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IReceiver} from "./interfaces/IReceiver.sol";
 import {IERC165} from "./interfaces/IERC165.sol";
-
-interface IExamplePredictionMarket {
-    enum Outcome { None, No, Yes, Inconclusive }
-    function buyShares(uint256 marketId, Outcome outcome, uint256 usdcAmount) external;
-    function nextMarketId() external view returns (uint256);
-}
+import {IExamplePredictionMarket} from "./interfaces/IExamplePredictionMarket.sol";
 
 contract SecretMarketplace is ReceiverTemplate, AccessControl {
     using SafeERC20 for IERC20;
@@ -33,7 +28,7 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
     // CRE report action types
     uint8 public constant ACTION_CLOSE_AUCTION = 0;
     uint8 public constant ACTION_FORCE_CLOSE_AUCTION = 1;
-    uint8 public constant ACTION_RESOLVE_MARKET = 2;
+    uint8 public constant ACTION_RESOLVE_EVENT = 2;
 
     // ===========================
     // ======== STRUCTS ==========
@@ -91,8 +86,8 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
         int8 reputationDelta
     );
 
-    event ExternalMarketResolved(
-        uint256 indexed externalMarketId,
+    event ExternalEventResolved(
+        uint256 indexed externalEventId,
         int8 delta,
         uint256 auctionsAffected
     );
@@ -104,9 +99,9 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
         int256 newScore
     );
 
-    event SimpleMarketUpdated(
-        address indexed previousMarket,
-        address indexed newMarket
+    event MarketplaceUpdated(
+        address indexed previousMarketplace,
+        address indexed newMarketplace
     );
 
     // ===========================
@@ -119,8 +114,8 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
     error BidTooLow();
     error EndTimeInPast();
     error AuctionDoesNotExist();
-    error MarketDoesNotExist(uint256 eventId);
-    error MarketAlreadyResolved(uint256 eventId);
+    error EventDoesNotExist(uint256 eventId);
+    error EventAlreadyResolved(uint256 eventId);
     error UnknownAction(uint8 action);
 
     // ===========================
@@ -134,20 +129,20 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
     uint256[] public openAuctionIds;
     mapping(uint256 => uint256) private _openAuctionIndex; // auctionId => index+1
 
-    // Unresolved market tracking for CRE reputation resolution
-    uint256[] public unresolvedMarketIds;
-    mapping(uint256 => uint256) private _unresolvedMarketIndex; // marketId => index+1
-    mapping(uint256 => bool) public marketResolved;
+    // Unresolved event tracking for CRE reputation resolution
+    uint256[] public unresolvedEventIds;
+    mapping(uint256 => uint256) private _unresolvedEventIndex; // eventId => index+1
+    mapping(uint256 => bool) public eventResolved;
 
-    // Market → auctions (for batch reputation resolution)
-    mapping(uint256 => uint256[]) public marketAuctions;
+    // Event → auctions (for batch reputation resolution)
+    mapping(uint256 => uint256[]) public eventAuctions;
 
     // Seller registry (keyed by seller name)
     mapping(string => Seller) internal _sellers;
     mapping(string => uint256[]) public sellerAuctions;
 
     IERC20 public immutable paymentToken;
-    IExamplePredictionMarket public simpleMarket;
+    IExamplePredictionMarket public marketplace;
 
     // ===========================
     // ======== CONSTRUCTOR ======
@@ -159,7 +154,7 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
         address forwarderAddress
     ) ReceiverTemplate(forwarderAddress) {
         paymentToken = IERC20(token);
-        simpleMarket = IExamplePredictionMarket(marketAddress);
+        marketplace = IExamplePredictionMarket(marketAddress);
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
@@ -167,10 +162,10 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
     // ======== ADMIN ============
     // ===========================
 
-    function setSimpleMarket(address newMarket) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        address previous = address(simpleMarket);
-        simpleMarket = IExamplePredictionMarket(newMarket);
-        emit SimpleMarketUpdated(previous, newMarket);
+    function setMarketplace(address newMarketplace) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        address previous = address(marketplace);
+        marketplace = IExamplePredictionMarket(newMarketplace);
+        emit MarketplaceUpdated(previous, newMarketplace);
     }
 
     function withdrawFunds(address to, uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -213,7 +208,7 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
         uint256 endTime
     ) external onlyRole(DEFAULT_ADMIN_ROLE) returns (uint256) {
         if (endTime <= block.timestamp) revert EndTimeInPast();
-        if (eventId >= simpleMarket.nextMarketId()) revert MarketDoesNotExist(eventId);
+        if (eventId >= marketplace.nextEventId()) revert EventDoesNotExist(eventId);
 
         // Auto-register seller if not registered
         Seller storage s = _sellers[seller];
@@ -235,12 +230,12 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
         openAuctionIds.push(auctionId);
         _openAuctionIndex[auctionId] = openAuctionIds.length; // index+1
 
-        // Track market for reputation resolution (only if not already tracked/resolved)
-        if (_unresolvedMarketIndex[eventId] == 0 && !marketResolved[eventId]) {
-            unresolvedMarketIds.push(eventId);
-            _unresolvedMarketIndex[eventId] = unresolvedMarketIds.length;
+        // Track event for reputation resolution (only if not already tracked/resolved)
+        if (_unresolvedEventIndex[eventId] == 0 && !eventResolved[eventId]) {
+            unresolvedEventIds.push(eventId);
+            _unresolvedEventIndex[eventId] = unresolvedEventIds.length;
         }
-        marketAuctions[eventId].push(auctionId);
+        eventAuctions[eventId].push(auctionId);
 
         // Track seller's auctions
         sellerAuctions[seller].push(auctionId);
@@ -279,9 +274,9 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
         _forceCloseAuction(auctionId, reputationDelta);
     }
 
-    /// @notice Resolve an external market — updates reputation for all linked auctions. Admin/CRE only.
-    function resolveExternalMarket(uint256 externalMarketId, int8 delta) external onlyAdminOrCRE {
-        _resolveExternalMarket(externalMarketId, delta);
+    /// @notice Resolve an external event — updates reputation for all linked auctions. Admin/CRE only.
+    function resolveExternalEvent(uint256 externalEventId, int8 delta) external onlyAdminOrCRE {
+        _resolveExternalEvent(externalEventId, delta);
     }
 
     // ===========================
@@ -298,9 +293,9 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
         } else if (action == ACTION_FORCE_CLOSE_AUCTION) {
             (uint256 auctionId, int8 reputationDelta) = abi.decode(payload, (uint256, int8));
             _forceCloseAuction(auctionId, reputationDelta);
-        } else if (action == ACTION_RESOLVE_MARKET) {
-            (uint256 externalMarketId, int8 delta) = abi.decode(payload, (uint256, int8));
-            _resolveExternalMarket(externalMarketId, delta);
+        } else if (action == ACTION_RESOLVE_EVENT) {
+            (uint256 externalEventId, int8 delta) = abi.decode(payload, (uint256, int8));
+            _resolveExternalEvent(externalEventId, delta);
         } else {
             revert UnknownAction(action);
         }
@@ -346,13 +341,13 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
         }
     }
 
-    function _resolveExternalMarket(uint256 externalMarketId, int8 delta) internal {
-        if (marketResolved[externalMarketId]) revert MarketAlreadyResolved(externalMarketId);
+    function _resolveExternalEvent(uint256 externalEventId, int8 delta) internal {
+        if (eventResolved[externalEventId]) revert EventAlreadyResolved(externalEventId);
 
-        marketResolved[externalMarketId] = true;
-        _removeUnresolvedMarket(externalMarketId);
+        eventResolved[externalEventId] = true;
+        _removeUnresolvedEvent(externalEventId);
 
-        uint256[] storage auctionIds = marketAuctions[externalMarketId];
+        uint256[] storage auctionIds = eventAuctions[externalEventId];
         uint256 count = auctionIds.length;
 
         for (uint256 i = 0; i < count; i++) {
@@ -363,7 +358,7 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
             if (a.status == AuctionStatus.Open) {
                 a.status = AuctionStatus.ForceClosed;
                 _removeOpenAuction(aid);
-                emit AuctionForceClosed(aid, a.currentBid, a.seller, externalMarketId, 0);
+                emit AuctionForceClosed(aid, a.currentBid, a.seller, externalEventId, 0);
             }
 
             // Update reputation if not already resolved
@@ -376,7 +371,7 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
             }
         }
 
-        emit ExternalMarketResolved(externalMarketId, delta, count);
+        emit ExternalEventResolved(externalEventId, delta, count);
     }
 
     // ===========================
@@ -391,12 +386,12 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
         return openAuctionIds;
     }
 
-    function getUnresolvedMarkets() external view returns (uint256[] memory) {
-        return unresolvedMarketIds;
+    function getUnresolvedEvents() external view returns (uint256[] memory) {
+        return unresolvedEventIds;
     }
 
-    function getMarketAuctions(uint256 externalMarketId) external view returns (uint256[] memory) {
-        return marketAuctions[externalMarketId];
+    function getEventAuctions(uint256 externalEventId) external view returns (uint256[] memory) {
+        return eventAuctions[externalEventId];
     }
 
     function getSeller(string calldata sellerName) external view returns (Seller memory) {
@@ -440,17 +435,17 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
         delete _openAuctionIndex[auctionId];
     }
 
-    function _removeUnresolvedMarket(uint256 marketId) private {
-        uint256 idx1 = _unresolvedMarketIndex[marketId];
+    function _removeUnresolvedEvent(uint256 eventId) private {
+        uint256 idx1 = _unresolvedEventIndex[eventId];
         if (idx1 == 0) return;
         uint256 idx = idx1 - 1;
-        uint256 last = unresolvedMarketIds.length - 1;
+        uint256 last = unresolvedEventIds.length - 1;
         if (idx != last) {
-            uint256 moved = unresolvedMarketIds[last];
-            unresolvedMarketIds[idx] = moved;
-            _unresolvedMarketIndex[moved] = idx1;
+            uint256 moved = unresolvedEventIds[last];
+            unresolvedEventIds[idx] = moved;
+            _unresolvedEventIndex[moved] = idx1;
         }
-        unresolvedMarketIds.pop();
-        delete _unresolvedMarketIndex[marketId];
+        unresolvedEventIds.pop();
+        delete _unresolvedEventIndex[eventId];
     }
 }

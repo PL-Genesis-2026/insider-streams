@@ -16,18 +16,19 @@ contract ExamplePredictionMarket is ReceiverTemplate {
     // ======== EVENTS ===========
     // ===========================
 
-    event MarketCreated(
-        uint256 indexed marketId,
+    event EventCreated(
+        uint256 indexed eventId,
         address indexed creator,
         string question,
-        uint256 marketOpen,
-        uint256 marketClose,
+        uint256 eventOpen,
+        uint256 eventClose,
+        uint256 duration,
         address yesToken,
         address noToken
     );
 
     event SharesPurchased(
-        uint256 indexed marketId,
+        uint256 indexed eventId,
         address indexed buyer,
         Outcome indexed outcome,
         uint256 usdcIn,
@@ -35,25 +36,25 @@ contract ExamplePredictionMarket is ReceiverTemplate {
     );
 
     event SharesRedeemed(
-        uint256 indexed marketId,
+        uint256 indexed eventId,
         address indexed redeemer,
         uint256 sharesIn,
         uint256 usdcOut
     );
 
     event LiquidityWithdrawn(
-        uint256 indexed marketId,
+        uint256 indexed eventId,
         address indexed creator,
         uint256 usdcOut
     );
 
     event SettlementRequested(
-        uint256 indexed marketId,
+        uint256 indexed eventId,
         string question
     );
 
     event SettlementResponse(
-        uint256 indexed marketId,
+        uint256 indexed eventId,
         Status indexed status,
         Outcome indexed outcome
     );
@@ -69,13 +70,15 @@ contract ExamplePredictionMarket is ReceiverTemplate {
     // ======== ERRORS ===========
     // ===========================
 
-    error MarketNotClosed(uint256 nowTs, uint256 closeTs);
+    error EventNotClosed(uint256 nowTs, uint256 closeTs);
     error StatusNotOpen(Status current);
     error SettlementNotRequested(Status current);
     error InvalidOutcome();
     error ManualSettlementNotAllowed(Status current);
-    error MarketNotOpen(uint256 nowTs, uint256 closeTs);
+    error EventNotOpen(uint256 nowTs, uint256 closeTs);
     error AmountZero();
+    error DurationZero();
+    error AlreadySettled(Status current);
     error NotSettledYet(Status current);
     error NotCreator();
     error LiquidityAlreadyWithdrawn();
@@ -84,11 +87,11 @@ contract ExamplePredictionMarket is ReceiverTemplate {
     // ======== STRUCTS ==========
     // ===========================
 
-    struct Market {
+    struct Event {
         string question;
         address creator;
-        uint256 marketOpen;
-        uint256 marketClose;
+        uint256 eventOpen;
+        uint256 eventClose;
         Status status;
         Outcome outcome;
         uint256 settledAt;
@@ -105,8 +108,8 @@ contract ExamplePredictionMarket is ReceiverTemplate {
     // ======= STATE VARS ========
     // ===========================
 
-    uint256 public nextMarketId;
-    mapping(uint256 => Market) public markets;
+    uint256 public nextEventId;
+    mapping(uint256 => Event) public events;
     IERC20 public immutable paymentToken;
 
     uint256 public constant INITIAL_LIQUIDITY = 10_000_000; // 10 USDC (6 decimals)
@@ -123,49 +126,52 @@ contract ExamplePredictionMarket is ReceiverTemplate {
     // ======== FUNCTIONS ========
     // ===========================
 
-    /// @notice Create a new market. Caller deposits 10 USDC as initial AMM liquidity.
-    function newMarket(string calldata question) public returns (uint256) {
+    /// @notice Create a new event. Caller deposits 10 USDC as initial AMM liquidity.
+    /// @param question The prediction question for this event.
+    /// @param duration How long the event stays open for trading, in seconds.
+    function newEvent(string calldata question, uint256 duration) public returns (uint256) {
+        if (duration == 0) revert DurationZero();
         paymentToken.safeTransferFrom(msg.sender, address(this), INITIAL_LIQUIDITY);
 
-        uint256 marketId = nextMarketId++;
-        Market storage m = markets[marketId];
-        m.question = question;
-        m.creator = msg.sender;
-        m.marketOpen = block.timestamp;
-        m.marketClose = block.timestamp + 3 minutes;
+        uint256 eventId = nextEventId++;
+        Event storage e = events[eventId];
+        e.question = question;
+        e.creator = msg.sender;
+        e.eventOpen = block.timestamp;
+        e.eventClose = block.timestamp + duration;
 
         // Deploy YES/NO share tokens
-        string memory idStr = _uint2str(marketId);
-        m.yesToken = new ExamplePredictionMarketShareToken(
+        string memory idStr = _uint2str(eventId);
+        e.yesToken = new ExamplePredictionMarketShareToken(
             string.concat("YES-", idStr),
             string.concat("YES-", idStr)
         );
-        m.noToken = new ExamplePredictionMarketShareToken(
+        e.noToken = new ExamplePredictionMarketShareToken(
             string.concat("NO-", idStr),
             string.concat("NO-", idStr)
         );
 
         // Mint initial shares into pool reserves (10 each for 50/50 odds)
-        m.yesToken.mint(address(this), INITIAL_LIQUIDITY);
-        m.noToken.mint(address(this), INITIAL_LIQUIDITY);
-        m.yesReserve = INITIAL_LIQUIDITY;
-        m.noReserve = INITIAL_LIQUIDITY;
+        e.yesToken.mint(address(this), INITIAL_LIQUIDITY);
+        e.noToken.mint(address(this), INITIAL_LIQUIDITY);
+        e.yesReserve = INITIAL_LIQUIDITY;
+        e.noReserve = INITIAL_LIQUIDITY;
 
-        emit MarketCreated(
-            marketId, msg.sender, question,
-            m.marketOpen, m.marketClose,
-            address(m.yesToken), address(m.noToken)
+        emit EventCreated(
+            eventId, msg.sender, question,
+            e.eventOpen, e.eventClose, duration,
+            address(e.yesToken), address(e.noToken)
         );
-        return marketId;
+        return eventId;
     }
 
     /// @notice Buy YES or NO shares using USDC via constant-product AMM.
     /// @dev Mints complete sets (1 YES + 1 NO per USDC), adds unwanted side to pool,
     ///      and computes wanted shares out using x*y=k.
-    function buyShares(uint256 marketId, Outcome outcome, uint256 usdcAmount) public {
-        Market storage m = markets[marketId];
-        if (m.marketClose < block.timestamp) revert MarketNotOpen(block.timestamp, m.marketClose);
-        if (m.status != Status.Open) revert StatusNotOpen(m.status);
+    function buyShares(uint256 eventId, Outcome outcome, uint256 usdcAmount) public {
+        Event storage e = events[eventId];
+        if (e.eventClose < block.timestamp) revert EventNotOpen(block.timestamp, e.eventClose);
+        if (e.status != Status.Open) revert StatusNotOpen(e.status);
         if (outcome != Outcome.No && outcome != Outcome.Yes) revert InvalidOutcome();
         if (usdcAmount == 0) revert AmountZero();
 
@@ -173,8 +179,8 @@ contract ExamplePredictionMarket is ReceiverTemplate {
         paymentToken.safeTransferFrom(msg.sender, address(this), usdcAmount);
 
         // Mint complete sets: 1 USDC → 1 YES + 1 NO (held by this contract)
-        m.yesToken.mint(address(this), usdcAmount);
-        m.noToken.mint(address(this), usdcAmount);
+        e.yesToken.mint(address(this), usdcAmount);
+        e.noToken.mint(address(this), usdcAmount);
 
         uint256 sharesOut;
 
@@ -184,61 +190,61 @@ contract ExamplePredictionMarket is ReceiverTemplate {
             // New noReserve = noReserve + usdcAmount
             // New yesReserve = k / newNoReserve
             // sharesOut = oldYesReserve - newYesReserve + usdcAmount (minted)
-            uint256 k = m.yesReserve * m.noReserve;
-            uint256 newNoReserve = m.noReserve + usdcAmount;
+            uint256 k = e.yesReserve * e.noReserve;
+            uint256 newNoReserve = e.noReserve + usdcAmount;
             uint256 newYesReserve = k / newNoReserve;
-            uint256 yesFromPool = m.yesReserve - newYesReserve;
+            uint256 yesFromPool = e.yesReserve - newYesReserve;
             sharesOut = yesFromPool + usdcAmount;
 
-            m.yesReserve = newYesReserve;
-            m.noReserve = newNoReserve + usdcAmount; // pool gets the minted NO tokens too
+            e.yesReserve = newYesReserve;
+            e.noReserve = newNoReserve + usdcAmount; // pool gets the minted NO tokens too
 
             // Transfer YES shares to buyer
-            m.yesToken.transfer(msg.sender, sharesOut);
+            e.yesToken.transfer(msg.sender, sharesOut);
         } else {
             // Add YES tokens to pool, take NO tokens out
-            uint256 k = m.yesReserve * m.noReserve;
-            uint256 newYesReserve = m.yesReserve + usdcAmount;
+            uint256 k = e.yesReserve * e.noReserve;
+            uint256 newYesReserve = e.yesReserve + usdcAmount;
             uint256 newNoReserve = k / newYesReserve;
-            uint256 noFromPool = m.noReserve - newNoReserve;
+            uint256 noFromPool = e.noReserve - newNoReserve;
             sharesOut = noFromPool + usdcAmount;
 
-            m.noReserve = newNoReserve;
-            m.yesReserve = newYesReserve + usdcAmount; // pool gets the minted YES tokens too
+            e.noReserve = newNoReserve;
+            e.yesReserve = newYesReserve + usdcAmount; // pool gets the minted YES tokens too
 
             // Transfer NO shares to buyer
-            m.noToken.transfer(msg.sender, sharesOut);
+            e.noToken.transfer(msg.sender, sharesOut);
         }
 
-        emit SharesPurchased(marketId, msg.sender, outcome, usdcAmount, sharesOut);
+        emit SharesPurchased(eventId, msg.sender, outcome, usdcAmount, sharesOut);
     }
 
-    /// @notice Redeem winning shares for USDC after market settlement. 1 winning share = 1 USDC.
-    function redeemShares(uint256 marketId, uint256 amount) public {
-        Market storage m = markets[marketId];
-        if (m.status != Status.Settled) revert NotSettledYet(m.status);
+    /// @notice Redeem winning shares for USDC after event settlement. 1 winning share = 1 USDC.
+    function redeemShares(uint256 eventId, uint256 amount) public {
+        Event storage e = events[eventId];
+        if (e.status != Status.Settled) revert NotSettledYet(e.status);
         if (amount == 0) revert AmountZero();
 
-        ExamplePredictionMarketShareToken winningToken = m.outcome == Outcome.Yes ? m.yesToken : m.noToken;
+        ExamplePredictionMarketShareToken winningToken = e.outcome == Outcome.Yes ? e.yesToken : e.noToken;
         winningToken.burn(msg.sender, amount);
         paymentToken.safeTransfer(msg.sender, amount);
 
-        emit SharesRedeemed(marketId, msg.sender, amount, amount);
+        emit SharesRedeemed(eventId, msg.sender, amount, amount);
     }
 
     /// @notice Creator withdraws remaining pool liquidity after settlement.
     /// @dev Burns pool's winning-side reserve tokens and sends equivalent USDC.
-    function withdrawLiquidity(uint256 marketId) public {
-        Market storage m = markets[marketId];
-        if (m.status != Status.Settled) revert NotSettledYet(m.status);
-        if (msg.sender != m.creator) revert NotCreator();
-        if (m.liquidityWithdrawn) revert LiquidityAlreadyWithdrawn();
+    function withdrawLiquidity(uint256 eventId) public {
+        Event storage e = events[eventId];
+        if (e.status != Status.Settled) revert NotSettledYet(e.status);
+        if (msg.sender != e.creator) revert NotCreator();
+        if (e.liquidityWithdrawn) revert LiquidityAlreadyWithdrawn();
 
-        m.liquidityWithdrawn = true;
+        e.liquidityWithdrawn = true;
 
         // The pool holds both YES and NO reserve tokens. After settlement only the
         // winning side's tokens have value (1 winning token = 1 USDC).
-        ExamplePredictionMarketShareToken winningToken = m.outcome == Outcome.Yes ? m.yesToken : m.noToken;
+        ExamplePredictionMarketShareToken winningToken = e.outcome == Outcome.Yes ? e.yesToken : e.noToken;
         uint256 poolWinningBalance = winningToken.balanceOf(address(this));
 
         if (poolWinningBalance > 0) {
@@ -246,86 +252,101 @@ contract ExamplePredictionMarket is ReceiverTemplate {
             paymentToken.safeTransfer(msg.sender, poolWinningBalance);
         }
 
-        emit LiquidityWithdrawn(marketId, msg.sender, poolWinningBalance);
+        emit LiquidityWithdrawn(eventId, msg.sender, poolWinningBalance);
     }
 
     // ===========================
     // ======== VIEWS ============
     // ===========================
 
-    function getMarket(uint256 marketId) public view returns (Market memory) {
-        return markets[marketId];
+    function getEvent(uint256 eventId) public view returns (Event memory) {
+        return events[eventId];
     }
 
     /// @notice Get the current price of YES shares in USDC terms (scaled by 1e6).
-    function getYesPrice(uint256 marketId) public view returns (uint256) {
-        Market storage m = markets[marketId];
+    function getYesPrice(uint256 eventId) public view returns (uint256) {
+        Event storage e = events[eventId];
         // price_yes = noReserve / (yesReserve + noReserve)
-        return (m.noReserve * 1e6) / (m.yesReserve + m.noReserve);
+        return (e.noReserve * 1e6) / (e.yesReserve + e.noReserve);
     }
 
     /// @notice Get the current price of NO shares in USDC terms (scaled by 1e6).
-    function getNoPrice(uint256 marketId) public view returns (uint256) {
-        Market storage m = markets[marketId];
-        return (m.yesReserve * 1e6) / (m.yesReserve + m.noReserve);
+    function getNoPrice(uint256 eventId) public view returns (uint256) {
+        Event storage e = events[eventId];
+        return (e.yesReserve * 1e6) / (e.yesReserve + e.noReserve);
     }
 
-    function getUri(uint256 marketId) public view returns (string memory) {
-        return string.concat("http://localhost:3000/", markets[marketId].evidenceURI);
+    function getUri(uint256 eventId) public view returns (string memory) {
+        return string.concat("http://localhost:3000/", events[eventId].evidenceURI);
     }
 
     // ===========================
     // ======== SETTLEMENT =======
     // ===========================
 
-    function requestSettlement(uint256 marketId) public {
-        Market storage m = markets[marketId];
-        if (m.marketClose > block.timestamp) revert MarketNotClosed(block.timestamp, m.marketClose);
-        if (m.status != Status.Open) revert StatusNotOpen(m.status);
+    function requestSettlement(uint256 eventId) public {
+        Event storage e = events[eventId];
+        if (e.eventClose > block.timestamp) revert EventNotClosed(block.timestamp, e.eventClose);
+        if (e.status != Status.Open) revert StatusNotOpen(e.status);
 
-        m.status = Status.SettlementRequested;
-        emit SettlementRequested(marketId, m.question);
+        e.status = Status.SettlementRequested;
+        emit SettlementRequested(eventId, e.question);
     }
 
-    function settleMarket(
-        uint256 marketId,
+    function settleEvent(
+        uint256 eventId,
         Outcome outcome,
         uint16 confidenceBps,
         string memory evidenceURI
     ) private {
-        Market storage m = markets[marketId];
-        if (m.status != Status.SettlementRequested) revert SettlementNotRequested(m.status);
+        Event storage e = events[eventId];
+        if (e.status != Status.SettlementRequested) revert SettlementNotRequested(e.status);
 
-        m.outcome = outcome;
-        m.settledAt = block.timestamp;
-        m.confidenceBps = confidenceBps;
-        m.evidenceURI = evidenceURI;
+        e.outcome = outcome;
+        e.settledAt = block.timestamp;
+        e.confidenceBps = confidenceBps;
+        e.evidenceURI = evidenceURI;
 
         if (outcome == Outcome.Inconclusive) {
-            m.status = Status.NeedsManual;
+            e.status = Status.NeedsManual;
         } else {
-            m.status = Status.Settled;
+            e.status = Status.Settled;
         }
 
-        emit SettlementResponse(marketId, m.status, m.outcome);
+        emit SettlementResponse(eventId, e.status, e.outcome);
     }
 
-    function settleMarketManually(uint256 marketId, Outcome outcome) public {
-        Market storage m = markets[marketId];
+    function settleEventManually(uint256 eventId, Outcome outcome) public {
+        Event storage e = events[eventId];
         if (outcome != Outcome.No && outcome != Outcome.Yes) revert InvalidOutcome();
-        if (m.status != Status.NeedsManual) revert ManualSettlementNotAllowed(m.status);
+        if (e.status != Status.NeedsManual) revert ManualSettlementNotAllowed(e.status);
 
-        m.outcome = outcome;
-        m.settledAt = block.timestamp;
-        m.status = Status.Settled;
+        e.outcome = outcome;
+        e.settledAt = block.timestamp;
+        e.status = Status.Settled;
 
-        emit SettlementResponse(marketId, m.status, m.outcome);
+        emit SettlementResponse(eventId, e.status, e.outcome);
+    }
+
+    /// @notice Debug-only: force-settle an event regardless of timestamps or status.
+    /// @dev Bypasses eventClose check and SettlementRequested status requirement.
+    ///      Sets status directly to Settled. For testing only.
+    function forceSettle(uint256 eventId, Outcome outcome, uint16 confidenceBps, string calldata evidenceURI) public {
+        Event storage e = events[eventId];
+        if (e.status == Status.Settled) revert AlreadySettled(e.status);
+        if (outcome != Outcome.No && outcome != Outcome.Yes) revert InvalidOutcome();
+        e.outcome = outcome;
+        e.settledAt = block.timestamp;
+        e.confidenceBps = confidenceBps;
+        e.evidenceURI = evidenceURI;
+        e.status = Status.Settled;
+        emit SettlementResponse(eventId, e.status, e.outcome);
     }
 
     function _processReport(bytes calldata report) internal override {
-        (uint256 marketId, uint8 outcome, uint16 confidenceBps, string memory responseId) =
+        (uint256 eventId, uint8 outcome, uint16 confidenceBps, string memory responseId) =
             abi.decode(report, (uint256, uint8, uint16, string));
-        settleMarket(marketId, Outcome(outcome), confidenceBps, responseId);
+        settleEvent(eventId, Outcome(outcome), confidenceBps, responseId);
     }
 
     // ===========================

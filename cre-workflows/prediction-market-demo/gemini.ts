@@ -52,18 +52,18 @@ REMINDER:
  * User prompt template for Gemini AI.
  * Provides clear instructions and the JSON schema for the expected response.
  */
-const userPrompt = `Determine the outcome of this market based on factual information and return the result in this JSON format:\n\n{\n  "result": "YES" | "NO" | "INCONCLUSIVE",\n  "confidence": <integer between 0 and 10000>\n}\n\nMarket question:\n`;
+const userPrompt = `Determine the outcome of this event based on factual information and return the result in this JSON format:\n\n{\n  "result": "YES" | "NO" | "INCONCLUSIVE",\n  "confidence": <integer between 0 and 10000>\n}\n\nEvent question:\n`;
 
 /**
- * Queries Gemini AI to determine the outcome of a prediction market question.
+ * Queries Gemini AI to determine the outcome of a prediction market event question.
  * Uses Google search grounding for factual verification and requires consensus across CRE nodes.
  * 
  * @param runtime - CRE runtime instance with config and secrets
- * @param marketId - ID of the market being settled
- * @param question - The market question to evaluate
+ * @param eventId - ID of the event being settled
+ * @param question - The event question to evaluate
  * @returns Gemini API response with outcome and confidence score
  */
-export const askGemini = (runtime: Runtime<Config>, marketId: string, question: string): GeminiResponse => {
+export const askGemini = (runtime: Runtime<Config>, eventId: string, question: string): GeminiResponse => {
     // API key for the outbound LLM request (stored in CRE secrets)
     const geminiApiKey = runtime.getSecret({ id: "GEMINI_API_KEY" }).result();
 
@@ -73,7 +73,7 @@ export const askGemini = (runtime: Runtime<Config>, marketId: string, question: 
     const result: GeminiResponse = httpClient
       .sendRequest(
         runtime,
-        PostGeminiData({ marketId, question}, geminiApiKey.value),
+        PostGeminiData({ eventId, question}, geminiApiKey.value),
         consensusIdenticalAggregation<GeminiResponse>()
       )(runtime.config)
       .result();
@@ -89,7 +89,7 @@ export const askGemini = (runtime: Runtime<Config>, marketId: string, question: 
  * Builds and executes an HTTP request to the Gemini API.
  * Constructs a JSON payload with system instructions, user prompt, and Google search grounding.
  * 
- * @param logDetails - Market ID and question from the settlement request event
+ * @param logDetails - Event ID and question from the settlement request event
  * @param geminiApiKey - Gemini API authentication key
  * @returns Function that performs the HTTP request and returns the parsed response
  */
@@ -109,7 +109,7 @@ const PostGeminiData =
         {
           parts: [
             {
-              // User prompt with the market question appended
+              // User prompt with the event question appended
               text: userPrompt + logDetails.question,
             },
           ],

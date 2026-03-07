@@ -18,7 +18,6 @@ import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardFooter,
   CardHeader,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -69,18 +68,6 @@ function formatSignedNumber(value: number) {
   return value > 0 ? `+${value}` : String(value);
 }
 
-function shortAddress(address: string | undefined) {
-  if (!address) {
-    return "Unavailable";
-  }
-
-  if (address.length <= 12) {
-    return address;
-  }
-
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
-}
-
 function shortHash(hash: string) {
   if (hash.length <= 14) {
     return hash;
@@ -96,7 +83,7 @@ function buildTimeline(auction: AuctionDetailData) {
     timeline.push({
       type: "created",
       label: "Auction created",
-      detail: `Reserve ${formatCurrency(auction.reservePriceUsdc)}`,
+      detail: `Seller: ${auction.sellerId}`,
       timestamp: auction.createdAt,
     });
   }
@@ -105,7 +92,7 @@ function buildTimeline(auction: AuctionDetailData) {
     timeline.push({
       type: "bid",
       label: "Bid placed",
-      detail: `${formatCurrency(bid.amountUsdc)} by ${shortAddress(bid.bidderAddress)}`,
+      detail: formatCurrency(bid.amountUsdc),
       timestamp: bid.timestamp,
     });
   }
@@ -114,7 +101,7 @@ function buildTimeline(auction: AuctionDetailData) {
     timeline.push({
       type: "closed",
       label: "Auction closed",
-      detail: `Buyer ${shortAddress(auction.closedAuction.buyerAddress)}`,
+      detail: `Winning bid: ${formatCurrency(auction.closedAuction.winningBidUsdc)}`,
       timestamp: auction.closedAuction.timestamp,
     });
   }
@@ -123,17 +110,8 @@ function buildTimeline(auction: AuctionDetailData) {
     timeline.push({
       type: "closed",
       label: "Auction force closed",
-      detail: `Refund ${formatCurrency(auction.forceClosedAuction.refundAmountUsdc)} to ${shortAddress(auction.forceClosedAuction.refundedBidderAddress)}`,
+      detail: `Held amount: ${formatCurrency(auction.forceClosedAuction.heldAmountUsdc)}`,
       timestamp: auction.forceClosedAuction.timestamp,
-    });
-  }
-
-  if (auction.tradeExecuted) {
-    timeline.push({
-      type: "settled",
-      label: "Trade executed",
-      detail: `${formatCurrency(auction.tradeExecuted.amountUsdc)} automatic bet by ${shortAddress(auction.tradeExecuted.buyerAddress)}`,
-      timestamp: auction.tradeExecuted.timestamp,
     });
   }
 
@@ -141,7 +119,7 @@ function buildTimeline(auction: AuctionDetailData) {
     timeline.push({
       type: "settled",
       label: "Reputation updated",
-      detail: `Score ${update.newScore} (${formatSignedNumber(update.delta)})`,
+      detail: `Score ${update.newScore} (${formatSignedNumber(update.reputationDelta)})`,
       timestamp: update.timestamp,
     });
   }
@@ -246,15 +224,12 @@ function BidRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-3">
           <p className="truncate text-sm font-medium text-foreground">
-            {shortAddress(bid.bidderAddress)}
+            {formatCurrency(bid.amountUsdc)}
             {highlightLabel ? (
               <span className="ml-2 text-xs font-normal text-accent">
                 {highlightLabel}
               </span>
             ) : null}
-          </p>
-          <p className="shrink-0 font-serif text-lg font-medium tracking-tight text-foreground">
-            {formatCurrency(bid.amountUsdc)}
           </p>
         </div>
         <div className="mt-0.5 flex items-center gap-3 text-xs text-muted-foreground/70">
@@ -301,12 +276,6 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
       : auction.status === "ForceClosed"
         ? "outline"
         : "accent";
-  const bidFill =
-    auction.currentBidUsdc !== undefined &&
-    auction.reservePriceUsdc !== undefined &&
-    auction.reservePriceUsdc > 0
-      ? Math.min(100, Math.round((auction.currentBidUsdc / auction.reservePriceUsdc) * 100))
-      : undefined;
   const timeline = buildTimeline(auction);
 
   return (
@@ -328,7 +297,7 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
             <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.24em] text-accent">
               <span>Auction #{auction.auctionId}</span>
               <span className="text-muted-foreground/40">/</span>
-              <span>Market {auction.externalMarketId}</span>
+              <span>Event #{auction.eventId}</span>
             </div>
             <Badge variant={statusVariant}>{auction.status}</Badge>
             {auction.endTime ? (
@@ -340,11 +309,8 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
           </div>
 
           <h1 className="max-w-4xl font-serif text-[3.4rem] leading-[0.88] font-medium tracking-[-0.055em] text-foreground sm:text-[4.6rem]">
-            Auction #{auction.auctionId}
+            {auction.eventTitle ?? `Auction #${auction.auctionId}`}
           </h1>
-          <p className="text-sm text-muted-foreground/60">
-            TODO: auction title &amp; summary from editorial listing data source
-          </p>
         </header>
 
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
@@ -398,21 +364,12 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
               </CardContent>
             </Card>
 
-            <Card className="border-dashed border-border/50">
-              <CardContent className="py-6 text-center text-sm text-muted-foreground/60">
-                TODO: signal intelligence card (category, summary, narrative)
-              </CardContent>
-            </Card>
-
             <Card className="overflow-hidden border-accent/30 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--accent)_6%,var(--card)),color-mix(in_srgb,var(--secondary)_22%,transparent))]">
               <CardHeader className="pb-0">
                 <Label>Secret record</Label>
               </CardHeader>
               <CardContent>
                 <JsonPreview value={auction.secretRecord?.secretData} />
-                <p className="mt-2 text-xs text-muted-foreground/50">
-                  TODO: render structured data once schema is defined
-                </p>
               </CardContent>
             </Card>
           </div>
@@ -427,25 +384,6 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
                       ? "No bids yet"
                       : formatCurrency(auction.currentBidUsdc)}
                   </p>
-                  <div className="space-y-1.5">
-                    <div className="h-1 overflow-hidden rounded-full bg-muted/50">
-                      <div
-                        className={cn(
-                          "h-full rounded-full transition-all",
-                          bidFill !== undefined && bidFill >= 100
-                            ? "bg-accent"
-                            : "bg-primary/50",
-                        )}
-                        style={{ width: `${bidFill ?? 0}%` }}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-muted-foreground/70">
-                      <span>
-                        {bidFill === undefined ? "No bids yet" : `${bidFill}% of reserve`}
-                      </span>
-                      <span>{formatCurrency(auction.reservePriceUsdc)}</span>
-                    </div>
-                  </div>
                 </div>
               </CardHeader>
 
@@ -462,17 +400,6 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
                   </div>
                 )}
               </CardContent>
-
-              {auction.currentBidderAddress ? (
-                <CardFooter className="border-t border-border/60 pt-4">
-                  <div className="w-full space-y-1">
-                    <Label>{isClosed ? "Winner" : "Current bidder"}</Label>
-                    <p className="font-mono text-xs text-muted-foreground/70">
-                      {auction.currentBidderAddress}
-                    </p>
-                  </div>
-                </CardFooter>
-              ) : null}
             </Card>
 
             <Card className="border-border/70 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_98%,transparent),color-mix(in_srgb,var(--secondary)_18%,transparent))]">
@@ -482,8 +409,8 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
                   <div className="flex size-10 items-center justify-center rounded-full bg-accent/15 text-accent">
                     <User className="size-4" />
                   </div>
-                  <p className="min-w-0 truncate font-mono text-xs text-muted-foreground/70">
-                    {auction.sellerAddress}
+                  <p className="min-w-0 truncate text-sm font-medium text-foreground">
+                    {auction.sellerId}
                   </p>
                 </div>
               </CardHeader>
@@ -500,8 +427,8 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
                     <p className="font-mono text-sm text-foreground">#{auction.auctionId}</p>
                   </div>
                   <div className="space-y-1">
-                    <span className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground/60">Market ID</span>
-                    <p className="font-mono text-sm text-foreground">{auction.externalMarketId}</p>
+                    <span className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground/60">Event ID</span>
+                    <p className="font-mono text-sm text-foreground">{auction.eventId}</p>
                   </div>
                 </div>
 
