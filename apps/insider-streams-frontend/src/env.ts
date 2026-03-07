@@ -2,7 +2,7 @@ import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
 
 const DEFAULT_SUBGRAPH_URL =
-  "https://api.studio.thegraph.com/query/1743303/insider-streams/version/latest";
+  "https://api.studio.thegraph.com/query/1743303/insider-streams-2/version/latest";
 
 export const env = createEnv({
   server: {},

@@ -15,8 +15,8 @@
  *   pnpm e2e
  */
 
+import { CONFIDENTIAL_USDC_ADDRESS } from "@private-streams/common";
 import { PrivateTokenApiClient } from "../src/index.js";
-import { MOCK_USDC_ADDRESS } from "@private-streams/common";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -49,7 +49,7 @@ async function main() {
 
   console.log(`Owner:  ${owner.account}`);
   console.log(`Tester: ${tester.account}`);
-  console.log(`Token:  ${MOCK_USDC_ADDRESS}\n`);
+  console.log(`Token:  ${CONFIDENTIAL_USDC_ADDRESS}\n`);
 
   // 1. getBalances
   console.log("─── 1/5 getBalances ───");
@@ -77,7 +77,7 @@ async function main() {
   console.log("─── 4/5 privateTransfer ───");
   const transfer = await owner.privateTransfer({
     recipient: tester.account,
-    token: MOCK_USDC_ADDRESS,
+    token: CONFIDENTIAL_USDC_ADDRESS,
     amount: "1",
   });
   console.log("Private transfer:", JSON.stringify(transfer));
@@ -90,13 +90,16 @@ async function main() {
   // 5. withdraw (1 wei of DEMO token)
   console.log("─── 5/5 withdraw ───");
   const withdrawal = await tester.withdraw({
-    token: MOCK_USDC_ADDRESS,
+    token: CONFIDENTIAL_USDC_ADDRESS,
     amount: "1",
   });
   console.log("Withdraw:", JSON.stringify(withdrawal));
   assert(typeof withdrawal.id === "string", "withdraw should have id");
   assert(typeof withdrawal.ticket === "string", "withdraw should have ticket");
-  assert(typeof withdrawal.deadline === "number", "withdraw should have deadline");
+  assert(
+    typeof withdrawal.deadline === "number",
+    "withdraw should have deadline",
+  );
   console.log("PASS\n");
 
   console.log("All 5 endpoint smoke tests passed");

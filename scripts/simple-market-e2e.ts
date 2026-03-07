@@ -22,22 +22,22 @@
  */
 
 import {
-  MOCK_USDC_ADDRESS,
+  CONFIDENTIAL_USDC_ADDRESS,
   EXAMPLE_PREDICTION_MARKET_ADDRESS,
-  mockUsdcAbi,
   examplePredictionMarketAbi,
+  confidentialUsdcAbi,
 } from "@private-streams/common";
 import { parseEventLogs, type Address, type Hex } from "viem";
 import {
-  banner,
-  step,
   assert,
-  envRequired,
+  banner,
   createClients,
-  waitForTx,
-  waitForTimestamp,
   ensureUsdcBalance,
+  envRequired,
   runCRE,
+  step,
+  waitForTimestamp,
+  waitForTx,
 } from "./e2e-helpers.js";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
@@ -48,8 +48,8 @@ const RPC_URL = envRequired("RPC_URL");
 const FIREBASE_API_KEY = envRequired("FIREBASE_API_KEY");
 const FIREBASE_PROJECT_ID = envRequired("FIREBASE_PROJECT_ID");
 
-const MOCK_USDC = (process.env.MOCK_USDC_ADDRESS ??
-  MOCK_USDC_ADDRESS) as Address;
+const CONFIDENTIAL_USDC = (process.env.CONFIDENTIAL_USDC_ADDRESS ??
+  CONFIDENTIAL_USDC_ADDRESS) as Address;
 const SIMPLE_MARKET = (process.env.EXAMPLE_PREDICTION_MARKET_ADDRESS ??
   EXAMPLE_PREDICTION_MARKET_ADDRESS) as Address;
 
@@ -74,7 +74,7 @@ async function main() {
   banner("SimpleMarket + CRE E2E Test");
   console.log(`  Owner:         ${ownerAccount.address}`);
   console.log(`  Bidder:        ${bidderAccount!.address}`);
-  console.log(`  MockUSDC:      ${MOCK_USDC}`);
+  console.log(`  ConfidentialUSDC: ${CONFIDENTIAL_USDC}`);
   console.log(`  SimpleMarket:  ${SIMPLE_MARKET}`);
   console.log(`  Question:      ${QUESTION}`);
 
@@ -83,7 +83,7 @@ async function main() {
   await ensureUsdcBalance(
     publicClient,
     ownerClient,
-    MOCK_USDC,
+    CONFIDENTIAL_USDC,
     bidderAccount!.address,
     MIN_BALANCE,
     MINT_AMOUNT,
@@ -92,15 +92,15 @@ async function main() {
   // ── Step 2: Approve USDC (only if needed) ──────────────────────────────────
   step("Ensuring USDC approvals...");
   const ownerAllowance = await publicClient.readContract({
-    address: MOCK_USDC,
-    abi: mockUsdcAbi,
+    address: CONFIDENTIAL_USDC,
+    abi: confidentialUsdcAbi,
     functionName: "allowance",
     args: [ownerAccount.address, SIMPLE_MARKET],
   });
   if (ownerAllowance < MIN_ALLOWANCE) {
     const h = await ownerClient.writeContract({
-      address: MOCK_USDC,
-      abi: mockUsdcAbi,
+      address: CONFIDENTIAL_USDC,
+      abi: confidentialUsdcAbi,
       functionName: "approve",
       args: [SIMPLE_MARKET, APPROVAL_AMOUNT],
     });
@@ -110,15 +110,15 @@ async function main() {
   }
 
   const bidderAllowance = await publicClient.readContract({
-    address: MOCK_USDC,
-    abi: mockUsdcAbi,
+    address: CONFIDENTIAL_USDC,
+    abi: confidentialUsdcAbi,
     functionName: "allowance",
     args: [bidderAccount!.address, SIMPLE_MARKET],
   });
   if (bidderAllowance < MIN_ALLOWANCE) {
     const h = await bidderClient!.writeContract({
-      address: MOCK_USDC,
-      abi: mockUsdcAbi,
+      address: CONFIDENTIAL_USDC,
+      abi: confidentialUsdcAbi,
       functionName: "approve",
       args: [SIMPLE_MARKET, APPROVAL_AMOUNT],
     });
@@ -156,7 +156,11 @@ async function main() {
     functionName: "buyShares",
     args: [eventId, OUTCOME_YES, PREDICTION_AMOUNT],
   });
-  await waitForTx(publicClient, buyHash, `Bought YES shares (${PREDICTION_AMOUNT} USDC)`);
+  await waitForTx(
+    publicClient,
+    buyHash,
+    `Bought YES shares (${PREDICTION_AMOUNT} USDC)`,
+  );
 
   // ── Step 5: Wait for event closure ─────────────────────────────────────────
   step("Waiting for event to close...");
@@ -233,7 +237,9 @@ async function main() {
     `Expected status=2 (Settled), got status=${finalEvent.status}`,
   );
   console.log(`  ok Event ${eventId} is Settled (status=2)`);
-  console.log(`  Outcome: ${finalEvent.outcome === 2 ? "YES" : finalEvent.outcome === 1 ? "NO" : `Unknown(${finalEvent.outcome})`}`);
+  console.log(
+    `  Outcome: ${finalEvent.outcome === 2 ? "YES" : finalEvent.outcome === 1 ? "NO" : `Unknown(${finalEvent.outcome})`}`,
+  );
 
   // ── Step 10: Verify Firestore ───────────────────────────────────────────────
   step("Verifying Firestore document...");
@@ -278,7 +284,9 @@ async function main() {
   console.log(`  Event ID:      ${eventId}`);
   console.log(`  Question:      ${QUESTION}`);
   console.log(`  On-chain:      Settled`);
-  console.log(`  Firestore:     ${firestoreDocId ? "Verified" : "Skipped (no doc ID)"}`);
+  console.log(
+    `  Firestore:     ${firestoreDocId ? "Verified" : "Skipped (no doc ID)"}`,
+  );
 }
 
 main()

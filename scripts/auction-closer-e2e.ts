@@ -19,23 +19,23 @@
  */
 
 import {
-  MOCK_USDC_ADDRESS,
+  CONFIDENTIAL_USDC_ADDRESS,
   SECRET_MARKETPLACE_ADDRESS,
-  mockUsdcAbi,
-  secretMarketplaceAbi,
   examplePredictionMarketAbi,
+  confidentialUsdcAbi,
+  secretMarketplaceAbi,
 } from "@private-streams/common";
 import { parseEventLogs, type Address, type Hex } from "viem";
 import {
-  banner,
-  step,
   assert,
-  envRequired,
+  banner,
   createClients,
-  waitForTx,
-  waitForTimestamp,
   ensureUsdcBalance,
+  envRequired,
   runCRE,
+  step,
+  waitForTimestamp,
+  waitForTx,
 } from "./e2e-helpers.js";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
@@ -44,8 +44,8 @@ const OWNER_PK = envRequired("OWNER_PK") as Hex;
 const BIDDER_PK = envRequired("BIDDER_PK") as Hex;
 const RPC_URL = envRequired("RPC_URL");
 
-const MOCK_USDC = (process.env.MOCK_USDC_ADDRESS ??
-  MOCK_USDC_ADDRESS) as Address;
+const CONFIDENTIAL_USDC = (process.env.CONFIDENTIAL_USDC_ADDRESS ??
+  CONFIDENTIAL_USDC_ADDRESS) as Address;
 const SECRET_MARKETPLACE = (process.env.SECRET_MARKETPLACE_ADDRESS ??
   SECRET_MARKETPLACE_ADDRESS) as Address;
 
@@ -76,7 +76,7 @@ async function main() {
   banner("Auction Closer E2E Test");
   console.log(`  Owner:             ${ownerAccount.address}`);
   console.log(`  Bidder:            ${bidderAccount!.address}`);
-  console.log(`  MockUSDC:          ${MOCK_USDC}`);
+  console.log(`  ConfidentialUSDC:          ${CONFIDENTIAL_USDC}`);
   console.log(`  SimpleMarket:      ${SIMPLE_MARKET}`);
   console.log(`  SecretMarketplace: ${SECRET_MARKETPLACE}`);
 
@@ -85,7 +85,7 @@ async function main() {
   await ensureUsdcBalance(
     publicClient,
     ownerClient,
-    MOCK_USDC,
+    CONFIDENTIAL_USDC,
     ownerAccount.address,
     MIN_BALANCE,
     MINT_AMOUNT,
@@ -94,15 +94,15 @@ async function main() {
   // ── Step 2: Approve USDC (only if needed) ──────────────────────────────────
   step("Ensuring USDC approvals...");
   const allowanceSM = await publicClient.readContract({
-    address: MOCK_USDC,
-    abi: mockUsdcAbi,
+    address: CONFIDENTIAL_USDC,
+    abi: confidentialUsdcAbi,
     functionName: "allowance",
     args: [ownerAccount.address, SECRET_MARKETPLACE],
   });
   if (allowanceSM < MIN_ALLOWANCE) {
     const h = await ownerClient.writeContract({
-      address: MOCK_USDC,
-      abi: mockUsdcAbi,
+      address: CONFIDENTIAL_USDC,
+      abi: confidentialUsdcAbi,
       functionName: "approve",
       args: [SECRET_MARKETPLACE, APPROVAL_AMOUNT],
     });
@@ -112,15 +112,15 @@ async function main() {
   }
 
   const allowanceMarket = await publicClient.readContract({
-    address: MOCK_USDC,
-    abi: mockUsdcAbi,
+    address: CONFIDENTIAL_USDC,
+    abi: confidentialUsdcAbi,
     functionName: "allowance",
     args: [ownerAccount.address, SIMPLE_MARKET],
   });
   if (allowanceMarket < MIN_ALLOWANCE) {
     const h = await ownerClient.writeContract({
-      address: MOCK_USDC,
-      abi: mockUsdcAbi,
+      address: CONFIDENTIAL_USDC,
+      abi: confidentialUsdcAbi,
       functionName: "approve",
       args: [SIMPLE_MARKET, APPROVAL_AMOUNT],
     });
@@ -204,11 +204,7 @@ async function main() {
     functionName: "getAuction",
     args: [auctionId],
   });
-  await waitForTimestamp(
-    publicClient,
-    auctionData.endTime,
-    "Auction expiry",
-  );
+  await waitForTimestamp(publicClient, auctionData.endTime, "Auction expiry");
 
   // ── Step 7: CRE dry run ─────────────────────────────────────────────────────
   step("Running CRE auction-closer simulation (dry run)...");
