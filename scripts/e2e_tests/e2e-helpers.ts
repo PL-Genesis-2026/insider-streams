@@ -3,8 +3,8 @@
  *
  * DRY utilities used across all E2E test scripts:
  *   - secret-marketplace-e2e.ts
- *   - deposit-reconciler-e2e.ts
- *   - auction-closer-e2e.ts
+ *   - user-balance-recording-fallback-e2e.ts
+ *   - secret-marketplace-auction-closer-e2e.ts
  *   - simple-market-e2e.ts
  */
 
@@ -193,7 +193,7 @@ export async function ensureUsdcBalance(
 
 const __filename_ = fileURLToPath(import.meta.url);
 const __dirname_ = dirname(__filename_);
-const PROJECT_ROOT = resolve(__dirname_, "..");
+const PROJECT_ROOT = resolve(__dirname_, "../..");
 const CRE_BIN = `${process.env.HOME}/.cre/bin/cre`;
 
 export function runCRE(opts: {

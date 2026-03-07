@@ -15,7 +15,7 @@
  *   CONFIDENTIAL_USDC_ADDRESS           — ConfidentialUSDC contract
  *   SECRET_MARKETPLACE_ADDRESS  — SecretMarketplace contract
  *
- * Usage: pnpm e2e
+ * Usage: pnpm e2e:secret-marketplace
  */
 
 import "dotenv/config";

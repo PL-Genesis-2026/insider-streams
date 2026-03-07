@@ -7,7 +7,7 @@
  *   3. Owner places on-chain bid
  *   4. Insert Supabase records (seller, secret, deposit transfer, private_bid)
  *   5. Waits for auction to expire
- *   6. CRE auction-closer broadcast — closes auction on-chain + settles bid
+ *   6. CRE secret-marketplace-auction-closer broadcast — closes auction on-chain + settles bid
  *   7. Verifies auction is closed on-chain
  *   8. Verifies bid settled in Supabase (status=won, won_at set)
  *   9. Verifies balances view (buyer spend + seller earnings)
@@ -23,7 +23,7 @@
  *   SUPABASE_URL              — Supabase project URL
  *   SUPABASE_SERVICE_ROLE_KEY — Supabase service role key
  *
- * Usage: pnpm e2e:auction-closer
+ * Usage: pnpm e2e:secret-marketplace-auction-closer
  */
 
 import "dotenv/config";
@@ -74,7 +74,7 @@ const APPROVAL_AMOUNT = 100_000_000_000n; // 100,000 USDC blanket
 const MIN_ALLOWANCE = 10_000_000n; // 10 USDC — threshold to trigger approve
 const BID_AMOUNT = 2_000_000n; // 2 USDC
 const EVENT_DURATION = BigInt(60); // 60 seconds (market event duration)
-const AUCTION_DURATION = 30; // 30 seconds (short for fast test)
+const AUCTION_DURATION = 45; // 45 seconds — needs headroom for Sepolia tx confirmation
 const SELLER_NAME = "E2ETestSeller";
 const USDC_DECIMALS = 6;
 
@@ -171,9 +171,12 @@ async function main() {
   console.log(`  Event ID: ${eventId}`);
 
   // ── Step 4: Create auction ─────────────────────────────────────────────────
-  step("Owner creating auction (30s duration)...");
-  const now = BigInt(Math.floor(Date.now() / 1000));
-  const endTime = now + BigInt(AUCTION_DURATION);
+  step("Owner creating auction (45s duration)...");
+  // Compute endTime from latest on-chain block, not local clock, to avoid
+  // clock skew causing the auction to expire before the bid tx lands.
+  // Use 45s (not 30s) to give enough headroom for Sepolia tx confirmation.
+  const latestBlock = await publicClient.getBlock({ blockTag: "latest" });
+  const endTime = latestBlock.timestamp + BigInt(AUCTION_DURATION);
 
   const createAuctionHash = await ownerClient.writeContract({
     address: SECRET_MARKETPLACE,
@@ -286,8 +289,8 @@ async function main() {
   // ── Step 8: CRE broadcast — closes auction + settles bid ───────────────────
   // NOTE: Skip dry run — CRE simulation makes real HTTP calls even without
   // --broadcast, which would settle the bid before the on-chain close happens.
-  step("Running CRE auction-closer with broadcast...");
-  runCRE({ workflow: "auction-closer", triggerIndex: 0, broadcast: true });
+  step("Running CRE secret-marketplace-auction-closer with broadcast...");
+  runCRE({ workflow: "secret-marketplace-auction-closer", triggerIndex: 0, broadcast: true });
   console.log(`  ok Broadcast completed`);
 
   // ── Step 9: Verify on-chain ────────────────────────────────────────────────
