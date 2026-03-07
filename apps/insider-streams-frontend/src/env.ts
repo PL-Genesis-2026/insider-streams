@@ -4,6 +4,11 @@ import { z } from "zod";
 export const env = createEnv({
   server: {
     OWNER_PK: z.string().min(1).optional(),
+    RPC_URL: z
+      .string()
+      .url()
+      .optional()
+      .default("https://ethereum-sepolia-rpc.publicnode.com"),
     SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
     THE_GRAPH_API_KEY: z.string().min(1).optional(),
   },
@@ -15,6 +20,7 @@ export const env = createEnv({
   },
   runtimeEnv: {
     OWNER_PK: process.env.OWNER_PK,
+    RPC_URL: process.env.RPC_URL,
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
     THE_GRAPH_API_KEY: process.env.THE_GRAPH_API_KEY,
     NEXT_PUBLIC_PROJECT_ID: process.env.NEXT_PUBLIC_PROJECT_ID,
