@@ -129,6 +129,7 @@ const PostGeminiData =
         "Content-Type": "application/json",
         "x-goog-api-key": geminiApiKey,
       },
+      timeoutMs: 60_000,
       cacheSettings: {
         readFromCache: true,
         maxAgeMs: 60_000,
