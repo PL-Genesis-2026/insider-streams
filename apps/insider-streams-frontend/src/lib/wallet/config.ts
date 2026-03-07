@@ -29,26 +29,34 @@ type GlobalAppKit = typeof globalThis & {
 
 const globalAppKit = globalThis as GlobalAppKit;
 
-export const appKit =
-  globalAppKit[APPKIT_INSTANCE_KEY] ??
-  createAppKit({
-  adapters: [wagmiAdapter],
-  projectId: walletProjectId,
-  networks: [...walletNetworks],
-  defaultNetwork: requiredChain,
-  features: {
-    analytics: false,
-    email: false,
-    history: false,
-    onramp: false,
-    pay: false,
-    receive: false,
-    send: false,
-    socials: false,
-    swaps: false,
-  },
+export function ensureAppKit() {
+  const existingAppKit = globalAppKit[APPKIT_INSTANCE_KEY];
+
+  if (existingAppKit) {
+    return existingAppKit;
+  }
+
+  const createdAppKit = createAppKit({
+    adapters: [wagmiAdapter],
+    projectId: walletProjectId,
+    networks: [...walletNetworks],
+    defaultNetwork: requiredChain,
+    features: {
+      analytics: false,
+      email: false,
+      history: false,
+      onramp: false,
+      pay: false,
+      receive: false,
+      send: false,
+      socials: false,
+      swaps: false,
+    },
   });
 
-globalAppKit[APPKIT_INSTANCE_KEY] = appKit;
+  globalAppKit[APPKIT_INSTANCE_KEY] = createdAppKit;
+
+  return createdAppKit;
+}
 
 export const walletConfig = wagmiAdapter.wagmiConfig;

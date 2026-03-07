@@ -48,12 +48,6 @@ const usdFormat = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
 });
 
-function shortenAddress(address: string) {
-  return address.length <= 12
-    ? address
-    : `${address.slice(0, 6)}...${address.slice(-4)}`;
-}
-
 function closesInLabel(endTime: string | undefined, status: string) {
   if (status !== "Open") return undefined;
   if (!endTime) return "Unknown";
@@ -63,7 +57,11 @@ function closesInLabel(endTime: string | undefined, status: string) {
 }
 
 function getCardDescription(auction: AuctionCardData) {
-  return `Seller ${shortenAddress(auction.sellerAddress)} competing in market #${auction.marketId}.`;
+  if (auction.title && auction.outcome) {
+    return `${auction.outcome === "yes" ? "Yes" : "No"} outcome on ${auction.title}.`;
+  }
+
+  return `Seller ${auction.sellerAddress} competing in market #${auction.marketId}.`;
 }
 
 function MetaRail({ auction }: { auction: AuctionCardData }) {
@@ -174,11 +172,12 @@ function TraceRow({ auction }: { auction: AuctionCardData }) {
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            router.push(`/seller/${auction.sellerAddress}`);
+            router.push(`/seller/${encodeURIComponent(auction.sellerAddress)}`);
           }}
-          className="relative z-10 font-medium text-foreground transition-colors hover:text-primary"
+          title={auction.sellerAddress}
+          className="relative z-10 break-all text-left font-medium text-foreground transition-colors hover:text-primary"
         >
-          {shortenAddress(auction.sellerAddress)}
+          {auction.sellerAddress}
         </button>
         <ReputationBadge auction={auction} />
       </div>

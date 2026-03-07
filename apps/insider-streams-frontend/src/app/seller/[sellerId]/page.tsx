@@ -20,12 +20,6 @@ type SellerPageProps = {
   }>;
 };
 
-function shortenAddress(address: string) {
-  return address.length <= 12
-    ? address
-    : `${address.slice(0, 6)}...${address.slice(-4)}`;
-}
-
 const usdFormat = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
@@ -70,8 +64,8 @@ export default async function SellerPage({ params }: SellerPageProps) {
             </Link>
           </Button>
           <span className="text-muted-foreground/40">/</span>
-          <span className="truncate font-medium text-foreground">
-            {shortenAddress(seller.sellerId)}
+          <span className="break-all font-medium text-foreground">
+            {seller.sellerId}
           </span>
         </nav>
 
