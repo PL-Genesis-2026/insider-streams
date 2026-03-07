@@ -18,9 +18,12 @@
  *   pnpm e2e:errors
  */
 
+import { config } from "dotenv";
+config({ path: "../../.env" });
+
+import { PRIVATE_CONFIDENTIAL_USDC_ADDRESS } from "@private-streams/common";
 import { AxiosError } from "axios";
 import { PrivateTokenApiClient } from "../src/index.js";
-import { MOCK_USDC_ADDRESS } from "@private-streams/common";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -86,7 +89,7 @@ async function main() {
   await expectError("insufficient balance", () =>
     owner.privateTransfer({
       recipient: tester.account,
-      token: MOCK_USDC_ADDRESS,
+      token: PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
       amount: "999999999999999999999999999999",
     }),
   );
@@ -95,7 +98,7 @@ async function main() {
   console.log("─── 3/4 Withdraw exceeding balance ───");
   await expectError("insufficient balance for withdraw", () =>
     tester.withdraw({
-      token: MOCK_USDC_ADDRESS,
+      token: PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
       amount: "999999999999999999999999999999",
     }),
   );

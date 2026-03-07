@@ -5,7 +5,7 @@ import {Script, console} from "forge-std/Script.sol";
 import {ConfidentialUSDC} from "../../src/ConfidentialUSDC.sol";
 
 /// @title MintTokens
-/// @notice Mints 100 tokens (with 18 decimals) to a specified address.
+/// @notice Mints 100 tokens (with 6 decimals) to a specified address.
 ///         Set TOKEN_ADDRESS env var to the deployed ConfidentialUSDC address.
 ///         Set MINT_TO env var to the recipient address (defaults to deployer).
 contract MintTokens is Script {
@@ -15,7 +15,7 @@ contract MintTokens is Script {
 
         address tokenAddr = vm.envAddress("TOKEN_ADDRESS");
         address mintTo = vm.envOr("MINT_TO", deployer);
-        uint256 amount = 100 ether; // 100 tokens with 18 decimals
+        uint256 amount = 100_000_000; // 100 tokens with 6 decimals
 
         ConfidentialUSDC token = ConfidentialUSDC(tokenAddr);
 

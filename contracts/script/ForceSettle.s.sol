@@ -6,7 +6,7 @@ import {ExamplePredictionMarket} from "../src/ExamplePredictionMarket.sol";
 
 contract ForceSettle is Script {
     function run() external {
-        address marketAddress = vm.envAddress("SIMPLE_MARKET_ADDRESS");
+        address marketAddress = vm.envAddress("EXAMPLE_PREDICTION_MARKET_ADDRESS");
         uint256 eventId = vm.envUint("EVENT_ID");
         uint8 outcome = uint8(vm.envUint("OUTCOME")); // 1=No, 2=Yes
         uint256 deployerPk = vm.envUint("PRIVATE_KEY");

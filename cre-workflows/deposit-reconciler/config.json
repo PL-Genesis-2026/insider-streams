@@ -1,6 +1,6 @@
 {
   "platformEoaAddress": "0x6B789D957B87c12F30b48E9bFc58678c2f76f1c5",
-  "tokenAddress": "0x1662dA7fd24B5622140401751c9113D7E0237fae",
+  "tokenAddress": "0x38EDa3F7b7649CE3f8534C59a40132bE347E750A",
   "privateTokenApiUrl": "https://convergence2026-token-api.cldev.cloud",
   "supabaseUrl": "https://jeyudbkttazpifxvzqvq.supabase.co",
   "transactionLimit": "100",

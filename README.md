@@ -14,9 +14,9 @@ pnpm dev:insider-streams
 
 | Contract | Address |
 |----------|---------|
-| MockUSDC | `0x1B69F56bEC6978D0B62C3f5612019cC6b72D6F7f` |
-| SimpleMarket | `0xAE7167747c7f50ed26125c4fFa48DD7d4c18aF0d` |
-| SecretMarketplace | `0x8221Ef6351c2CA9Ae3Ae65266076f3E14279F52a` |
+| ConfidentialUSDC | `0xee3A0Cccb31fF816615C18E1d1DB480df8a0f9F1` |
+| ExamplePredictionMarket | `0x83B1F9d683b1a760569C237Bfb89C50112c05e24` |
+| SecretMarketplace | `0x8e99C312489f64D2C94B611A9d8f28A7566cb42D` |
 
 ## Create a Prediction Market
 
@@ -39,7 +39,7 @@ See [CRE Workflows README](cre-workflows/README.md) for details.
 cd contracts
 
 # Create a market
-SIMPLE_MARKET_ADDRESS=0xAE7167747c7f50ed26125c4fFa48DD7d4c18aF0d \
+EXAMPLE_PREDICTION_MARKET_ADDRESS=0x83B1F9d683b1a760569C237Bfb89C50112c05e24 \
 QUESTION="The New York Yankees won the 2009 World Series." \
 forge script script/CreateMarket.s.sol --rpc-url $RPC_URL --broadcast
 ```
@@ -49,7 +49,7 @@ forge script script/CreateMarket.s.sol --rpc-url $RPC_URL --broadcast
 ```bash
 cd contracts
 
-SECRET_MARKETPLACE_ADDRESS=0x8221Ef6351c2CA9Ae3Ae65266076f3E14279F52a \
+SECRET_MARKETPLACE_ADDRESS=0x8e99C312489f64D2C94B611A9d8f28A7566cb42D \
 EXTERNAL_MARKET_ID=0 \
 RESERVE_PRICE=1000000 \
 AUCTION_DURATION=120 \
@@ -72,7 +72,7 @@ cre workflow simulate auction-closer --target local-simulation --broadcast
 ```bash
 cd contracts
 
-SECRET_MARKETPLACE_ADDRESS=0x8221Ef6351c2CA9Ae3Ae65266076f3E14279F52a \
+SECRET_MARKETPLACE_ADDRESS=0x8e99C312489f64D2C94B611A9d8f28A7566cb42D \
 AUCTION_ID=0 \
 forge script script/secret-marketplace/CloseAuction.s.sol --rpc-url $RPC_URL --broadcast
 ```
@@ -84,7 +84,7 @@ Force-closes an auction regardless of expiry. Refunds the highest bidder and adj
 ```bash
 cd contracts
 
-SECRET_MARKETPLACE_ADDRESS=0x8221Ef6351c2CA9Ae3Ae65266076f3E14279F52a \
+SECRET_MARKETPLACE_ADDRESS=0x8e99C312489f64D2C94B611A9d8f28A7566cb42D \
 AUCTION_ID=0 \
 REPUTATION_DELTA=-1 \
 forge script script/secret-marketplace/ForceCloseAuction.s.sol --rpc-url $RPC_URL --broadcast

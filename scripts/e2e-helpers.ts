@@ -9,7 +9,7 @@
  */
 
 import {
-  mockUsdcAbi,
+  confidentialUsdcAbi,
 } from "@private-streams/common";
 import {
   BaseError,
@@ -171,7 +171,7 @@ export async function ensureUsdcBalance(
 ): Promise<void> {
   const balance = (await publicClient.readContract({
     address: usdcAddr,
-    abi: mockUsdcAbi,
+    abi: confidentialUsdcAbi,
     functionName: "balanceOf",
     args: [target],
   })) as bigint;
@@ -179,7 +179,7 @@ export async function ensureUsdcBalance(
   if (balance < minBalance) {
     const h = await mintClient.writeContract({
       address: usdcAddr,
-      abi: mockUsdcAbi,
+      abi: confidentialUsdcAbi,
       functionName: "mint",
       args: [target, mintAmount],
     });

@@ -330,8 +330,8 @@ contract ExamplePredictionMarket is ReceiverTemplate {
 
     /// @notice Debug-only: force-settle an event regardless of timestamps or status.
     /// @dev Bypasses eventClose check and SettlementRequested status requirement.
-    ///      Sets status directly to Settled. For testing only.
-    function forceSettle(uint256 eventId, Outcome outcome, uint16 confidenceBps, string calldata evidenceURI) public {
+    ///      Sets status directly to Settled. For testing only — restricted to owner.
+    function forceSettle(uint256 eventId, Outcome outcome, uint16 confidenceBps, string calldata evidenceURI) public onlyOwner {
         Event storage e = events[eventId];
         if (e.status == Status.Settled) revert AlreadySettled(e.status);
         if (outcome != Outcome.No && outcome != Outcome.Yes) revert InvalidOutcome();
