@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc --noEmit",
+    "e2e": "tsx e2e_tests/secret-marketplace-e2e.ts",
     "e2e:secret-marketplace": "tsx e2e_tests/secret-marketplace-e2e.ts",
     "e2e:user-balance-recording-fallback": "tsx e2e_tests/user-balance-recording-fallback-e2e.ts",
     "e2e:secret-marketplace-auction-closer": "tsx e2e_tests/secret-marketplace-auction-closer-e2e.ts",

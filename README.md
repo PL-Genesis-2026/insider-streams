@@ -111,7 +111,7 @@ pnpm wagmi
 
 ```bash
 # SecretMarketplace full lifecycle (TypeScript)
-pnpm e2e
+pnpm e2e:secret-marketplace
 
 # SimpleMarket + CRE settlement (bash)
 ./scripts/e2e_tests/simple-market-e2e.sh
