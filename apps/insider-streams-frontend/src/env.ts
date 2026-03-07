@@ -19,6 +19,10 @@ export const env = createEnv({
     NEXT_PUBLIC_SUBGRAPH_API_KEY: z.string().min(1).optional(),
     NEXT_PUBLIC_SUPABASE_URL: z.url(),
     NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
+    NEXT_PUBLIC_EXTERNAL_PREDICTION_MARKET_BASE_URL: z
+      .string()
+      .optional()
+      .default("http://localhost:3002"),
   },
   runtimeEnv: {
     OWNER_PK: process.env.OWNER_PK,
@@ -29,6 +33,8 @@ export const env = createEnv({
     NEXT_PUBLIC_SUBGRAPH_API_KEY: process.env.NEXT_PUBLIC_SUBGRAPH_API_KEY,
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    NEXT_PUBLIC_EXTERNAL_PREDICTION_MARKET_BASE_URL:
+      process.env.NEXT_PUBLIC_EXTERNAL_PREDICTION_MARKET_BASE_URL,
   },
   emptyStringAsUndefined: true,
 });

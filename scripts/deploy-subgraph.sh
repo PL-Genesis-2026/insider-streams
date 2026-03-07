@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# deploy-subgraph.sh — Build and deploy the SecretMarketplace subgraph
+# deploy-subgraph.sh — Build and deploy the insider-streams-2 subgraph
 #
-# Prompts for a contract address (defaults to the one in subgraph.yaml).
-# Always fetches the deployment block via RPC and updates both
-# subgraph.yaml and networks.json before deploying.
+# Supports multiple data sources in subgraph.yaml. Each data source has a
+# contract name, address, and startBlock. By default the script only prompts
+# for the SecretMarketplace address (the primary contract). Use --address to
+# skip the prompt.
 #
 # Usage: ./scripts/deploy-subgraph.sh [--skip-deploy] [--address <ADDRESS>]
 #   --skip-deploy  Only run codegen + build, skip deployment
-#   --address      Contract address (skips interactive prompt)
+#   --address      SecretMarketplace contract address (skips interactive prompt)
 
 set -euo pipefail
 
@@ -30,32 +31,78 @@ echo "════════════════════════�
 echo "  Deploy Subgraph"
 echo "═══════════════════════════════════════════════════════"
 
-# ─── Read current address from subgraph.yaml ────────────────────────────────
-CURRENT_ADDRESS=$(sed -n 's/.*address: "\(0x[^"]*\)".*/\1/p' "$SUBGRAPH_DIR/subgraph.yaml")
-CURRENT_START_BLOCK=$(sed -n 's/.*startBlock: \([0-9]*\)/\1/p' "$SUBGRAPH_DIR/subgraph.yaml")
+# ─── Read current data sources from subgraph.yaml ─────────────────────────
+# Uses python3 to parse YAML — handles multiple data sources correctly.
+read_datasource() {
+  local name="$1"
+  python3 -c "
+import sys, json
+
+# Minimal YAML parser for subgraph.yaml — reads dataSources array
+# and finds the entry matching the given name.
+name = sys.argv[1]
+path = sys.argv[2]
+
+with open(path) as f:
+    content = f.read()
+
+# Use a simple approach: find the data source block by name
+import re
+# Match 'name: <value>' then find 'address:' and 'startBlock:' nearby
+blocks = re.split(r'(?=  - kind: ethereum)', content)
+for block in blocks:
+    name_match = re.search(r'name:\s+(\S+)', block)
+    if not name_match or name_match.group(1) != name:
+        continue
+    addr_match = re.search(r'address:\s+\"(0x[0-9a-fA-F]+)\"', block)
+    start_match = re.search(r'startBlock:\s+(\d+)', block)
+    result = {
+        'address': addr_match.group(1) if addr_match else '',
+        'startBlock': start_match.group(1) if start_match else '',
+    }
+    print(json.dumps(result))
+    sys.exit(0)
+print('{}')
+" "$name" "$SUBGRAPH_DIR/subgraph.yaml"
+}
+
+SM_CONFIG=$(read_datasource "SecretMarketplace")
+SM_CURRENT_ADDRESS=$(echo "$SM_CONFIG" | python3 -c "import sys,json; print(json.load(sys.stdin).get('address',''))")
+SM_CURRENT_START_BLOCK=$(echo "$SM_CONFIG" | python3 -c "import sys,json; print(json.load(sys.stdin).get('startBlock',''))")
 
 echo ""
-echo "  Current config:"
-echo "    Address:    $CURRENT_ADDRESS"
-echo "    StartBlock: $CURRENT_START_BLOCK"
+echo "  Current SecretMarketplace config:"
+echo "    Address:    $SM_CURRENT_ADDRESS"
+echo "    StartBlock: $SM_CURRENT_START_BLOCK"
 
-# ─── Get contract address (interactive or from flag) ────────────────────────
+# Show other data sources for reference
+EPM_CONFIG=$(read_datasource "ExamplePredictionMarket")
+EPM_ADDRESS=$(echo "$EPM_CONFIG" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('address',''))" 2>/dev/null)
+if [ -n "$EPM_ADDRESS" ]; then
+  EPM_START_BLOCK=$(echo "$EPM_CONFIG" | python3 -c "import sys,json; print(json.load(sys.stdin).get('startBlock',''))")
+  echo ""
+  echo "  Current ExamplePredictionMarket config:"
+  echo "    Address:    $EPM_ADDRESS"
+  echo "    StartBlock: $EPM_START_BLOCK"
+fi
+
+# ─── Get SecretMarketplace contract address ───────────────────────────────
 if [ -n "$ADDRESS_ARG" ]; then
   CONTRACT_ADDRESS="$ADDRESS_ARG"
 else
   echo ""
-  read -rp "  Contract address [$CURRENT_ADDRESS]: " CONTRACT_ADDRESS
-  CONTRACT_ADDRESS="${CONTRACT_ADDRESS:-$CURRENT_ADDRESS}"
+  read -rp "  SecretMarketplace address [$SM_CURRENT_ADDRESS]: " CONTRACT_ADDRESS
+  CONTRACT_ADDRESS="${CONTRACT_ADDRESS:-$SM_CURRENT_ADDRESS}"
 fi
 
-# ─── Validate address format ─────────────────────────────────────────────────
+# ─── Validate address format ─────────────────────────────────────────────
 if [[ ! "$CONTRACT_ADDRESS" =~ ^0x[0-9a-fA-F]{40}$ ]]; then
   echo "  ERROR: Invalid address format: $CONTRACT_ADDRESS"
   echo "  Expected: 0x followed by 40 hex characters"
   exit 1
 fi
 
-# ─── Fetch deployment block via Blockscout API ───────────────────────────────
+# ─── Fetch deployment block via Blockscout API ───────────────────────────
 echo ""
 echo "  Fetching deployment block for $CONTRACT_ADDRESS..."
 
@@ -76,13 +123,45 @@ fi
 
 echo "  Found deployment block: $START_BLOCK"
 
-# ─── Update subgraph.yaml ──────────────────────────────────────────────────
+# ─── Update subgraph.yaml (targeted by data source name) ────────────────
 echo "  Updating subgraph.yaml..."
-sed -i.bak "s|address: \"$CURRENT_ADDRESS\"|address: \"$CONTRACT_ADDRESS\"|" "$SUBGRAPH_DIR/subgraph.yaml"
-sed -i.bak "s|startBlock: $CURRENT_START_BLOCK|startBlock: $START_BLOCK|" "$SUBGRAPH_DIR/subgraph.yaml"
-rm -f "$SUBGRAPH_DIR/subgraph.yaml.bak"
+python3 -c "
+import sys, re
 
-# ─── Update networks.json ──────────────────────────────────────────────────
+path = sys.argv[1]
+old_addr = sys.argv[2]
+new_addr = sys.argv[3]
+old_block = sys.argv[4]
+new_block = sys.argv[5]
+
+with open(path) as f:
+    content = f.read()
+
+# Split into data source blocks and only update the SecretMarketplace one
+blocks = re.split(r'(  - kind: ethereum)', content)
+result = []
+in_sm_block = False
+for i, block in enumerate(blocks):
+    if block.strip() == '- kind: ethereum':
+        result.append(block)
+        continue
+    # Check if this block contains 'name: SecretMarketplace'
+    if 'name: SecretMarketplace' in block:
+        block = block.replace(
+            'address: \"' + old_addr + '\"',
+            'address: \"' + new_addr + '\"',
+        )
+        block = block.replace(
+            'startBlock: ' + old_block,
+            'startBlock: ' + new_block,
+        )
+    result.append(block)
+
+with open(path, 'w') as f:
+    f.write(''.join(result))
+" "$SUBGRAPH_DIR/subgraph.yaml" "$SM_CURRENT_ADDRESS" "$CONTRACT_ADDRESS" "$SM_CURRENT_START_BLOCK" "$START_BLOCK"
+
+# ─── Update networks.json ────────────────────────────────────────────────
 echo "  Updating networks.json..."
 python3 -c "
 import json, sys
@@ -90,8 +169,9 @@ path = sys.argv[1]
 addr = sys.argv[2]
 block = int(sys.argv[3])
 data = json.load(open(path))
-data['sepolia']['SecretMarketplace']['address'] = addr
-data['sepolia']['SecretMarketplace']['startBlock'] = block
+if 'sepolia' in data and 'SecretMarketplace' in data['sepolia']:
+    data['sepolia']['SecretMarketplace']['address'] = addr
+    data['sepolia']['SecretMarketplace']['startBlock'] = block
 with open(path, 'w') as f:
     json.dump(data, f, indent=2)
     f.write('\n')
@@ -101,22 +181,28 @@ echo "  Updated config:"
 echo "    Address:    $CONTRACT_ADDRESS"
 echo "    StartBlock: $START_BLOCK"
 
-# ─── Copy ABI from Foundry artifacts ────────────────────────────────────────
+# ─── Copy ABIs from Foundry artifacts (only when address changed) ─────────
 echo ""
-echo "▶ Copying ABI..."
-if [ -f "$ARTIFACTS_DIR/SecretMarketplace.sol/SecretMarketplace.json" ]; then
-  python3 -c "
+if [ "$CONTRACT_ADDRESS" != "$SM_CURRENT_ADDRESS" ]; then
+  echo "▶ Copying ABIs (address changed)..."
+  for contract in SecretMarketplace ExamplePredictionMarket; do
+    artifact="$ARTIFACTS_DIR/$contract.sol/$contract.json"
+    if [ -f "$artifact" ]; then
+      python3 -c "
 import json, sys
 artifact = json.load(open(sys.argv[1]))
 json.dump(artifact['abi'], open(sys.argv[2], 'w'), indent=2)
-" "$ARTIFACTS_DIR/SecretMarketplace.sol/SecretMarketplace.json" \
-    "$SUBGRAPH_DIR/abis/SecretMarketplace.json"
-  echo "  Copied SecretMarketplace ABI → subgraphs/secrets-marketplace/abis/"
+" "$artifact" "$SUBGRAPH_DIR/abis/$contract.json"
+      echo "  Copied $contract ABI → subgraphs/secrets-marketplace/abis/"
+    else
+      echo "  Skipping $contract ABI (Foundry artifact not found)"
+    fi
+  done
 else
-  echo "  Skipping ABI copy (Foundry artifacts not found — run 'forge build --via-ir' first)"
+  echo "  Skipping ABI copy (address unchanged)"
 fi
 
-# ─── Install deps if needed ─────────────────────────────────────────────────
+# ─── Install deps if needed ──────────────────────────────────────────────
 cd "$SUBGRAPH_DIR"
 
 if [ ! -d "node_modules/@graphprotocol/graph-ts" ]; then
@@ -125,7 +211,7 @@ if [ ! -d "node_modules/@graphprotocol/graph-ts" ]; then
   npm install --no-fund --no-audit
 fi
 
-# ─── Codegen + Build ────────────────────────────────────────────────────────
+# ─── Codegen + Build ─────────────────────────────────────────────────────
 echo ""
 echo "▶ Running graph codegen..."
 npm run codegen
@@ -134,7 +220,7 @@ echo ""
 echo "▶ Running graph build..."
 npm run build
 
-# ─── Deploy ─────────────────────────────────────────────────────────────────
+# ─── Deploy ──────────────────────────────────────────────────────────────
 if [ "$SKIP_DEPLOY" = false ]; then
   CURRENT_VERSION=$(node -p "require('./package.json').version")
   npm version patch --no-git-tag-version > /dev/null

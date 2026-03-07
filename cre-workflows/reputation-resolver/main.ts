@@ -1,5 +1,5 @@
 import { cre, type Runtime, Runner, getNetwork, type CronPayload } from "@chainlink/cre-sdk";
-import { configSchema, CRON_SCHEDULE, type Config, OUTCOME_YES, OUTCOME_NO } from "./types";
+import { configSchema, CRON_SCHEDULE, type Config, OUTCOME_YES, OUTCOME_NO, OUTCOME_INCONCLUSIVE } from "./types";
 import { findSettledUnresolvedEvents } from "./monitor";
 import { fetchSecretsForAuctions, type SecretWithPrediction } from "./supabase";
 import { submitResolveReport, type AuctionResultTuple } from "./resolve";
@@ -49,7 +49,10 @@ const onTrigger = (runtime: Runtime<Config>): string => {
 
         const sellerPrediction = secret.event_data.outcome;
         let predictionOutcome: number;
-        if (
+        if (event.outcome === OUTCOME_INCONCLUSIVE) {
+          // Inconclusive markets penalize all predictions
+          predictionOutcome = 2; // PredictionWrong
+        } else if (
           (sellerPrediction === "yes" && event.outcome === OUTCOME_YES) ||
           (sellerPrediction === "no" && event.outcome === OUTCOME_NO)
         ) {
@@ -58,8 +61,9 @@ const onTrigger = (runtime: Runtime<Config>): string => {
           predictionOutcome = 2; // PredictionWrong
         }
 
+        const actualLabel = event.outcome === OUTCOME_INCONCLUSIVE ? "inconclusive" : event.outcome === OUTCOME_YES ? "yes" : "no";
         runtime.log(
-          `Auction ${auctionId}: predicted=${sellerPrediction}, actual=${event.outcome === OUTCOME_YES ? "yes" : "no"}, outcome=${predictionOutcome === 1 ? "correct" : "wrong"}`,
+          `Auction ${auctionId}: predicted=${sellerPrediction}, actual=${actualLabel}, outcome=${predictionOutcome === 1 ? "correct" : "wrong"}`,
         );
 
         results.push({ auctionId, predictionOutcome });

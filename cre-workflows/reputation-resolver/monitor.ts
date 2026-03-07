@@ -7,11 +7,11 @@ import {
   bytesToHex,
 } from "@chainlink/cre-sdk";
 import { encodeFunctionData, decodeFunctionResult } from "viem";
-import { type Config, secretMarketplaceAbi, examplePredictionMarketAbi, STATUS_SETTLED, OUTCOME_NO, OUTCOME_YES } from "./types";
+import { type Config, secretMarketplaceAbi, examplePredictionMarketAbi, STATUS_SETTLED, STATUS_NEEDS_MANUAL, OUTCOME_NO, OUTCOME_YES, OUTCOME_INCONCLUSIVE } from "./types";
 
 export interface SettledEvent {
   eventId: bigint;
-  outcome: number; // 1=No, 2=Yes
+  outcome: number; // 1=No, 2=Yes, 3=Inconclusive
   auctionIds: bigint[];
 }
 
@@ -109,13 +109,16 @@ export function findSettledUnresolvedEvents(
       liquidityWithdrawn: boolean;
     };
 
-    if (eventData.status !== STATUS_SETTLED) {
+    const isSettled = eventData.status === STATUS_SETTLED;
+    const isInconclusive = eventData.status === STATUS_NEEDS_MANUAL && eventData.outcome === OUTCOME_INCONCLUSIVE;
+
+    if (!isSettled && !isInconclusive) {
       runtime.log(`Event ${eventId}: not settled (status=${eventData.status}), skipping`);
       continue;
     }
 
-    if (eventData.outcome !== OUTCOME_YES && eventData.outcome !== OUTCOME_NO) {
-      runtime.log(`Event ${eventId}: outcome=${eventData.outcome} (not Yes/No), skipping`);
+    if (!isInconclusive && eventData.outcome !== OUTCOME_YES && eventData.outcome !== OUTCOME_NO) {
+      runtime.log(`Event ${eventId}: outcome=${eventData.outcome} (not Yes/No/Inconclusive), skipping`);
       continue;
     }
 

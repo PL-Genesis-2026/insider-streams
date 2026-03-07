@@ -12,7 +12,10 @@ import {
   Trophy,
   User,
 } from "lucide-react";
-import { SECRET_MARKETPLACE_ADDRESS } from "@private-streams/common";
+import {
+  SECRET_MARKETPLACE_ADDRESS,
+  EXAMPLE_PREDICTION_MARKET_NAME,
+} from "@private-streams/common";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,13 +24,13 @@ import {
   CardHeader,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { SecretRevealCard } from "@/components/secret-reveal";
 import { AuctionBidGate } from "@/components/funding/auction-bid-gate";
 import {
   getAuctionDetail,
   type AuctionDetailBid,
   type AuctionDetailData,
 } from "@/lib/auction-detail";
-import type { JsonValue } from "@/lib/supabase/secrets";
 import { cn } from "@/lib/utils";
 
 type AuctionDetailPageProps = {
@@ -67,14 +70,6 @@ function formatCurrency(amount: number | undefined) {
 
 function formatSignedNumber(value: number) {
   return value > 0 ? `+${value}` : String(value);
-}
-
-function formatOutcome(value: "yes" | "no" | undefined) {
-  if (!value) {
-    return undefined;
-  }
-
-  return value === "yes" ? "Yes" : "No";
 }
 
 function shortHash(hash: string) {
@@ -130,15 +125,6 @@ function buildTimeline(auction: AuctionDetailData) {
       label: "Reputation updated",
       detail: `Score ${update.newScore} (${formatSignedNumber(update.scoreChange)})`,
       timestamp: update.timestamp,
-    });
-  }
-
-  if (auction.secretRecord) {
-    timeline.push({
-      type: "settled",
-      label: "Secret record updated",
-      detail: "Supabase secret record updated",
-      timestamp: auction.secretRecord.updatedAt,
     });
   }
 
@@ -250,21 +236,7 @@ function BidRow({
   );
 }
 
-function JsonPreview({ value }: { value?: JsonValue }) {
-  if (value === undefined || value === null) {
-    return (
-      <p className="text-sm leading-7 text-muted-foreground">
-        No secret payload available for this auction yet.
-      </p>
-    );
-  }
-
-  return (
-    <pre className="overflow-x-auto rounded-lg bg-muted/40 p-4 text-xs leading-6 text-muted-foreground">
-      {JSON.stringify(value, null, 2)}
-    </pre>
-  );
-}
+export const dynamic = "force-dynamic";
 
 export default async function AuctionDetailPage({ params }: AuctionDetailPageProps) {
   const { auctionId } = await params;
@@ -306,12 +278,9 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
             <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.24em] text-accent">
               <span>Auction #{auction.auctionId}</span>
               <span className="text-muted-foreground/40">/</span>
-              <span>{auction.marketplace ?? `Market #${auction.marketId}`}</span>
+              <span>{EXAMPLE_PREDICTION_MARKET_NAME}</span>
             </div>
             <Badge variant={statusVariant}>{auction.status}</Badge>
-            {formatOutcome(auction.outcome) ? (
-              <Badge variant="outline">{formatOutcome(auction.outcome)}</Badge>
-            ) : null}
             {auction.endTime ? (
               <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
                 <Clock className="size-3.5" />
@@ -381,7 +350,7 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
                 <Label>Secret record</Label>
               </CardHeader>
               <CardContent>
-                <JsonPreview value={auction.secretRecord?.secretData} />
+                <SecretRevealCard auctionId={auction.auctionId} />
               </CardContent>
             </Card>
           </div>

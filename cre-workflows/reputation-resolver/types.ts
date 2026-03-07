@@ -25,6 +25,8 @@ export const ACTION_RECORD_EVENT_OUTCOME = 0x02;
 // ExamplePredictionMarket outcome enum values
 export const OUTCOME_NO = 1;
 export const OUTCOME_YES = 2;
+export const OUTCOME_INCONCLUSIVE = 3;
 
 // ExamplePredictionMarket status enum values
 export const STATUS_SETTLED = 2;
+export const STATUS_NEEDS_MANUAL = 3;
