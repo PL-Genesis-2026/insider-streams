@@ -13,7 +13,7 @@
 import stringify from "fast-json-stable-stringify";
 import { recoverMessageAddress } from "viem";
 
-const SIGNATURE_MAX_AGE_SECONDS = 60;
+const SIGNATURE_MAX_AGE_SECONDS = 600;
 
 export type VerifySuccess<T extends Record<string, unknown>> = {
   ok: true;
