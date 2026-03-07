@@ -10,6 +10,7 @@ const CLOSED_AUCTION_CARD_LIMIT = 4;
 
 export default async function Home() {
   let data: Awaited<ReturnType<typeof getHomepageAuctions>> | null = null;
+  let auctionsUnavailable = false;
 
   try {
     data = await getHomepageAuctions({
@@ -17,6 +18,7 @@ export default async function Home() {
       closedLimit: CLOSED_AUCTION_CARD_LIMIT,
     });
   } catch (error) {
+    auctionsUnavailable = true;
     console.error("Failed to load homepage auctions", error);
   }
 
@@ -28,11 +30,11 @@ export default async function Home() {
       <main>
         <section className="relative mx-auto w-full max-w-7xl overflow-hidden px-6 pt-16 pb-12 md:px-10 md:pt-24 md:pb-20">
           <div
-            className="pointer-events-none absolute top-[6%] right-[2%] h-[76%] w-[48%] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(195,146,110,0.16),transparent_68%)] blur-2xl"
+            className="pointer-events-none absolute top-[6%] right-[2%] hidden h-[76%] w-[48%] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(195,146,110,0.16),transparent_68%)] blur-2xl md:block"
             aria-hidden="true"
           />
           <div
-            className="pointer-events-none absolute top-0 right-0 bottom-0 left-[38%] select-none mix-blend-lighten"
+            className="pointer-events-none absolute top-0 right-0 bottom-0 left-[38%] hidden select-none mix-blend-lighten md:block"
             aria-hidden="true"
             style={{
               maskImage:
@@ -70,7 +72,7 @@ export default async function Home() {
             <div className="flex flex-wrap items-center gap-x-8 gap-y-4 pt-2 text-sm text-muted-foreground">
               <div>
                 <span className="font-serif text-[2rem] leading-none font-medium tracking-[-0.04em] text-foreground">
-                  {openAuctions.length}
+                  {auctionsUnavailable ? "?" : openAuctions.length}
                 </span>
                 <span className="ml-2 text-xs uppercase tracking-[0.22em] text-accent">
                   Open
@@ -79,7 +81,7 @@ export default async function Home() {
               <div className="h-6 w-px bg-border" />
               <div>
                 <span className="font-serif text-[2rem] leading-none font-medium tracking-[-0.04em] text-foreground">
-                  {closedAuctions.length}
+                  {auctionsUnavailable ? "?" : closedAuctions.length}
                 </span>
                 <span className="ml-2 text-xs uppercase tracking-[0.22em] text-accent">
                   Closed
@@ -88,7 +90,7 @@ export default async function Home() {
               <div className="h-6 w-px bg-border" />
               <div>
                 <span className="font-serif text-[2rem] leading-none font-medium tracking-[-0.04em] text-foreground">
-                  {openAuctions.length + closedAuctions.length}
+                  {auctionsUnavailable ? "?" : openAuctions.length + closedAuctions.length}
                 </span>
                 <span className="ml-2 text-xs uppercase tracking-[0.22em] text-accent">
                   Total listings
@@ -111,10 +113,17 @@ export default async function Home() {
                 Open signals
               </h2>
             </div>
-            <Badge variant="accent">{openAuctions.length} active</Badge>
+            <Badge variant={auctionsUnavailable ? "outline" : "accent"}>
+              {auctionsUnavailable ? "Subgraph unavailable" : `${openAuctions.length} active`}
+            </Badge>
           </div>
 
-          {openAuctions.length > 0 ? (
+          {auctionsUnavailable ? (
+            <div className="rounded-[calc(var(--radius)+6px)] border border-destructive/35 bg-destructive/5 p-6 text-sm leading-7 text-muted-foreground">
+              Auctions are temporarily unavailable because the configured subgraph
+              endpoint did not return data.
+            </div>
+          ) : openAuctions.length > 0 ? (
             <div className="grid gap-5">
               {openAuctions.map((auction) => (
                 <AuctionCard
