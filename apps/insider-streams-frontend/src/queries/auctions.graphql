@@ -33,14 +33,13 @@ query RecentClosedAuctions {
   }
 }
 
-query RecentForceClosedAuctions {
-  auctionForceCloseds(first: 10, orderBy: blockTimestamp, orderDirection: desc) {
+query RecentCancelledAuctions {
+  auctionCancelleds(first: 10, orderBy: blockTimestamp, orderDirection: desc) {
     id
     auctionId
     sellerId
-    heldAmount
+    cancelledBidAmount
     eventId
-    reputationDelta
     blockTimestamp
     transactionHash
   }

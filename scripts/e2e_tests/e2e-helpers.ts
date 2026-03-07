@@ -6,22 +6,38 @@
  *   - user-balance-recording-fallback-e2e.ts
  *   - secret-marketplace-auction-closer-e2e.ts
  *   - simple-market-e2e.ts
+ *   - reputation-resolver-e2e.ts
+ *   - force-close-handler-e2e.ts
  */
 
 import {
   confidentialUsdcAbi,
+  secretMarketplaceAbi,
 } from "@private-streams/common";
+import type { Database } from "@private-streams/common";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   createPublicClient,
   createWalletClient,
   formatUnits,
   http,
+  parseEventLogs,
+  type Abi,
   type Address,
   type Hex,
   type TransactionReceipt,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
+
+// ─── Shared constants ──────────────────────────────────────────────────────
+
+export const USDC_DECIMALS = 6;
+export const MIN_BALANCE = 10_000_000n;           // 10 USDC
+export const MINT_AMOUNT = 10_000_000_000n;       // 10,000 USDC
+export const APPROVAL_AMOUNT = 100_000_000_000n;  // 100,000 USDC blanket
+export const MIN_ALLOWANCE = 10_000_000n;         // 10 USDC — threshold to trigger approve
+
 // ─── Environment ────────────────────────────────────────────────────────────
 
 export function envRequired(name: string): string {
@@ -148,9 +164,40 @@ export async function waitForTimestamp(
   console.log(`  ok ${label} reached`);
 }
 
-// ─── USDC balance helper ────────────────────────────────────────────────────
+// ─── Polling ────────────────────────────────────────────────────────────────
 
-const USDC_DECIMALS = 6;
+/**
+ * Poll a condition until it returns truthy or maxAttempts is exceeded.
+ * Supports optional exponential backoff (doubles interval each attempt, capped at 30s).
+ */
+export async function poll<T>(
+  fn: () => Promise<T | null | undefined>,
+  label: string,
+  opts?: {
+    maxAttempts?: number;
+    intervalMs?: number;
+    backoff?: boolean;
+  },
+): Promise<T> {
+  const maxAttempts = opts?.maxAttempts ?? 30;
+  const baseInterval = opts?.intervalMs ?? 10_000;
+  const useBackoff = opts?.backoff ?? false;
+
+  for (let i = 1; i <= maxAttempts; i++) {
+    console.log(`  Polling ${label} (attempt ${i}/${maxAttempts})...`);
+    const result = await fn();
+    if (result) return result;
+    if (i < maxAttempts) {
+      const delay = useBackoff
+        ? Math.min(baseInterval * Math.pow(2, i - 1), 30_000)
+        : baseInterval;
+      await sleep(delay);
+    }
+  }
+  throw new Error(`Timed out polling for ${label}`);
+}
+
+// ─── USDC helpers ───────────────────────────────────────────────────────────
 
 /**
  * Check USDC balance, mint if below threshold.
@@ -183,6 +230,140 @@ export async function ensureUsdcBalance(
       `  ok ${target.slice(0, 8)}... has ${formatUnits(balance, USDC_DECIMALS)} USDC`,
     );
   }
+}
+
+/**
+ * Check USDC allowance for a spender, approve if below threshold.
+ */
+export async function ensureUsdcApproval(
+  publicClient: E2EPublicClient,
+  walletClient: E2EWalletClient,
+  usdcAddr: Address,
+  owner: Address,
+  spender: Address,
+  label: string,
+): Promise<void> {
+  const allowance = (await publicClient.readContract({
+    address: usdcAddr,
+    abi: confidentialUsdcAbi,
+    functionName: "allowance",
+    args: [owner, spender],
+  })) as bigint;
+
+  if (allowance < MIN_ALLOWANCE) {
+    const h = await walletClient.writeContract({
+      address: usdcAddr,
+      abi: confidentialUsdcAbi,
+      functionName: "approve",
+      args: [spender, APPROVAL_AMOUNT],
+    });
+    await waitForTx(publicClient, h, `${label} approval`);
+  } else {
+    console.log(`  ok ${label} allowance sufficient`);
+  }
+}
+
+// ─── Event log parsing ──────────────────────────────────────────────────────
+
+/**
+ * Parse event logs from a receipt and return the first matching event's args.
+ * Asserts at least one event was found.
+ */
+export function parseFirstEventLog(
+  receipt: TransactionReceipt,
+  abi: Abi,
+  eventName: string,
+): Record<string, unknown> {
+  const logs = parseEventLogs({ abi: abi as Abi, logs: receipt.logs, eventName });
+  assert(logs.length > 0, `No ${eventName} event found in receipt`);
+  return (logs[0] as { args: Record<string, unknown> }).args;
+}
+
+// ─── Contract read helpers ──────────────────────────────────────────────────
+
+/**
+ * Read the ExamplePredictionMarket address from SecretMarketplace.marketplace().
+ */
+export async function readSimpleMarketAddress(
+  publicClient: E2EPublicClient,
+  secretMarketplace: Address,
+): Promise<Address> {
+  return (await publicClient.readContract({
+    address: secretMarketplace,
+    abi: secretMarketplaceAbi,
+    functionName: "marketplace",
+  })) as Address;
+}
+
+// ─── Supabase helpers ───────────────────────────────────────────────────────
+
+/**
+ * Insert the standard set of Supabase records needed for an auction bid test:
+ * seller, secret, deposit transfer, and private bid.
+ *
+ * Use `skipDeposit: true` when the bidder already has a deposit from a prior call
+ * (e.g., reputation-resolver's second auction).
+ */
+export async function setupSupabaseAuctionBid(
+  supabase: SupabaseClient<Database>,
+  opts: {
+    sellerName: string;
+    sellerAddress: string;
+    auctionId: string;
+    secretData: string;
+    eventData?: Record<string, unknown>;
+    bidderAddress: string;
+    bidAmount: bigint;
+    depositTxId: string;
+    depositAmount: bigint;
+    skipDeposit?: boolean;
+  },
+): Promise<void> {
+  // Upsert seller
+  const { error: sellerErr } = await supabase
+    .from("sellers")
+    .upsert({ id: opts.sellerName, address: opts.sellerAddress.toLowerCase() }, { onConflict: "id" });
+  assert(!sellerErr, `Failed to upsert seller: ${sellerErr?.message}`);
+  console.log(`  ok Seller upserted: ${opts.sellerName} -> ${opts.sellerAddress}`);
+
+  // Upsert secret
+  const secretRow: Record<string, unknown> = {
+    auction_id: opts.auctionId,
+    secret_data: opts.secretData,
+    seller_id: opts.sellerName,
+  };
+  if (opts.eventData) secretRow.event_data = opts.eventData;
+  const { error: secretErr } = await supabase
+    .from("secrets")
+    .upsert(secretRow as never, { onConflict: "auction_id" });
+  assert(!secretErr, `Failed to insert secret: ${secretErr?.message}`);
+  console.log(`  ok Secret inserted for auction ${opts.auctionId}`);
+
+  // Insert deposit transfer (unless skipped)
+  if (!opts.skipDeposit) {
+    const { error: depositErr } = await supabase
+      .from("transfers")
+      .insert({
+        transaction_id: opts.depositTxId,
+        user_address: opts.bidderAddress.toLowerCase(),
+        amount: opts.depositAmount.toString(),
+        status: "confirmed",
+      });
+    assert(!depositErr, `Failed to insert deposit transfer: ${depositErr?.message}`);
+    console.log(`  ok Deposit: ${formatUnits(opts.depositAmount, USDC_DECIMALS)} USDC for bidder`);
+  }
+
+  // Insert active private bid
+  const { error: bidErr } = await supabase
+    .from("private_bids")
+    .insert({
+      auction_id: opts.auctionId,
+      bidder_address: opts.bidderAddress.toLowerCase(),
+      amount: opts.bidAmount.toString(),
+      status: "active",
+    });
+  assert(!bidErr, `Failed to insert private_bid: ${bidErr?.message}`);
+  console.log(`  ok Private bid: ${formatUnits(opts.bidAmount, USDC_DECIMALS)} USDC from bidder`);
 }
 
 // ─── CRE CLI helper ─────────────────────────────────────────────────────────

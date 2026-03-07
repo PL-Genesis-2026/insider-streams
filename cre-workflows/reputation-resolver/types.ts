@@ -20,7 +20,7 @@ export const configSchema = z.object({
 
 export type Config = z.infer<typeof configSchema>;
 
-export const ACTION_RESOLVE_EVENT = 0x02;
+export const ACTION_RECORD_EVENT_OUTCOME = 0x02;
 
 // ExamplePredictionMarket outcome enum values
 export const OUTCOME_NO = 1;

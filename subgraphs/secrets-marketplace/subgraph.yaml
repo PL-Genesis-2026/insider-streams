@@ -8,9 +8,9 @@ dataSources:
     name: SecretMarketplace
     network: sepolia
     source:
-      address: "0xCE8607e616D7b76C69Be5464ee2f89DCD21aC854"
+      address: "0x6420943F07c8427C4E6f27BDa09cB711e8BB2A93"
       abi: SecretMarketplace
-      startBlock: 10401680
+      startBlock: 10403122
 
     mapping:
       kind: ethereum/events
@@ -19,7 +19,7 @@ dataSources:
       entities:
         - AuctionClosed
         - AuctionCreated
-        - AuctionForceClosed
+        - AuctionCancelled
         - BidPlaced
         - ExpectedAuthorUpdated
         - ExpectedWorkflowIdUpdated
@@ -27,7 +27,7 @@ dataSources:
         - ExternalEventResolved
         - ForwarderAddressUpdated
         - OwnershipTransferred
-        - ReputationUpdated
+        - SellerReputationScoreUpdated
         - SecurityWarning
         - SellerRegistered
         - MarketplaceUpdated
@@ -39,8 +39,8 @@ dataSources:
           handler: handleAuctionClosed
         - event: AuctionCreated(indexed uint256,indexed uint256,string,string,uint256)
           handler: handleAuctionCreated
-        - event: AuctionForceClosed(indexed uint256,uint256,string,uint256,int8)
-          handler: handleAuctionForceClosed
+        - event: AuctionCancelled(indexed uint256,uint256,string,uint256)
+          handler: handleAuctionCancelled
         - event: BidPlaced(indexed uint256,uint256,uint256)
           handler: handleBidPlaced
         - event: ExpectedAuthorUpdated(indexed address,indexed address)
@@ -55,8 +55,8 @@ dataSources:
           handler: handleForwarderAddressUpdated
         - event: OwnershipTransferred(indexed address,indexed address)
           handler: handleOwnershipTransferred
-        - event: ReputationUpdated(string,indexed uint256,int8,int256)
-          handler: handleReputationUpdated
+        - event: SellerReputationScoreUpdated(string,indexed uint256,uint8,int8,int256)
+          handler: handleSellerReputationScoreUpdated
         - event: SecurityWarning(string)
           handler: handleSecurityWarning
         - event: SellerRegistered(string)

@@ -42,10 +42,10 @@ All scripts require `PRIVATE_KEY` and `RPC_URL` env vars. Run with `forge script
 
 | Script | Purpose | Extra env vars |
 |--------|---------|----------------|
-| `CreateAuction.s.sol` | Create an auction | `SECRET_MARKETPLACE_ADDRESS`, `EVENT_ID`, `SELLER_NAME`, `EVENT_TITLE`, `AUCTION_DURATION` |
+| `CreateAuction.s.sol` | Create an auction | `SECRET_MARKETPLACE_ADDRESS`, `EVENT_ID`, `SELLER_ID`, `EVENT_TITLE`, `AUCTION_DURATION` |
 | `PlaceBid.s.sol` | Place a bid | `SECRET_MARKETPLACE_ADDRESS`, `CONFIDENTIAL_USDC_ADDRESS`, `AUCTION_ID`, `BID_AMOUNT` |
 | `CloseAuction.s.sol` | Close an expired auction | `SECRET_MARKETPLACE_ADDRESS`, `AUCTION_ID` |
-| `ForceCloseAuction.s.sol` | Force-close an auction | `SECRET_MARKETPLACE_ADDRESS`, `AUCTION_ID`, `REPUTATION_DELTA` |
+| `CancelAuction.s.sol` | Cancel an auction | `SECRET_MARKETPLACE_ADDRESS`, `AUCTION_ID`, `PREDICTION_OUTCOME` |
 
 ---
 

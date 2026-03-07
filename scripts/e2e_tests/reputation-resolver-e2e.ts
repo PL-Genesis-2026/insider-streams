@@ -8,7 +8,7 @@
  *   4. Insert Supabase records (sellers, secrets with event_data, deposits, private_bids)
  *   5. Waits for auctions to expire -> CRE auction-closer closes them
  *   6. Waits for prediction market event to close + force settles it to "Yes"
- *   7. Runs CRE reputation-resolver (dry run first, then broadcast)
+ *   7. Runs CRE reputation-resolver (broadcast)
  *   8. Verifies: SellerA reputation +1, SellerB reputation -1, event marked resolved
  *
  * NOTE: No dry run before broadcast for auction-closer — CRE simulation makes
@@ -32,18 +32,23 @@ import {
   CONFIDENTIAL_USDC_ADDRESS,
   SECRET_MARKETPLACE_ADDRESS,
   examplePredictionMarketAbi,
-  confidentialUsdcAbi,
   secretMarketplaceAbi,
 } from "@private-streams/common";
 import type { Database } from "@private-streams/common";
-import { parseEventLogs, formatUnits, type Address, type Hex } from "viem";
+import type { Address, Hex } from "viem";
 import {
+  MIN_BALANCE,
+  MINT_AMOUNT,
   assert,
   banner,
   createClients,
+  ensureUsdcApproval,
   ensureUsdcBalance,
   envRequired,
+  parseFirstEventLog,
+  readSimpleMarketAddress,
   runCRE,
+  setupSupabaseAuctionBid,
   step,
   waitForTimestamp,
   waitForTx,
@@ -70,16 +75,10 @@ const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_KEY);
 const SELLER_A = "E2EReputationSellerA";
 const SELLER_B = "E2EReputationSellerB";
 const BID_AMOUNT = 1_000_000n; // 1 USDC
-const AUCTION_DURATION = 90; // 90 seconds — needs headroom for setup steps + remote latency
-const EVENT_DURATION = BigInt(120); // 120 seconds — must outlast auctions
+const AUCTION_DURATION = 60; // 60 seconds — needs headroom for setup steps + remote latency
+const EVENT_DURATION = BigInt(90); // 90 seconds — must outlast auctions
 const DEPOSIT_AMOUNT = BID_AMOUNT * 10n; // 10 USDC headroom
 const QUESTION = "Reputation resolver E2E test event";
-
-const MIN_BALANCE = 10_000_000n; // 10 USDC
-const MINT_AMOUNT = 10_000_000_000n; // 10,000 USDC
-const APPROVAL_AMOUNT = 100_000_000_000n; // 100,000 USDC blanket
-const MIN_ALLOWANCE = 10_000_000n; // 10 USDC — threshold to trigger approve
-const USDC_DECIMALS = 6;
 
 // Unique transaction ID for the mock deposit (avoids collisions with real data)
 const DEPOSIT_TX_ID = `e2e-reputation-resolver-deposit-${Date.now()}`;
@@ -88,11 +87,7 @@ const DEPOSIT_TX_ID = `e2e-reputation-resolver-deposit-${Date.now()}`;
 
 async function main() {
   // Read the ExamplePredictionMarket address from SecretMarketplace
-  const SIMPLE_MARKET = (await publicClient.readContract({
-    address: SECRET_MARKETPLACE,
-    abi: secretMarketplaceAbi,
-    functionName: "marketplace",
-  })) as Address;
+  const SIMPLE_MARKET = await readSimpleMarketAddress(publicClient, SECRET_MARKETPLACE);
 
   banner("Reputation Resolver E2E Test");
   console.log(`  Owner (seller):    ${ownerAccount.address}`);
@@ -115,41 +110,22 @@ async function main() {
 
   // ── Step 2: Approve USDC (only if needed) ──────────────────────────────────
   step("Ensuring USDC approvals...");
-  const allowanceSM = await publicClient.readContract({
-    address: CONFIDENTIAL_USDC,
-    abi: confidentialUsdcAbi,
-    functionName: "allowance",
-    args: [ownerAccount.address, SECRET_MARKETPLACE],
-  });
-  if (allowanceSM < MIN_ALLOWANCE) {
-    const h = await ownerClient.writeContract({
-      address: CONFIDENTIAL_USDC,
-      abi: confidentialUsdcAbi,
-      functionName: "approve",
-      args: [SECRET_MARKETPLACE, APPROVAL_AMOUNT],
-    });
-    await waitForTx(publicClient, h, "Owner approved SecretMarketplace");
-  } else {
-    console.log(`  ok SecretMarketplace allowance sufficient`);
-  }
-
-  const allowanceMarket = await publicClient.readContract({
-    address: CONFIDENTIAL_USDC,
-    abi: confidentialUsdcAbi,
-    functionName: "allowance",
-    args: [ownerAccount.address, SIMPLE_MARKET],
-  });
-  if (allowanceMarket < MIN_ALLOWANCE) {
-    const h = await ownerClient.writeContract({
-      address: CONFIDENTIAL_USDC,
-      abi: confidentialUsdcAbi,
-      functionName: "approve",
-      args: [SIMPLE_MARKET, APPROVAL_AMOUNT],
-    });
-    await waitForTx(publicClient, h, "Owner approved ExamplePredictionMarket");
-  } else {
-    console.log(`  ok ExamplePredictionMarket allowance sufficient`);
-  }
+  await ensureUsdcApproval(
+    publicClient,
+    ownerClient,
+    CONFIDENTIAL_USDC,
+    ownerAccount.address,
+    SECRET_MARKETPLACE,
+    "SecretMarketplace",
+  );
+  await ensureUsdcApproval(
+    publicClient,
+    ownerClient,
+    CONFIDENTIAL_USDC,
+    ownerAccount.address,
+    SIMPLE_MARKET,
+    "ExamplePredictionMarket",
+  );
 
   // ── Step 3: Register sellers on-chain ──────────────────────────────────────
   step("Registering sellers on-chain...");
@@ -186,12 +162,8 @@ async function main() {
     createEventHash,
     "Event created",
   );
-  const eventLogs = parseEventLogs({
-    abi: examplePredictionMarketAbi,
-    logs: eventReceipt.logs,
-    eventName: "EventCreated",
-  });
-  const eventId = eventLogs[0].args.eventId;
+  const eventArgs = parseFirstEventLog(eventReceipt, examplePredictionMarketAbi, "EventCreated");
+  const eventId = eventArgs.eventId as bigint;
   console.log(`  Event ID: ${eventId}`);
 
   // ── Step 5: Create auction A (SellerA predicts "yes") ──────────────────────
@@ -210,12 +182,8 @@ async function main() {
     createAuctionAHash,
     "Auction A created",
   );
-  const auctionALogs = parseEventLogs({
-    abi: secretMarketplaceAbi,
-    logs: auctionAReceipt.logs,
-    eventName: "AuctionCreated",
-  });
-  const auctionIdA = auctionALogs[0].args.auctionId;
+  const auctionAArgs = parseFirstEventLog(auctionAReceipt, secretMarketplaceAbi, "AuctionCreated");
+  const auctionIdA = auctionAArgs.auctionId as bigint;
   const auctionIdAStr = auctionIdA.toString();
   console.log(`  Auction A ID: ${auctionIdA}`);
 
@@ -235,12 +203,8 @@ async function main() {
     createAuctionBHash,
     "Auction B created",
   );
-  const auctionBLogs = parseEventLogs({
-    abi: secretMarketplaceAbi,
-    logs: auctionBReceipt.logs,
-    eventName: "AuctionCreated",
-  });
-  const auctionIdB = auctionBLogs[0].args.auctionId;
+  const auctionBArgs = parseFirstEventLog(auctionBReceipt, secretMarketplaceAbi, "AuctionCreated");
+  const auctionIdB = auctionBArgs.auctionId as bigint;
   const auctionIdBStr = auctionIdB.toString();
   console.log(`  Auction B ID: ${auctionIdB}`);
 
@@ -281,89 +245,42 @@ async function main() {
   // ── Step 8: Insert Supabase records ────────────────────────────────────────
   step("Setting up Supabase records (sellers, secrets, deposit, private_bids)...");
 
-  // Upsert seller A
-  const { error: sellerAErr } = await supabase
-    .from("sellers")
-    .upsert({ id: SELLER_A, address: ownerAccount.address.toLowerCase() }, { onConflict: "id" });
-  assert(!sellerAErr, `Failed to upsert seller A: ${sellerAErr?.message}`);
-  console.log(`  ok Seller A upserted: ${SELLER_A} -> ${ownerAccount.address}`);
+  // Seller A + deposit + bid A
+  await setupSupabaseAuctionBid(supabase, {
+    sellerName: SELLER_A,
+    sellerAddress: ownerAccount.address,
+    auctionId: auctionIdAStr,
+    secretData: "E2E reputation test secret A",
+    eventData: {
+      marketplace: "ExamplePredictionMarket",
+      event: QUESTION,
+      marketId: Number(eventId),
+      outcome: "yes",
+    },
+    bidderAddress: bidderAccount!.address,
+    bidAmount: BID_AMOUNT,
+    depositTxId: DEPOSIT_TX_ID,
+    depositAmount: DEPOSIT_AMOUNT,
+  });
 
-  // Upsert seller B
-  const { error: sellerBErr } = await supabase
-    .from("sellers")
-    .upsert({ id: SELLER_B, address: ownerAccount.address.toLowerCase() }, { onConflict: "id" });
-  assert(!sellerBErr, `Failed to upsert seller B: ${sellerBErr?.message}`);
-  console.log(`  ok Seller B upserted: ${SELLER_B} -> ${ownerAccount.address}`);
-
-  // Insert secret for Auction A — predicts "yes"
-  const { error: secretAErr } = await supabase
-    .from("secrets")
-    .upsert({
-      auction_id: auctionIdAStr,
-      secret_data: "E2E reputation test secret A",
-      seller_id: SELLER_A,
-      event_data: {
-        marketplace: "ExamplePredictionMarket",
-        event: QUESTION,
-        marketId: Number(eventId),
-        outcome: "yes",
-      },
-    }, { onConflict: "auction_id" });
-  assert(!secretAErr, `Failed to insert secret A: ${secretAErr?.message}`);
-  console.log(`  ok Secret A inserted for auction ${auctionIdAStr} (outcome: yes)`);
-
-  // Insert secret for Auction B — predicts "no"
-  const { error: secretBErr } = await supabase
-    .from("secrets")
-    .upsert({
-      auction_id: auctionIdBStr,
-      secret_data: "E2E reputation test secret B",
-      seller_id: SELLER_B,
-      event_data: {
-        marketplace: "ExamplePredictionMarket",
-        event: QUESTION,
-        marketId: Number(eventId),
-        outcome: "no",
-      },
-    }, { onConflict: "auction_id" });
-  assert(!secretBErr, `Failed to insert secret B: ${secretBErr?.message}`);
-  console.log(`  ok Secret B inserted for auction ${auctionIdBStr} (outcome: no)`);
-
-  // Insert confirmed deposit transfer so bidder has available balance
-  const { error: depositErr } = await supabase
-    .from("transfers")
-    .insert({
-      transaction_id: DEPOSIT_TX_ID,
-      user_address: bidderAccount!.address.toLowerCase(),
-      amount: DEPOSIT_AMOUNT.toString(),
-      status: "confirmed",
-    });
-  assert(!depositErr, `Failed to insert deposit transfer: ${depositErr?.message}`);
-  console.log(`  ok Deposit: ${formatUnits(DEPOSIT_AMOUNT, USDC_DECIMALS)} USDC for bidder`);
-
-  // Insert active private bid for Auction A
-  const { error: bidAErr } = await supabase
-    .from("private_bids")
-    .insert({
-      auction_id: auctionIdAStr,
-      bidder_address: bidderAccount!.address.toLowerCase(),
-      amount: BID_AMOUNT.toString(),
-      status: "active",
-    });
-  assert(!bidAErr, `Failed to insert private_bid A: ${bidAErr?.message}`);
-  console.log(`  ok Private bid A: ${formatUnits(BID_AMOUNT, USDC_DECIMALS)} USDC from bidder`);
-
-  // Insert active private bid for Auction B
-  const { error: bidBErr } = await supabase
-    .from("private_bids")
-    .insert({
-      auction_id: auctionIdBStr,
-      bidder_address: bidderAccount!.address.toLowerCase(),
-      amount: BID_AMOUNT.toString(),
-      status: "active",
-    });
-  assert(!bidBErr, `Failed to insert private_bid B: ${bidBErr?.message}`);
-  console.log(`  ok Private bid B: ${formatUnits(BID_AMOUNT, USDC_DECIMALS)} USDC from bidder`);
+  // Seller B + bid B only (skip deposit — bidder already has one from first call)
+  await setupSupabaseAuctionBid(supabase, {
+    sellerName: SELLER_B,
+    sellerAddress: ownerAccount.address,
+    auctionId: auctionIdBStr,
+    secretData: "E2E reputation test secret B",
+    eventData: {
+      marketplace: "ExamplePredictionMarket",
+      event: QUESTION,
+      marketId: Number(eventId),
+      outcome: "no",
+    },
+    bidderAddress: bidderAccount!.address,
+    bidAmount: BID_AMOUNT,
+    depositTxId: DEPOSIT_TX_ID, // not used since skipDeposit is true
+    depositAmount: DEPOSIT_AMOUNT,
+    skipDeposit: true,
+  });
 
   // ── Step 9: Wait for auctions to expire ────────────────────────────────────
   step("Waiting for auctions to expire...");
@@ -457,12 +374,9 @@ async function main() {
   console.log(`  ${SELLER_A} reputation: ${repABefore}`);
   console.log(`  ${SELLER_B} reputation: ${repBBefore}`);
 
-  // ── Step 15: Run CRE reputation-resolver (dry run first) ──────────────────
-  step("Running CRE reputation-resolver dry run...");
-  runCRE({ workflow: "reputation-resolver", triggerIndex: 0 });
-  console.log(`  ok Dry run completed`);
-
-  // ── Step 16: Run CRE reputation-resolver (broadcast) ──────────────────────
+  // ── Step 15: Run CRE reputation-resolver (broadcast) ──────────────────────
+  // NOTE: Skip dry run — it asserts nothing meaningful and adds 10-30s overhead.
+  // The broadcast step does the real work, and verification happens on-chain afterward.
   step("Running CRE reputation-resolver with broadcast...");
   runCRE({ workflow: "reputation-resolver", triggerIndex: 0, broadcast: true });
   console.log(`  ok Broadcast completed`);

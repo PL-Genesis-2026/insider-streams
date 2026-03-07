@@ -11,7 +11,7 @@ import { type Config, secretMarketplaceAbi } from "./types";
 
 export interface ExpiredAuction {
   auctionId: bigint;
-  seller: string;
+  sellerId: string;
   currentBid: bigint;
   eventId: bigint;
 }
@@ -90,7 +90,7 @@ export function findExpiredAuctions(
       functionName: "getAuction",
       data: bytesToHex(auctionResult.data),
     }) as {
-      seller: string;
+      sellerId: string;
       endTime: bigint;
       currentBid: bigint;
       eventId: bigint;
@@ -106,7 +106,7 @@ export function findExpiredAuctions(
       );
       expired.push({
         auctionId,
-        seller: auction.seller,
+        sellerId: auction.sellerId,
         currentBid: auction.currentBid,
         eventId: auction.eventId,
       });
