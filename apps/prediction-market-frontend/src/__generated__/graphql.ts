@@ -1,5 +1,4 @@
-import type { GraphQLClient, RequestOptions } from 'graphql-request';
-import gql from 'graphql-tag';
+import type { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-node/core';
 export type Maybe<T> = T | null;
 export type InputMaybe<T> = Maybe<T>;
 export type Exact<T extends { [key: string]: unknown }> = { [K in keyof T]: T[K] };
@@ -7,7 +6,6 @@ export type MakeOptional<T, K extends keyof T> = Omit<T, K> & { [SubKey in K]?: 
 export type MakeMaybe<T, K extends keyof T> = Omit<T, K> & { [SubKey in K]: Maybe<T[SubKey]> };
 export type MakeEmpty<T extends { [key: string]: unknown }, K extends keyof T> = { [_ in K]?: never };
 export type Incremental<T> = T | { [P in keyof T]?: P extends ' $fragmentName' | '__typename' ? T[P] : never };
-type GraphQLClientRequestHeaders = RequestOptions['requestHeaders'];
 /** All built-in and custom scalars, mapped to their actual values */
 export type Scalars = {
   ID: { input: string; output: string; }
@@ -2887,157 +2885,21 @@ export type _SubgraphErrorPolicy_ =
   /** If the subgraph has indexing errors, data will be omitted. The default. */
   | 'deny';
 
-export type AuctionDetailSubgraphQueryVariables = Exact<{
-  auctionId: Scalars['ID']['input'];
-  auctionIdBigInt: Scalars['BigInt']['input'];
-  bidLimit: Scalars['Int']['input'];
-}>;
-
-
-export type AuctionDetailSubgraphQuery = { __typename?: 'Query', auction?: { __typename?: 'Auction', auctionId: string, sellerId: string, eventId: string, eventTitle: string, endTime: string, currentBid: string, bidCount: number, status: AuctionStatus, predictionOutcome?: number | null, scoreChange?: number | null, blockTimestamp: string, seller: { __typename?: 'Seller', reputationScore: string, totalAuctionCount: number, totalEarnings: string, auctionsWithCorrectPredictionsCount: number, auctionsWithWrongPredictionsCount: number } } | null, bids: Array<{ __typename?: 'BidPlaced', bidAmount: string, previousBid: string, blockTimestamp: string, transactionHash: string }>, closedAuction: Array<{ __typename?: 'AuctionClosed', winningBid: string, blockTimestamp: string }>, cancelledAuction: Array<{ __typename?: 'AuctionCancelled', cancelledBidAmount: string, blockTimestamp: string }>, reputationUpdates: Array<{ __typename?: 'SellerReputationScoreUpdated', predictionOutcome: number, scoreChange: number, newScore: string, blockTimestamp: string }> };
-
-export type HomepageAuctionsQueryVariables = Exact<{
+export type PredictionEventsQueryVariables = Exact<{
   limit: Scalars['Int']['input'];
   skip: Scalars['Int']['input'];
-  where?: InputMaybe<Auction_Filter>;
 }>;
 
 
-export type HomepageAuctionsQuery = { __typename?: 'Query', auctions: Array<{ __typename?: 'Auction', auctionId: string, sellerId: string, eventId: string, eventTitle: string, endTime: string, currentBid: string, bidCount: number, status: AuctionStatus, seller: { __typename?: 'Seller', reputationScore: string, totalAuctionCount: number, auctionsWithCorrectPredictionsCount: number, auctionsWithWrongPredictionsCount: number } }> };
+export type PredictionEventsQuery = { __typename?: 'Query', eventCreateds: Array<{ __typename?: 'EventCreated', id: string, eventId: string, creator: string, question: string, eventOpen: string, eventClose: string, duration: string, yesToken: string, noToken: string, blockTimestamp: string, transactionHash: string }>, settlementResponses: Array<{ __typename?: 'SettlementResponse', eventId: string, status: number, outcome: number, blockTimestamp: string, transactionHash: string }> };
 
-export type SellerDetailQueryVariables = Exact<{
-  sellerId: Scalars['ID']['input'];
+export type EventDetailQueryVariables = Exact<{
+  eventId: Scalars['BigInt']['input'];
 }>;
 
 
-export type SellerDetailQuery = { __typename?: 'Query', seller?: { __typename?: 'Seller', sellerId: string, reputationScore: string, totalAuctionCount: number, openAuctionCount: number, auctionsWithCorrectPredictionsCount: number, auctionsWithWrongPredictionsCount: number, unscorableAuctionCount: number, totalEarnings: string, auctions: Array<{ __typename?: 'Auction', auctionId: string, eventId: string, eventTitle: string, endTime: string, currentBid: string, bidCount: number, status: AuctionStatus, predictionOutcome?: number | null, scoreChange?: number | null, blockTimestamp: string }> } | null };
+export type EventDetailQuery = { __typename?: 'Query', eventCreateds: Array<{ __typename?: 'EventCreated', id: string, eventId: string, creator: string, question: string, eventOpen: string, eventClose: string, duration: string, yesToken: string, noToken: string, blockTimestamp: string, transactionHash: string }>, settlementResponses: Array<{ __typename?: 'SettlementResponse', eventId: string, status: number, outcome: number, blockTimestamp: string, transactionHash: string }>, settlementRequesteds: Array<{ __typename?: 'SettlementRequested', eventId: string, question: string, blockTimestamp: string, transactionHash: string }> };
 
 
-export const AuctionDetailSubgraphDocument = gql`
-    query AuctionDetailSubgraph($auctionId: ID!, $auctionIdBigInt: BigInt!, $bidLimit: Int!) {
-  auction(id: $auctionId) {
-    auctionId
-    sellerId
-    eventId
-    eventTitle
-    endTime
-    currentBid
-    bidCount
-    status
-    predictionOutcome
-    scoreChange
-    blockTimestamp
-    seller {
-      reputationScore
-      totalAuctionCount
-      totalEarnings
-      auctionsWithCorrectPredictionsCount
-      auctionsWithWrongPredictionsCount
-    }
-  }
-  bids: bidPlaceds(
-    first: $bidLimit
-    orderBy: blockTimestamp
-    orderDirection: desc
-    where: {auctionId: $auctionIdBigInt}
-  ) {
-    bidAmount
-    previousBid
-    blockTimestamp
-    transactionHash
-  }
-  closedAuction: auctionCloseds(first: 1, where: {auctionId: $auctionIdBigInt}) {
-    winningBid
-    blockTimestamp
-  }
-  cancelledAuction: auctionCancelleds(
-    first: 1
-    where: {auctionId: $auctionIdBigInt}
-  ) {
-    cancelledBidAmount
-    blockTimestamp
-  }
-  reputationUpdates: sellerReputationScoreUpdateds(
-    orderBy: blockTimestamp
-    orderDirection: desc
-    where: {auctionId: $auctionIdBigInt}
-  ) {
-    predictionOutcome
-    scoreChange
-    newScore
-    blockTimestamp
-  }
-}
-    `;
-export const HomepageAuctionsDocument = gql`
-    query HomepageAuctions($limit: Int!, $skip: Int!, $where: Auction_filter) {
-  auctions(
-    first: $limit
-    skip: $skip
-    orderBy: blockTimestamp
-    orderDirection: desc
-    where: $where
-  ) {
-    auctionId
-    sellerId
-    eventId
-    eventTitle
-    endTime
-    currentBid
-    bidCount
-    status
-    seller {
-      reputationScore
-      totalAuctionCount
-      auctionsWithCorrectPredictionsCount
-      auctionsWithWrongPredictionsCount
-    }
-  }
-}
-    `;
-export const SellerDetailDocument = gql`
-    query SellerDetail($sellerId: ID!) {
-  seller(id: $sellerId) {
-    sellerId
-    reputationScore
-    totalAuctionCount
-    openAuctionCount
-    auctionsWithCorrectPredictionsCount
-    auctionsWithWrongPredictionsCount
-    unscorableAuctionCount
-    totalEarnings
-    auctions(orderBy: blockTimestamp, orderDirection: desc) {
-      auctionId
-      eventId
-      eventTitle
-      endTime
-      currentBid
-      bidCount
-      status
-      predictionOutcome
-      scoreChange
-      blockTimestamp
-    }
-  }
-}
-    `;
-
-export type SdkFunctionWrapper = <T>(action: (requestHeaders?:Record<string, string>) => Promise<T>, operationName: string, operationType?: string, variables?: any) => Promise<T>;
-
-
-const defaultWrapper: SdkFunctionWrapper = (action, _operationName, _operationType, _variables) => action();
-
-export function getSdk(client: GraphQLClient, withWrapper: SdkFunctionWrapper = defaultWrapper) {
-  return {
-    AuctionDetailSubgraph(variables: AuctionDetailSubgraphQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<AuctionDetailSubgraphQuery> {
-      return withWrapper((wrappedRequestHeaders) => client.request<AuctionDetailSubgraphQuery>({ document: AuctionDetailSubgraphDocument, variables, requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders }, signal }), 'AuctionDetailSubgraph', 'query', variables);
-    },
-    HomepageAuctions(variables: HomepageAuctionsQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<HomepageAuctionsQuery> {
-      return withWrapper((wrappedRequestHeaders) => client.request<HomepageAuctionsQuery>({ document: HomepageAuctionsDocument, variables, requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders }, signal }), 'HomepageAuctions', 'query', variables);
-    },
-    SellerDetail(variables: SellerDetailQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<SellerDetailQuery> {
-      return withWrapper((wrappedRequestHeaders) => client.request<SellerDetailQuery>({ document: SellerDetailDocument, variables, requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders }, signal }), 'SellerDetail', 'query', variables);
-    }
-  };
-}
-export type Sdk = ReturnType<typeof getSdk>;
+export const PredictionEventsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"PredictionEvents"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"limit"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"skip"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"eventCreateds"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"Variable","name":{"kind":"Name","value":"limit"}}},{"kind":"Argument","name":{"kind":"Name","value":"skip"},"value":{"kind":"Variable","name":{"kind":"Name","value":"skip"}}},{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"EnumValue","value":"blockTimestamp"}},{"kind":"Argument","name":{"kind":"Name","value":"orderDirection"},"value":{"kind":"EnumValue","value":"desc"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"eventId"}},{"kind":"Field","name":{"kind":"Name","value":"creator"}},{"kind":"Field","name":{"kind":"Name","value":"question"}},{"kind":"Field","name":{"kind":"Name","value":"eventOpen"}},{"kind":"Field","name":{"kind":"Name","value":"eventClose"}},{"kind":"Field","name":{"kind":"Name","value":"duration"}},{"kind":"Field","name":{"kind":"Name","value":"yesToken"}},{"kind":"Field","name":{"kind":"Name","value":"noToken"}},{"kind":"Field","name":{"kind":"Name","value":"blockTimestamp"}},{"kind":"Field","name":{"kind":"Name","value":"transactionHash"}}]}},{"kind":"Field","name":{"kind":"Name","value":"settlementResponses"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1000"}},{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"EnumValue","value":"blockTimestamp"}},{"kind":"Argument","name":{"kind":"Name","value":"orderDirection"},"value":{"kind":"EnumValue","value":"desc"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"eventId"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"outcome"}},{"kind":"Field","name":{"kind":"Name","value":"blockTimestamp"}},{"kind":"Field","name":{"kind":"Name","value":"transactionHash"}}]}}]}}]} as unknown as DocumentNode<PredictionEventsQuery, PredictionEventsQueryVariables>;
+export const EventDetailDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"EventDetail"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"eventId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"BigInt"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"eventCreateds"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1"}},{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"eventId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"eventId"}}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"eventId"}},{"kind":"Field","name":{"kind":"Name","value":"creator"}},{"kind":"Field","name":{"kind":"Name","value":"question"}},{"kind":"Field","name":{"kind":"Name","value":"eventOpen"}},{"kind":"Field","name":{"kind":"Name","value":"eventClose"}},{"kind":"Field","name":{"kind":"Name","value":"duration"}},{"kind":"Field","name":{"kind":"Name","value":"yesToken"}},{"kind":"Field","name":{"kind":"Name","value":"noToken"}},{"kind":"Field","name":{"kind":"Name","value":"blockTimestamp"}},{"kind":"Field","name":{"kind":"Name","value":"transactionHash"}}]}},{"kind":"Field","name":{"kind":"Name","value":"settlementResponses"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1"}},{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"eventId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"eventId"}}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"eventId"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"outcome"}},{"kind":"Field","name":{"kind":"Name","value":"blockTimestamp"}},{"kind":"Field","name":{"kind":"Name","value":"transactionHash"}}]}},{"kind":"Field","name":{"kind":"Name","value":"settlementRequesteds"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1"}},{"kind":"Argument","name":{"kind":"Name","value":"where"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"eventId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"eventId"}}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"eventId"}},{"kind":"Field","name":{"kind":"Name","value":"question"}},{"kind":"Field","name":{"kind":"Name","value":"blockTimestamp"}},{"kind":"Field","name":{"kind":"Name","value":"transactionHash"}}]}}]}}]} as unknown as DocumentNode<EventDetailQuery, EventDetailQueryVariables>;

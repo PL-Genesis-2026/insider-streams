@@ -18,6 +18,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { EXAMPLE_PREDICTION_MARKET_NAME } from "@private-streams/common";
 import { cn } from "@/lib/utils";
 
 export type AuctionCardData = {
@@ -28,9 +29,7 @@ export type AuctionCardData = {
   currentBidUsdc?: number;
   bidCount?: number;
   endTime?: string;
-  marketplace?: string;
   title?: string;
-  outcome?: "yes" | "no";
   sellerReputationScore?: number;
   sellerTotalAuctions?: number;
   sellerCorrectPredictions?: number;
@@ -64,10 +63,6 @@ function closesInLabel(endTime: string | undefined, status: string) {
 }
 
 function getCardDescription(auction: AuctionCardData) {
-  if (auction.title && auction.outcome) {
-    return `${auction.outcome === "yes" ? "Yes" : "No"} outcome on ${auction.title}.`;
-  }
-
   return `Seller ${shortenAddress(auction.sellerAddress)} competing in market #${auction.marketId}.`;
 }
 
@@ -82,7 +77,7 @@ function MetaRail({ auction }: { auction: AuctionCardData }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-[0.24em] text-accent">
-        <span>{auction.marketplace ?? `Market #${auction.marketId}`}</span>
+        <span>{EXAMPLE_PREDICTION_MARKET_NAME}</span>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant={statusVariant}>{auction.status}</Badge>
