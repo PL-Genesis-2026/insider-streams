@@ -23,11 +23,11 @@
 
 import {
   CONFIDENTIAL_USDC_ADDRESS,
+  confidentialUsdcAbi,
   EXAMPLE_PREDICTION_MARKET_ADDRESS,
   examplePredictionMarketAbi,
-  confidentialUsdcAbi,
 } from "@private-streams/common";
-import { parseEventLogs, type Address, type Hex } from "viem";
+import { parseEventLogs, type Hex } from "viem";
 import {
   assert,
   banner,
@@ -48,10 +48,7 @@ const RPC_URL = envRequired("RPC_URL");
 const FIREBASE_API_KEY = envRequired("FIREBASE_API_KEY");
 const FIREBASE_PROJECT_ID = envRequired("FIREBASE_PROJECT_ID");
 
-const CONFIDENTIAL_USDC = (process.env.CONFIDENTIAL_USDC_ADDRESS ??
-  CONFIDENTIAL_USDC_ADDRESS) as Address;
-const SIMPLE_MARKET = (process.env.EXAMPLE_PREDICTION_MARKET_ADDRESS ??
-  EXAMPLE_PREDICTION_MARKET_ADDRESS) as Address;
+const CONFIDENTIAL_USDC = CONFIDENTIAL_USDC_ADDRESS;
 
 const { publicClient, ownerClient, ownerAccount, bidderClient, bidderAccount } =
   createClients({ ownerPk: OWNER_PK, bidderPk: BIDDER_PK, rpcUrl: RPC_URL });
@@ -75,7 +72,7 @@ async function main() {
   console.log(`  Owner:         ${ownerAccount.address}`);
   console.log(`  Bidder:        ${bidderAccount!.address}`);
   console.log(`  ConfidentialUSDC: ${CONFIDENTIAL_USDC}`);
-  console.log(`  SimpleMarket:  ${SIMPLE_MARKET}`);
+  console.log(`  SimpleMarket:  ${EXAMPLE_PREDICTION_MARKET_ADDRESS}`);
   console.log(`  Question:      ${QUESTION}`);
 
   // ── Step 1: Ensure USDC balances ────────────────────────────────────────────
@@ -95,14 +92,14 @@ async function main() {
     address: CONFIDENTIAL_USDC,
     abi: confidentialUsdcAbi,
     functionName: "allowance",
-    args: [ownerAccount.address, SIMPLE_MARKET],
+    args: [ownerAccount.address, EXAMPLE_PREDICTION_MARKET_ADDRESS],
   });
   if (ownerAllowance < MIN_ALLOWANCE) {
     const h = await ownerClient.writeContract({
       address: CONFIDENTIAL_USDC,
       abi: confidentialUsdcAbi,
       functionName: "approve",
-      args: [SIMPLE_MARKET, APPROVAL_AMOUNT],
+      args: [EXAMPLE_PREDICTION_MARKET_ADDRESS, APPROVAL_AMOUNT],
     });
     await waitForTx(publicClient, h, "Owner USDC approval");
   } else {
@@ -113,14 +110,14 @@ async function main() {
     address: CONFIDENTIAL_USDC,
     abi: confidentialUsdcAbi,
     functionName: "allowance",
-    args: [bidderAccount!.address, SIMPLE_MARKET],
+    args: [bidderAccount!.address, EXAMPLE_PREDICTION_MARKET_ADDRESS],
   });
   if (bidderAllowance < MIN_ALLOWANCE) {
     const h = await bidderClient!.writeContract({
       address: CONFIDENTIAL_USDC,
       abi: confidentialUsdcAbi,
       functionName: "approve",
-      args: [SIMPLE_MARKET, APPROVAL_AMOUNT],
+      args: [EXAMPLE_PREDICTION_MARKET_ADDRESS, APPROVAL_AMOUNT],
     });
     await waitForTx(publicClient, h, "Bidder USDC approval");
   } else {
@@ -130,7 +127,7 @@ async function main() {
   // ── Step 3: Create event ───────────────────────────────────────────────────
   step("Owner creating event...");
   const createEventHash = await ownerClient.writeContract({
-    address: SIMPLE_MARKET,
+    address: EXAMPLE_PREDICTION_MARKET_ADDRESS,
     abi: examplePredictionMarketAbi,
     functionName: "newEvent",
     args: [QUESTION, EVENT_DURATION],
@@ -151,7 +148,7 @@ async function main() {
   // ── Step 4: Buy YES shares (replaces old makePrediction) ────────────────────
   step("Bidder buying YES shares...");
   const buyHash = await bidderClient!.writeContract({
-    address: SIMPLE_MARKET,
+    address: EXAMPLE_PREDICTION_MARKET_ADDRESS,
     abi: examplePredictionMarketAbi,
     functionName: "buyShares",
     args: [eventId, OUTCOME_YES, PREDICTION_AMOUNT],
@@ -165,7 +162,7 @@ async function main() {
   // ── Step 5: Wait for event closure ─────────────────────────────────────────
   step("Waiting for event to close...");
   const event = await publicClient.readContract({
-    address: SIMPLE_MARKET,
+    address: EXAMPLE_PREDICTION_MARKET_ADDRESS,
     abi: examplePredictionMarketAbi,
     functionName: "getEvent",
     args: [eventId],
@@ -176,7 +173,7 @@ async function main() {
   // ── Step 6: Request settlement ──────────────────────────────────────────────
   step("Owner requesting settlement...");
   const settleHash = await ownerClient.writeContract({
-    address: SIMPLE_MARKET,
+    address: EXAMPLE_PREDICTION_MARKET_ADDRESS,
     abi: examplePredictionMarketAbi,
     functionName: "requestSettlement",
     args: [eventId],
@@ -226,7 +223,7 @@ async function main() {
   // ── Step 9: Verify on-chain ─────────────────────────────────────────────────
   step("Verifying on-chain event status...");
   const finalEvent = await publicClient.readContract({
-    address: SIMPLE_MARKET,
+    address: EXAMPLE_PREDICTION_MARKET_ADDRESS,
     abi: examplePredictionMarketAbi,
     functionName: "getEvent",
     args: [eventId],

@@ -44,10 +44,8 @@ const OWNER_PK = envRequired("OWNER_PK") as Hex;
 const BIDDER_PK = envRequired("BIDDER_PK") as Hex;
 const RPC_URL = envRequired("RPC_URL");
 
-const CONFIDENTIAL_USDC = (process.env.CONFIDENTIAL_USDC_ADDRESS ??
-  CONFIDENTIAL_USDC_ADDRESS) as Address;
-const SECRET_MARKETPLACE = (process.env.SECRET_MARKETPLACE_ADDRESS ??
-  SECRET_MARKETPLACE_ADDRESS) as Address;
+const CONFIDENTIAL_USDC = CONFIDENTIAL_USDC_ADDRESS;
+const SECRET_MARKETPLACE = SECRET_MARKETPLACE_ADDRESS;
 
 const { publicClient, ownerClient, ownerAccount, bidderClient, bidderAccount } =
   createClients({ ownerPk: OWNER_PK, bidderPk: BIDDER_PK, rpcUrl: RPC_URL });
