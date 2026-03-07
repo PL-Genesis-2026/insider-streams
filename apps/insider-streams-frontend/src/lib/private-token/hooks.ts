@@ -1,0 +1,234 @@
+"use client";
+
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
+  VAULT_ADDRESS,
+} from "@private-streams/common";
+import { erc20Abi, type Address, zeroAddress } from "viem";
+import {
+  usePublicClient,
+  useReadContract,
+  useSignTypedData,
+  useWriteContract,
+} from "wagmi";
+import { reconcileFunding } from "@/lib/funding/api";
+import { getFundingSnapshotQueryKey } from "@/lib/funding/queries";
+import {
+  getBalances,
+  isPrivateAccountNotFoundError,
+  privateTransfer,
+  type PrivateTokenSigner,
+} from "./browser-client";
+
+type PrivateTransferFundingVariables = {
+  recipient: Address;
+  amount: string;
+  flags?: string[];
+};
+
+type PrivateTransferFundingResult = {
+  transactionId: string;
+  reconcileErrorMessage?: string;
+};
+
+const vaultAbi = [
+  {
+    type: "function",
+    name: "deposit",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "token", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [],
+  },
+] as const;
+
+export type PrivateBalancesResult =
+  | {
+      status: "ready";
+      balances: Awaited<ReturnType<typeof getBalances>>["balances"];
+    }
+  | {
+      status: "not_funded_yet";
+      balances: [];
+    };
+
+async function readPrivateBalances(
+  address: Address,
+  signTypedData: PrivateTokenSigner,
+): Promise<PrivateBalancesResult> {
+  try {
+    const response = await getBalances(address, signTypedData);
+
+    return {
+      status: "ready",
+      balances: response.balances,
+    };
+  } catch (error) {
+    if (!isPrivateAccountNotFoundError(error)) {
+      throw error;
+    }
+
+    return {
+      status: "not_funded_yet",
+      balances: [],
+    };
+  }
+}
+
+function usePrivateTokenSigner(): PrivateTokenSigner {
+  const { signTypedDataAsync } = useSignTypedData();
+
+  return (payload) =>
+    payload.primaryType === "Retrieve Balances"
+      ? signTypedDataAsync(payload)
+      : signTypedDataAsync(payload);
+}
+
+export function usePrivateBalancesMutation(address?: Address) {
+  const signTypedData = usePrivateTokenSigner();
+
+  return useMutation({
+    mutationFn: async () => {
+      if (!address) {
+        throw new Error("Fetching private balances requires a connected wallet.");
+      }
+
+      return readPrivateBalances(address, signTypedData);
+    },
+  });
+}
+
+export function usePrivateTransferFundingMutation(address?: Address) {
+  const queryClient = useQueryClient();
+  const signTypedData = usePrivateTokenSigner();
+
+  return useMutation({
+    mutationFn: async (
+      variables: PrivateTransferFundingVariables,
+    ): Promise<PrivateTransferFundingResult> => {
+      if (!address) {
+        throw new Error("Submitting a private transfer requires a connected wallet.");
+      }
+
+      let transferResponse: Awaited<ReturnType<typeof privateTransfer>>;
+
+      try {
+        transferResponse = await privateTransfer(address, signTypedData, {
+          recipient: variables.recipient,
+          token: PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
+          amount: variables.amount,
+          flags: variables.flags,
+        });
+      } catch (error) {
+        if (isPrivateAccountNotFoundError(error)) {
+          throw new Error(
+            "This wallet does not have private USDC yet. Approve USDC and deposit into the private vault first, then check balance again before using this step.",
+          );
+        }
+
+        throw error;
+      }
+
+      try {
+        const reconcileResponse = await reconcileFunding(address);
+
+        queryClient.setQueryData(
+          getFundingSnapshotQueryKey(address),
+          reconcileResponse.data,
+        );
+      } catch (error) {
+        return {
+          transactionId: transferResponse.transaction_id,
+          reconcileErrorMessage:
+            error instanceof Error
+              ? error.message
+              : "Private transfer submitted, but funding reconciliation failed.",
+        };
+      }
+
+      await queryClient.invalidateQueries({
+        queryKey: getFundingSnapshotQueryKey(address),
+      });
+
+      return {
+        transactionId: transferResponse.transaction_id,
+      };
+    },
+  });
+}
+
+export function useVaultFunding(address?: Address, amount?: bigint | null) {
+  const publicClient = usePublicClient();
+  const { writeContractAsync } = useWriteContract();
+  const allowanceQuery = useReadContract({
+    address: PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
+    abi: erc20Abi,
+    functionName: "allowance",
+    args: [address ?? zeroAddress, VAULT_ADDRESS],
+    query: {
+      enabled: Boolean(address) && amount !== null && amount !== undefined,
+    },
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: async () => {
+      if (!address || amount === null || amount === undefined) {
+        throw new Error("Enter a USDC amount before approving the vault.");
+      }
+
+      if (!publicClient) {
+        throw new Error("Wallet client unavailable. Try reconnecting your wallet.");
+      }
+
+      const hash = await writeContractAsync({
+        address: PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
+        abi: erc20Abi,
+        functionName: "approve",
+        args: [VAULT_ADDRESS, amount],
+      });
+
+      await publicClient.waitForTransactionReceipt({ hash });
+      await allowanceQuery.refetch();
+
+      return { hash };
+    },
+  });
+
+  const depositMutation = useMutation({
+    mutationFn: async () => {
+      if (!address || amount === null || amount === undefined) {
+        throw new Error("Enter a USDC amount before depositing into the vault.");
+      }
+
+      if (!publicClient) {
+        throw new Error("Wallet client unavailable. Try reconnecting your wallet.");
+      }
+
+      const hash = await writeContractAsync({
+        address: VAULT_ADDRESS,
+        abi: vaultAbi,
+        functionName: "deposit",
+        args: [PRIVATE_CONFIDENTIAL_USDC_ADDRESS, amount],
+      });
+
+      await publicClient.waitForTransactionReceipt({ hash });
+
+      return { hash };
+    },
+  });
+
+  const hasVaultApproval =
+    amount !== null &&
+    amount !== undefined &&
+    allowanceQuery.data !== undefined &&
+    allowanceQuery.data >= amount;
+
+  return {
+    hasVaultApproval,
+    approveMutation,
+    depositMutation,
+  };
+}

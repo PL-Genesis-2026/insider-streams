@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Logo } from "@/components/logo";
+import { WalletAccountControl } from "@/components/wallet/wallet-account-control";
 
 export function AppNavbar() {
   return (
@@ -15,9 +16,7 @@ export function AppNavbar() {
           >
             Auctions
           </Link>
-          <div className="rounded-[calc(var(--radius)-6px)] border border-border px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-            Connect wallet
-          </div>
+          <WalletAccountControl />
         </div>
       </nav>
     </header>
