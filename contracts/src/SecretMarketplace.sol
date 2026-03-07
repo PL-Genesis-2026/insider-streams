@@ -23,19 +23,21 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
     // ======== ENUMS ============
     // ===========================
 
-    enum AuctionStatus { Open, Closed, ForceClosed }
+    enum AuctionStatus { Open, Closed, Cancelled }
+
+    enum PredictionOutcome { NoPrediction, PredictionCorrect, PredictionWrong }
 
     // CRE report action types
     uint8 public constant ACTION_CLOSE_AUCTION = 0;
-    uint8 public constant ACTION_FORCE_CLOSE_AUCTION = 1;
-    uint8 public constant ACTION_RESOLVE_EVENT = 2;
+    uint8 public constant ACTION_CANCEL_AUCTION = 1;
+    uint8 public constant ACTION_RECORD_EVENT_OUTCOME = 2;
 
     // ===========================
     // ======== STRUCTS ==========
     // ===========================
 
     struct Auction {
-        string seller;
+        string sellerId;
         uint256 endTime;
         uint256 currentBid;
         uint256 eventId;
@@ -51,7 +53,7 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
 
     struct AuctionResult {
         uint256 auctionId;
-        bool predictionCorrect;
+        PredictionOutcome predictionOutcome;
     }
 
     // ===========================
@@ -59,13 +61,13 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
     // ===========================
 
     event SellerRegistered(
-        string seller
+        string sellerId
     );
 
     event AuctionCreated(
         uint256 indexed auctionId,
         uint256 indexed eventId,
-        string seller,
+        string sellerId,
         string eventTitle,
         uint256 endTime
     );
@@ -79,16 +81,15 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
     event AuctionClosed(
         uint256 indexed auctionId,
         uint256 winningBid,
-        string seller,
+        string sellerId,
         uint256 eventId
     );
 
-    event AuctionForceClosed(
+    event AuctionCancelled(
         uint256 indexed auctionId,
-        uint256 heldAmount,
-        string seller,
-        uint256 eventId,
-        int8 reputationDelta
+        uint256 cancelledBidAmount,
+        string sellerId,
+        uint256 eventId
     );
 
     event ExternalEventResolved(
@@ -97,10 +98,11 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
         uint256 resultsApplied
     );
 
-    event ReputationUpdated(
-        string seller,
+    event SellerReputationScoreUpdated(
+        string sellerId,
         uint256 indexed auctionId,
-        int8 delta,
+        PredictionOutcome predictionOutcome,
+        int8 scoreChange,
         int256 newScore
     );
 
@@ -121,7 +123,6 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
     error AuctionDoesNotExist();
     error EventDoesNotExist(uint256 eventId);
     error EventAlreadyResolved(uint256 eventId);
-    error AuctionNotLinkedToEvent(uint256 auctionId, uint256 expectedEventId);
     error UnknownAction(uint8 action);
 
     // ===========================
@@ -143,7 +144,7 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
     // Event → auctions (for batch reputation resolution)
     mapping(uint256 => uint256[]) public eventAuctions;
 
-    // Seller registry (keyed by seller name)
+    // Seller registry (keyed by seller ID)
     mapping(string => Seller) internal _sellers;
     mapping(string => uint256[]) public sellerAuctions;
 
@@ -193,14 +194,14 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
     // ======== SELLER ===========
     // ===========================
 
-    /// @notice Register a seller by name. Admin only.
-    function registerSeller(string calldata name) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        Seller storage s = _sellers[name];
+    /// @notice Register a seller by ID. Admin only.
+    function registerSeller(string calldata sellerId) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        Seller storage s = _sellers[sellerId];
         if (!s.registered) {
             s.registered = true;
             s.reputationScore = 0;
         }
-        emit SellerRegistered(name);
+        emit SellerRegistered(sellerId);
     }
 
     // ===========================
@@ -208,7 +209,7 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
     // ===========================
 
     function createAuction(
-        string calldata seller,
+        string calldata sellerId,
         uint256 eventId,
         string calldata eventTitle,
         uint256 endTime
@@ -217,16 +218,16 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
         if (eventId >= marketplace.nextEventId()) revert EventDoesNotExist(eventId);
 
         // Auto-register seller if not registered
-        Seller storage s = _sellers[seller];
+        Seller storage s = _sellers[sellerId];
         if (!s.registered) {
             s.registered = true;
             s.reputationScore = 0;
-            emit SellerRegistered(seller);
+            emit SellerRegistered(sellerId);
         }
 
         uint256 auctionId = nextAuctionId++;
         Auction storage a = _auctions[auctionId];
-        a.seller = seller;
+        a.sellerId = sellerId;
         a.endTime = endTime;
         a.eventId = eventId;
         a.eventTitle = eventTitle;
@@ -244,9 +245,9 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
         eventAuctions[eventId].push(auctionId);
 
         // Track seller's auctions
-        sellerAuctions[seller].push(auctionId);
+        sellerAuctions[sellerId].push(auctionId);
 
-        emit AuctionCreated(auctionId, eventId, seller, eventTitle, endTime);
+        emit AuctionCreated(auctionId, eventId, sellerId, eventTitle, endTime);
         return auctionId;
     }
 
@@ -275,14 +276,14 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
         _closeAuction(auctionId);
     }
 
-    /// @notice Force-close an auction with explicit reputation delta. Admin/CRE only.
-    function forceCloseAuction(uint256 auctionId, int8 reputationDelta) external onlyAdminOrCRE {
-        _forceCloseAuction(auctionId, reputationDelta);
+    /// @notice Cancel an auction with a prediction outcome. Admin/CRE only.
+    function cancelAuction(uint256 auctionId, PredictionOutcome predictionOutcome) external onlyAdminOrCRE {
+        _cancelAuction(auctionId, predictionOutcome);
     }
 
-    /// @notice Resolve an external event — updates reputation per auction based on prediction correctness. Admin/CRE only.
-    function resolveExternalEvent(uint256 externalEventId, AuctionResult[] calldata results) external onlyAdminOrCRE {
-        _resolveExternalEvent(externalEventId, results);
+    /// @notice Record event outcome and update reputation scores per auction. Admin/CRE only.
+    function recordEventOutcomeAndUpdateRepScore(uint256 externalEventId, AuctionResult[] calldata results) external onlyAdminOrCRE {
+        _recordEventOutcomeAndUpdateRepScore(externalEventId, results);
     }
 
     // ===========================
@@ -296,12 +297,12 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
         if (action == ACTION_CLOSE_AUCTION) {
             uint256 auctionId = abi.decode(payload, (uint256));
             _closeAuction(auctionId);
-        } else if (action == ACTION_FORCE_CLOSE_AUCTION) {
-            (uint256 auctionId, int8 reputationDelta) = abi.decode(payload, (uint256, int8));
-            _forceCloseAuction(auctionId, reputationDelta);
-        } else if (action == ACTION_RESOLVE_EVENT) {
+        } else if (action == ACTION_CANCEL_AUCTION) {
+            (uint256 auctionId, uint8 outcomeRaw) = abi.decode(payload, (uint256, uint8));
+            _cancelAuction(auctionId, PredictionOutcome(outcomeRaw));
+        } else if (action == ACTION_RECORD_EVENT_OUTCOME) {
             (uint256 externalEventId, AuctionResult[] memory results) = abi.decode(payload, (uint256, AuctionResult[]));
-            _resolveExternalEvent(externalEventId, results);
+            _recordEventOutcomeAndUpdateRepScore(externalEventId, results);
         } else {
             revert UnknownAction(action);
         }
@@ -322,73 +323,86 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
 
         // Funds stay in contract; admin withdraws via withdrawFunds()
 
-        emit AuctionClosed(auctionId, a.currentBid, a.seller, a.eventId);
+        emit AuctionClosed(auctionId, a.currentBid, a.sellerId, a.eventId);
     }
 
-    function _forceCloseAuction(uint256 auctionId, int8 reputationDelta) internal {
+    function _cancelAuction(uint256 auctionId, PredictionOutcome predictionOutcome) internal {
         Auction storage a = _auctions[auctionId];
         if (a.endTime == 0) revert AuctionDoesNotExist();
         if (a.status != AuctionStatus.Open) revert AuctionAlreadySettled();
 
-        a.status = AuctionStatus.ForceClosed;
+        a.status = AuctionStatus.Cancelled;
         _removeOpenAuction(auctionId);
 
         // Funds stay in contract; admin withdraws via withdrawFunds()
 
         // Update reputation
-        if (reputationDelta != 0) {
-            _sellers[a.seller].reputationScore += reputationDelta;
-        }
+        (int8 scoreChange, int256 newScore) = _applyReputation(a.sellerId, predictionOutcome);
         a.reputationResolved = true;
 
-        emit AuctionForceClosed(auctionId, a.currentBid, a.seller, a.eventId, reputationDelta);
-        if (reputationDelta != 0) {
-            emit ReputationUpdated(a.seller, auctionId, reputationDelta, _sellers[a.seller].reputationScore);
-        }
+        emit AuctionCancelled(auctionId, a.currentBid, a.sellerId, a.eventId);
+        emit SellerReputationScoreUpdated(a.sellerId, auctionId, predictionOutcome, scoreChange, newScore);
     }
 
-    function _resolveExternalEvent(uint256 externalEventId, AuctionResult[] memory results) internal {
+    function _recordEventOutcomeAndUpdateRepScore(uint256 externalEventId, AuctionResult[] memory results) internal {
         if (eventResolved[externalEventId]) revert EventAlreadyResolved(externalEventId);
-
-        eventResolved[externalEventId] = true;
-        _removeUnresolvedEvent(externalEventId);
 
         uint256[] storage auctionIds = eventAuctions[externalEventId];
         uint256 count = auctionIds.length;
 
-        // Phase 1: Force-close any still-open auctions (no reputation update here)
+        // Single pass: cancel open auctions, apply reputation from results, mark remaining resolved
         for (uint256 i = 0; i < count; i++) {
             uint256 aid = auctionIds[i];
             Auction storage a = _auctions[aid];
+
+            // Cancel if still open
             if (a.status == AuctionStatus.Open) {
-                a.status = AuctionStatus.ForceClosed;
+                a.status = AuctionStatus.Cancelled;
                 _removeOpenAuction(aid);
-                emit AuctionForceClosed(aid, a.currentBid, a.seller, externalEventId, 0);
+                emit AuctionCancelled(aid, a.currentBid, a.sellerId, externalEventId);
+            }
+
+            // Apply reputation if not already resolved
+            if (!a.reputationResolved) {
+                a.reputationResolved = true;
+                PredictionOutcome outcome = _findOutcomeForAuction(aid, results);
+                (int8 scoreChange, int256 newScore) = _applyReputation(a.sellerId, outcome);
+                emit SellerReputationScoreUpdated(a.sellerId, aid, outcome, scoreChange, newScore);
             }
         }
 
-        // Phase 2: Apply per-auction reputation from results array
-        for (uint256 i = 0; i < results.length; i++) {
-            uint256 aid = results[i].auctionId;
-            Auction storage a = _auctions[aid];
-            if (a.eventId != externalEventId) revert AuctionNotLinkedToEvent(aid, externalEventId);
-            if (!a.reputationResolved) {
-                a.reputationResolved = true;
-                int8 delta = results[i].predictionCorrect ? int8(1) : int8(-1);
-                _sellers[a.seller].reputationScore += delta;
-                emit ReputationUpdated(a.seller, aid, delta, _sellers[a.seller].reputationScore);
-            }
-        }
-
-        // Phase 3: Mark remaining auctions as resolved with 0 delta
-        for (uint256 i = 0; i < count; i++) {
-            Auction storage a = _auctions[auctionIds[i]];
-            if (!a.reputationResolved) {
-                a.reputationResolved = true;
-            }
-        }
+        eventResolved[externalEventId] = true;
+        _removeUnresolvedEvent(externalEventId);
 
         emit ExternalEventResolved(externalEventId, count, results.length);
+    }
+
+    function _applyReputation(string memory sellerId, PredictionOutcome outcome)
+        internal returns (int8 scoreChange, int256 newScore)
+    {
+        if (outcome == PredictionOutcome.PredictionCorrect) {
+            scoreChange = 1;
+        } else if (outcome == PredictionOutcome.PredictionWrong) {
+            scoreChange = -1;
+        } else {
+            scoreChange = 0;
+        }
+
+        if (scoreChange != 0) {
+            _sellers[sellerId].reputationScore += scoreChange;
+        }
+        newScore = _sellers[sellerId].reputationScore;
+    }
+
+    function _findOutcomeForAuction(uint256 auctionId, AuctionResult[] memory results)
+        internal pure returns (PredictionOutcome)
+    {
+        for (uint256 i = 0; i < results.length; i++) {
+            if (results[i].auctionId == auctionId) {
+                return results[i].predictionOutcome;
+            }
+        }
+        return PredictionOutcome.NoPrediction;
     }
 
     // ===========================
@@ -411,12 +425,12 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
         return eventAuctions[externalEventId];
     }
 
-    function getSeller(string calldata sellerName) external view returns (Seller memory) {
-        return _sellers[sellerName];
+    function getSeller(string calldata sellerId) external view returns (Seller memory) {
+        return _sellers[sellerId];
     }
 
-    function getSellerAuctions(string calldata sellerName) external view returns (uint256[] memory) {
-        return sellerAuctions[sellerName];
+    function getSellerAuctions(string calldata sellerId) external view returns (uint256[] memory) {
+        return sellerAuctions[sellerId];
     }
 
     // ===========================

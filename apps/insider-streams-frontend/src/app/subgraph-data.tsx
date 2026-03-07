@@ -5,7 +5,7 @@ import {
   RecentAuctionsDocument,
   RecentBidsDocument,
   RecentClosedAuctionsDocument,
-  RecentForceClosedAuctionsDocument,
+  RecentCancelledAuctionsDocument,
 } from "../__generated__/graphql";
 
 function Section({
@@ -57,14 +57,14 @@ export function ClosedAuctionsData() {
   );
 }
 
-export function ForceClosedAuctionsData() {
-  const { data } = useSuspenseQuery(RecentForceClosedAuctionsDocument);
+export function CancelledAuctionsData() {
+  const { data } = useSuspenseQuery(RecentCancelledAuctionsDocument);
   return (
     <Section
-      title="Auctions Force-Closed"
-      count={data.auctionForceCloseds.length}
+      title="Auctions Cancelled"
+      count={data.auctionCancelleds.length}
     >
-      {JSON.stringify(data.auctionForceCloseds, null, 2)}
+      {JSON.stringify(data.auctionCancelleds, null, 2)}
     </Section>
   );
 }

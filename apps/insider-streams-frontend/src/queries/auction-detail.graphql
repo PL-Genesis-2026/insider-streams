@@ -33,24 +33,24 @@ query AuctionDetailSubgraph($auctionId: BigInt!, $bidLimit: Int!) {
     eventId
     blockTimestamp
   }
-  forceClosedAuction: auctionForceCloseds(
+  cancelledAuction: auctionCancelleds(
     first: 1
     orderBy: blockTimestamp
     orderDirection: desc
     where: { auctionId: $auctionId }
   ) {
     sellerId
-    heldAmount
+    cancelledBidAmount
     eventId
-    reputationDelta
     blockTimestamp
   }
-  reputationUpdates: reputationUpdateds(
+  reputationUpdates: sellerReputationScoreUpdateds(
     orderBy: blockTimestamp
     orderDirection: desc
     where: { auctionId: $auctionId }
   ) {
-    reputationDelta
+    predictionOutcome
+    scoreChange
     newScore
     blockTimestamp
   }

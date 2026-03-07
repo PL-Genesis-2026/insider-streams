@@ -1,5 +1,5 @@
 /**
- * Force-close watcher — subscribes to AuctionForceClosed events via WebSocket
+ * Force-close watcher — subscribes to AuctionCancelled events via WebSocket
  * and triggers the force-close-handler CRE workflow to refund active bids.
  *
  * On startup, catches up from lastProcessedBlock using getLogs, then switches
@@ -43,7 +43,7 @@ async function handleEvent(
 
   log(
     "force-close",
-    `AuctionForceClosed auctionId=${auctionId} in block ${blockNumber} — txHash=${txHash.slice(0, 12)}... eventIndex=${eventIndex}`,
+    `AuctionCancelled auctionId=${auctionId} in block ${blockNumber} — txHash=${txHash.slice(0, 12)}... eventIndex=${eventIndex}`,
   );
 
   try {
@@ -71,8 +71,8 @@ export async function catchUpForceClose(
   const logs = await publicClient.getLogs({
     address: SECRET_MARKETPLACE_ADDRESS,
     event: secretMarketplaceAbi.find(
-      (e): e is Extract<typeof e, { type: "event"; name: "AuctionForceClosed" }> =>
-        e.type === "event" && e.name === "AuctionForceClosed",
+      (e): e is Extract<typeof e, { type: "event"; name: "AuctionCancelled" }> =>
+        e.type === "event" && e.name === "AuctionCancelled",
     )!,
     fromBlock,
     toBlock,
@@ -80,7 +80,7 @@ export async function catchUpForceClose(
 
   if (logs.length === 0) return;
 
-  log("force-close", `Catching up: ${logs.length} AuctionForceClosed event(s) in blocks ${fromBlock}-${toBlock}`);
+  log("force-close", `Catching up: ${logs.length} AuctionCancelled event(s) in blocks ${fromBlock}-${toBlock}`);
   for (const entry of logs) {
     await handleEvent(
       publicClient,
@@ -92,7 +92,7 @@ export async function catchUpForceClose(
   }
 }
 
-/** Subscribe to real-time AuctionForceClosed events via WebSocket. */
+/** Subscribe to real-time AuctionCancelled events via WebSocket. */
 export function watchForceClose(
   wsClient: PublicClient,
   httpClient: PublicClient,
@@ -100,7 +100,7 @@ export function watchForceClose(
   return wsClient.watchContractEvent({
     address: SECRET_MARKETPLACE_ADDRESS,
     abi: secretMarketplaceAbi,
-    eventName: "AuctionForceClosed",
+    eventName: "AuctionCancelled",
     onLogs: (logs) => {
       for (const entry of logs) {
         handleEvent(

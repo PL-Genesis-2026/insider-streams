@@ -25,17 +25,20 @@ import "dotenv/config";
 
 import {
   CONFIDENTIAL_USDC_ADDRESS,
-  confidentialUsdcAbi,
   EXAMPLE_PREDICTION_MARKET_ADDRESS,
   examplePredictionMarketAbi,
 } from "@private-streams/common";
-import { parseEventLogs, type Hex } from "viem";
+import type { Hex } from "viem";
 import {
+  MIN_BALANCE,
+  MINT_AMOUNT,
   assert,
   banner,
   createClients,
+  ensureUsdcApproval,
   ensureUsdcBalance,
   envRequired,
+  parseFirstEventLog,
   runCRE,
   step,
   waitForTimestamp,
@@ -57,12 +60,8 @@ const { publicClient, ownerClient, ownerAccount, bidderClient, bidderAccount } =
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const MIN_BALANCE = 10_000_000n; // 10 USDC
-const MINT_AMOUNT = 10_000_000_000n; // 10,000 USDC
-const APPROVAL_AMOUNT = 100_000_000_000n; // 100,000 USDC blanket
-const MIN_ALLOWANCE = 10_000_000n; // 10 USDC — threshold to trigger approve
 const PREDICTION_AMOUNT = 1_000_000n; // 1 USDC
-const EVENT_DURATION = BigInt(60); // 60 seconds
+const EVENT_DURATION = BigInt(30); // 30 seconds
 const QUESTION = "The New York Yankees won the 2009 World Series.";
 // SimpleMarket.Outcome: 0=Unresolved, 1=No, 2=Yes
 const OUTCOME_YES = 2;
@@ -90,41 +89,22 @@ async function main() {
 
   // ── Step 2: Approve USDC (only if needed) ──────────────────────────────────
   step("Ensuring USDC approvals...");
-  const ownerAllowance = await publicClient.readContract({
-    address: CONFIDENTIAL_USDC,
-    abi: confidentialUsdcAbi,
-    functionName: "allowance",
-    args: [ownerAccount.address, EXAMPLE_PREDICTION_MARKET_ADDRESS],
-  });
-  if (ownerAllowance < MIN_ALLOWANCE) {
-    const h = await ownerClient.writeContract({
-      address: CONFIDENTIAL_USDC,
-      abi: confidentialUsdcAbi,
-      functionName: "approve",
-      args: [EXAMPLE_PREDICTION_MARKET_ADDRESS, APPROVAL_AMOUNT],
-    });
-    await waitForTx(publicClient, h, "Owner USDC approval");
-  } else {
-    console.log(`  ok Owner allowance sufficient`);
-  }
-
-  const bidderAllowance = await publicClient.readContract({
-    address: CONFIDENTIAL_USDC,
-    abi: confidentialUsdcAbi,
-    functionName: "allowance",
-    args: [bidderAccount!.address, EXAMPLE_PREDICTION_MARKET_ADDRESS],
-  });
-  if (bidderAllowance < MIN_ALLOWANCE) {
-    const h = await bidderClient!.writeContract({
-      address: CONFIDENTIAL_USDC,
-      abi: confidentialUsdcAbi,
-      functionName: "approve",
-      args: [EXAMPLE_PREDICTION_MARKET_ADDRESS, APPROVAL_AMOUNT],
-    });
-    await waitForTx(publicClient, h, "Bidder USDC approval");
-  } else {
-    console.log(`  ok Bidder allowance sufficient`);
-  }
+  await ensureUsdcApproval(
+    publicClient,
+    ownerClient,
+    CONFIDENTIAL_USDC,
+    ownerAccount.address,
+    EXAMPLE_PREDICTION_MARKET_ADDRESS,
+    "Owner",
+  );
+  await ensureUsdcApproval(
+    publicClient,
+    bidderClient!,
+    CONFIDENTIAL_USDC,
+    bidderAccount!.address,
+    EXAMPLE_PREDICTION_MARKET_ADDRESS,
+    "Bidder",
+  );
 
   // ── Step 3: Create event ───────────────────────────────────────────────────
   step("Owner creating event...");
@@ -139,12 +119,7 @@ async function main() {
     createEventHash,
     "Event created",
   );
-  const eventLogs = parseEventLogs({
-    abi: examplePredictionMarketAbi,
-    logs: eventReceipt.logs,
-    eventName: "EventCreated",
-  });
-  const eventId = eventLogs[0].args.eventId;
+  const eventId = parseFirstEventLog(eventReceipt, examplePredictionMarketAbi, "EventCreated").eventId as bigint;
   console.log(`  Event ID: ${eventId}`);
 
   // ── Step 4: Buy YES shares (replaces old makePrediction) ────────────────────

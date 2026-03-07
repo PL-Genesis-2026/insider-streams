@@ -7,7 +7,7 @@
  *   3. Owner places on-chain bid
  *   4. Insert Supabase records (seller, secret, deposit transfer, private_bid)
  *   5. Verify bidder's locked_balance includes the bid
- *   6. Force-close the auction on-chain via forceCloseAuction(auctionId, 0)
+ *   6. Cancel the auction on-chain via cancelAuction(auctionId, 0)
  *   7. Run CRE force-close-handler with --evm-tx-hash + --evm-event-index
  *   8. Verify bid status=refunded, refunded_at set, bidder locked_balance decreased
  *
@@ -32,18 +32,24 @@ import {
   CONFIDENTIAL_USDC_ADDRESS,
   SECRET_MARKETPLACE_ADDRESS,
   examplePredictionMarketAbi,
-  confidentialUsdcAbi,
   secretMarketplaceAbi,
 } from "@private-streams/common";
 import type { Database } from "@private-streams/common";
 import { parseEventLogs, formatUnits, type Address, type Hex } from "viem";
 import {
+  MIN_BALANCE,
+  MINT_AMOUNT,
+  USDC_DECIMALS,
   assert,
   banner,
   createClients,
+  ensureUsdcApproval,
   ensureUsdcBalance,
   envRequired,
+  parseFirstEventLog,
+  readSimpleMarketAddress,
   runCRE,
+  setupSupabaseAuctionBid,
   step,
   waitForTx,
 } from "./e2e-helpers.js";
@@ -66,18 +72,12 @@ const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_KEY);
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const SELLER_NAME = "E2EForceCloseSeller";
+const SELLER_ID = "E2EForceCloseSeller";
 const BID_AMOUNT = 1_000_000n; // 1 USDC
-const AUCTION_DURATION = 300; // 5 minutes (we'll force-close before it ends)
-const EVENT_DURATION = BigInt(600); // 10 minutes
+const AUCTION_DURATION = 120; // 2 minutes (we'll force-close before it ends)
+const EVENT_DURATION = BigInt(300); // 5 minutes
 const DEPOSIT_AMOUNT = BID_AMOUNT * 10n; // 10 USDC headroom
 const QUESTION = "Force close handler E2E test event";
-const USDC_DECIMALS = 6;
-
-const MIN_BALANCE = 10_000_000n; // 10 USDC
-const MINT_AMOUNT = 10_000_000_000n; // 10,000 USDC
-const APPROVAL_AMOUNT = 100_000_000_000n; // 100,000 USDC blanket
-const MIN_ALLOWANCE = 10_000_000n; // 10 USDC — threshold to trigger approve
 
 // Unique transaction ID for the mock deposit (avoids collisions with real data)
 const DEPOSIT_TX_ID = `e2e-force-close-deposit-${Date.now()}`;
@@ -86,11 +86,7 @@ const DEPOSIT_TX_ID = `e2e-force-close-deposit-${Date.now()}`;
 
 async function main() {
   // Read the ExamplePredictionMarket address from SecretMarketplace
-  const SIMPLE_MARKET = (await publicClient.readContract({
-    address: SECRET_MARKETPLACE,
-    abi: secretMarketplaceAbi,
-    functionName: "marketplace",
-  })) as Address;
+  const SIMPLE_MARKET = await readSimpleMarketAddress(publicClient, SECRET_MARKETPLACE);
 
   banner("Force Close Handler E2E Test");
   console.log(`  Owner (seller):    ${ownerAccount.address}`);
@@ -113,41 +109,22 @@ async function main() {
 
   // ── Step 2: Approve USDC (only if needed) ──────────────────────────────────
   step("Ensuring USDC approvals...");
-  const allowanceSM = await publicClient.readContract({
-    address: CONFIDENTIAL_USDC,
-    abi: confidentialUsdcAbi,
-    functionName: "allowance",
-    args: [ownerAccount.address, SECRET_MARKETPLACE],
-  });
-  if (allowanceSM < MIN_ALLOWANCE) {
-    const h = await ownerClient.writeContract({
-      address: CONFIDENTIAL_USDC,
-      abi: confidentialUsdcAbi,
-      functionName: "approve",
-      args: [SECRET_MARKETPLACE, APPROVAL_AMOUNT],
-    });
-    await waitForTx(publicClient, h, "Owner approved SecretMarketplace");
-  } else {
-    console.log(`  ok SecretMarketplace allowance sufficient`);
-  }
-
-  const allowanceMarket = await publicClient.readContract({
-    address: CONFIDENTIAL_USDC,
-    abi: confidentialUsdcAbi,
-    functionName: "allowance",
-    args: [ownerAccount.address, SIMPLE_MARKET],
-  });
-  if (allowanceMarket < MIN_ALLOWANCE) {
-    const h = await ownerClient.writeContract({
-      address: CONFIDENTIAL_USDC,
-      abi: confidentialUsdcAbi,
-      functionName: "approve",
-      args: [SIMPLE_MARKET, APPROVAL_AMOUNT],
-    });
-    await waitForTx(publicClient, h, "Owner approved ExamplePredictionMarket");
-  } else {
-    console.log(`  ok ExamplePredictionMarket allowance sufficient`);
-  }
+  await ensureUsdcApproval(
+    publicClient,
+    ownerClient,
+    CONFIDENTIAL_USDC,
+    ownerAccount.address,
+    SECRET_MARKETPLACE,
+    "SecretMarketplace",
+  );
+  await ensureUsdcApproval(
+    publicClient,
+    ownerClient,
+    CONFIDENTIAL_USDC,
+    ownerAccount.address,
+    SIMPLE_MARKET,
+    "ExamplePredictionMarket",
+  );
 
   // ── Step 3: Create event ───────────────────────────────────────────────────
   step("Owner creating ExamplePredictionMarket event...");
@@ -162,12 +139,8 @@ async function main() {
     createEventHash,
     "Event created",
   );
-  const eventLogs = parseEventLogs({
-    abi: examplePredictionMarketAbi,
-    logs: eventReceipt.logs,
-    eventName: "EventCreated",
-  });
-  const eventId = eventLogs[0].args.eventId;
+  const eventArgs = parseFirstEventLog(eventReceipt, examplePredictionMarketAbi, "EventCreated");
+  const eventId = eventArgs.eventId as bigint;
   console.log(`  Event ID: ${eventId}`);
 
   // ── Step 4: Create auction (5-min duration, force-close before expiry) ─────
@@ -179,19 +152,15 @@ async function main() {
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
     functionName: "createAuction",
-    args: [SELLER_NAME, eventId, QUESTION, endTime],
+    args: [SELLER_ID, eventId, QUESTION, endTime],
   });
   const auctionReceipt = await waitForTx(
     publicClient,
     createAuctionHash,
     "Auction created",
   );
-  const auctionLogs = parseEventLogs({
-    abi: secretMarketplaceAbi,
-    logs: auctionReceipt.logs,
-    eventName: "AuctionCreated",
-  });
-  const auctionId = auctionLogs[0].args.auctionId;
+  const auctionArgs = parseFirstEventLog(auctionReceipt, secretMarketplaceAbi, "AuctionCreated");
+  const auctionId = auctionArgs.auctionId as bigint;
   const auctionIdStr = auctionId.toString();
   console.log(`  Auction ID: ${auctionId}`);
 
@@ -219,48 +188,16 @@ async function main() {
 
   // ── Step 6: Insert Supabase records (seller, secret, deposit, private_bid) ─
   step("Setting up Supabase records...");
-
-  // Upsert seller (seller_id for the secret)
-  const { error: sellerErr } = await supabase
-    .from("sellers")
-    .upsert({ id: SELLER_NAME, address: ownerAccount.address.toLowerCase() }, { onConflict: "id" });
-  assert(!sellerErr, `Failed to upsert seller: ${sellerErr?.message}`);
-  console.log(`  ok Seller upserted: ${SELLER_NAME} -> ${ownerAccount.address}`);
-
-  // Insert secret (auction_id is PK — FK target for private_bids)
-  const { error: secretErr } = await supabase
-    .from("secrets")
-    .upsert({
-      auction_id: auctionIdStr,
-      secret_data: "E2E test secret",
-      seller_id: SELLER_NAME,
-    }, { onConflict: "auction_id" });
-  assert(!secretErr, `Failed to insert secret: ${secretErr?.message}`);
-  console.log(`  ok Secret inserted for auction ${auctionIdStr}`);
-
-  // Insert confirmed deposit transfer so bidder has available balance for bidding
-  const { error: depositErr } = await supabase
-    .from("transfers")
-    .insert({
-      transaction_id: DEPOSIT_TX_ID,
-      user_address: bidderAccount!.address.toLowerCase(),
-      amount: DEPOSIT_AMOUNT.toString(),
-      status: "confirmed",
-    });
-  assert(!depositErr, `Failed to insert deposit transfer: ${depositErr?.message}`);
-  console.log(`  ok Deposit: ${formatUnits(DEPOSIT_AMOUNT, USDC_DECIMALS)} USDC for bidder`);
-
-  // Insert active private bid (web2 bid from bidder)
-  const { error: bidErr } = await supabase
-    .from("private_bids")
-    .insert({
-      auction_id: auctionIdStr,
-      bidder_address: bidderAccount!.address.toLowerCase(),
-      amount: BID_AMOUNT.toString(),
-      status: "active",
-    });
-  assert(!bidErr, `Failed to insert private_bid: ${bidErr?.message}`);
-  console.log(`  ok Private bid: ${formatUnits(BID_AMOUNT, USDC_DECIMALS)} USDC from bidder`);
+  await setupSupabaseAuctionBid(supabase, {
+    sellerName: SELLER_ID,
+    sellerAddress: ownerAccount.address,
+    auctionId: auctionIdStr,
+    secretData: "E2E test secret",
+    bidderAddress: bidderAccount!.address,
+    bidAmount: BID_AMOUNT,
+    depositTxId: DEPOSIT_TX_ID,
+    depositAmount: DEPOSIT_AMOUNT,
+  });
 
   // ── Step 7: Capture balances before force-close ────────────────────────────
   step("Capturing bidder balances before force-close...");
@@ -279,36 +216,36 @@ async function main() {
   );
 
   // ── Step 8: Force-close auction on-chain ───────────────────────────────────
-  step("Force-closing auction on-chain...");
-  const forceCloseHash = await ownerClient.writeContract({
+  step("Cancelling auction on-chain...");
+  const cancelHash = await ownerClient.writeContract({
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
-    functionName: "forceCloseAuction",
+    functionName: "cancelAuction",
     args: [auctionId, 0],
   });
-  const forceCloseReceipt = await waitForTx(
+  const cancelReceipt = await waitForTx(
     publicClient,
-    forceCloseHash,
-    "Auction force-closed",
+    cancelHash,
+    "Auction cancelled",
   );
 
-  // Find AuctionForceClosed event index among ALL logs in the receipt
-  const forceCloseLogs = parseEventLogs({
+  // Find AuctionCancelled event index among ALL logs in the receipt
+  const cancelLogs = parseEventLogs({
     abi: secretMarketplaceAbi,
-    logs: forceCloseReceipt.logs,
-    eventName: "AuctionForceClosed",
+    logs: cancelReceipt.logs,
+    eventName: "AuctionCancelled",
   });
   assert(
-    forceCloseLogs.length > 0,
-    "No AuctionForceClosed event found in receipt",
+    cancelLogs.length > 0,
+    "No AuctionCancelled event found in receipt",
   );
-  const eventIndex = forceCloseReceipt.logs.findIndex(
-    (l) => l.logIndex === forceCloseLogs[0].logIndex,
+  const eventIndex = cancelReceipt.logs.findIndex(
+    (l) => l.logIndex === cancelLogs[0].logIndex,
   );
-  assert(eventIndex >= 0, "Could not find AuctionForceClosed log index");
-  console.log(`  AuctionForceClosed event index: ${eventIndex}`);
+  assert(eventIndex >= 0, "Could not find AuctionCancelled log index");
+  console.log(`  AuctionCancelled event index: ${eventIndex}`);
 
-  // Verify auction is now force-closed on-chain
+  // Verify auction is now cancelled on-chain
   const closedAuction = await publicClient.readContract({
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
@@ -322,7 +259,7 @@ async function main() {
   runCRE({
     workflow: "force-close-handler",
     triggerIndex: 0,
-    evmTxHash: forceCloseHash,
+    evmTxHash: cancelHash,
     evmEventIndex: eventIndex,
     broadcast: false,
   });
@@ -363,7 +300,7 @@ async function main() {
   console.log(`  Auction ID:        ${auctionId}`);
   console.log(`  Event ID:          ${eventId}`);
   console.log(`  Bid Amount:        ${formatUnits(BID_AMOUNT, USDC_DECIMALS)} USDC`);
-  console.log(`  On-chain status:   ForceClosed`);
+  console.log(`  On-chain status:   Cancelled`);
   console.log(`  Supabase bid:      refunded`);
   console.log(`  Buyer locked:      ${formatUnits(buyerLockedBefore, USDC_DECIMALS)} -> ${formatUnits(buyerLockedAfter, USDC_DECIMALS)} USDC`);
 }

@@ -48,15 +48,21 @@ const onTrigger = (runtime: Runtime<Config>): string => {
         }
 
         const sellerPrediction = secret.event_data.outcome;
-        const predictionCorrect =
+        let predictionOutcome: number;
+        if (
           (sellerPrediction === "yes" && event.outcome === OUTCOME_YES) ||
-          (sellerPrediction === "no" && event.outcome === OUTCOME_NO);
+          (sellerPrediction === "no" && event.outcome === OUTCOME_NO)
+        ) {
+          predictionOutcome = 1; // PredictionCorrect
+        } else {
+          predictionOutcome = 2; // PredictionWrong
+        }
 
         runtime.log(
-          `Auction ${auctionId}: predicted=${sellerPrediction}, actual=${event.outcome === OUTCOME_YES ? "yes" : "no"}, correct=${predictionCorrect}`,
+          `Auction ${auctionId}: predicted=${sellerPrediction}, actual=${event.outcome === OUTCOME_YES ? "yes" : "no"}, outcome=${predictionOutcome === 1 ? "correct" : "wrong"}`,
         );
 
-        results.push({ auctionId, predictionCorrect });
+        results.push({ auctionId, predictionOutcome });
       }
 
       try {
