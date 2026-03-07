@@ -60,7 +60,7 @@ const { publicClient, ownerClient, ownerAccount } = createClients({
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const BID_AMOUNT = 1_000_000n; // 1 USDC
-const AUCTION_DURATION = 45; // seconds
+const AUCTION_DURATION = 90; // seconds
 const QUESTION = "The New York Yankees won the 2009 World Series.";
 const SELLER_NAME = "Insider Alice";
 
