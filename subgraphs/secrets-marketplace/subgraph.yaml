@@ -10,7 +10,7 @@ dataSources:
     source:
       address: "0xCE8607e616D7b76C69Be5464ee2f89DCD21aC854"
       abi: SecretMarketplace
-      startBlock: 10400150
+      startBlock: 10401680
 
     mapping:
       kind: ethereum/events
