@@ -141,9 +141,7 @@ export async function getAuctionDetail({
     createdAt: scalarToIso(auction.blockTimestamp),
     status: auction.status as "Open" | "Closed" | "Cancelled",
     currentBidUsdc:
-      currentBidBigInt > BigInt(0)
-        ? bigintToUsdc(currentBidBigInt)
-        : undefined,
+      currentBidBigInt > BigInt(0) ? bigintToUsdc(currentBidBigInt) : undefined,
     bidCount: auction.bidCount,
     bids: result.bids.map(mapBid),
     closedAuction: closedAuction ? mapClosedAuction(closedAuction) : undefined,
@@ -155,8 +153,7 @@ export async function getAuctionDetail({
     sellerTotalAuctions: auction.seller.totalAuctionCount,
     sellerCorrectPredictions:
       auction.seller.auctionsWithCorrectPredictionsCount,
-    sellerWrongPredictions:
-      auction.seller.auctionsWithWrongPredictionsCount,
+    sellerWrongPredictions: auction.seller.auctionsWithWrongPredictionsCount,
     sellerTotalEarnings: bigintToUsdc(
       scalarToBigInt(auction.seller.totalEarnings),
     ),

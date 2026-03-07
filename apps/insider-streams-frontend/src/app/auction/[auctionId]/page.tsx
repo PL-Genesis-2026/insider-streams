@@ -18,11 +18,7 @@ import {
 } from "@private-streams/common";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { SecretRevealCard } from "@/components/secret-reveal";
 import { AuctionDetailPrivate } from "@/components/auction-detail-private";
@@ -200,7 +196,9 @@ function BidRow({
     <div
       className={cn(
         "flex items-center gap-4 rounded-lg px-4 py-3 transition-colors",
-        highlightLabel ? "bg-accent/8 ring-1 ring-accent/20" : "hover:bg-muted/40",
+        highlightLabel
+          ? "bg-accent/8 ring-1 ring-accent/20"
+          : "hover:bg-muted/40",
       )}
     >
       <div
@@ -239,7 +237,9 @@ function BidRow({
 
 export const dynamic = "force-dynamic";
 
-export default async function AuctionDetailPage({ params }: AuctionDetailPageProps) {
+export default async function AuctionDetailPage({
+  params,
+}: AuctionDetailPageProps) {
   const { auctionId } = await params;
   const auction = await getAuctionDetail({
     auctionId,
@@ -272,7 +272,9 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
             </Link>
           </Button>
           <span className="text-muted-foreground/40">/</span>
-          <span className="truncate font-medium text-foreground">#{auction.auctionId}</span>
+          <span className="font-medium text-foreground">
+            #{auction.auctionId}
+          </span>
         </nav>
 
         <header className="space-y-6">
@@ -280,7 +282,9 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
             <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.24em] text-accent">
               <span>Auction #{auction.auctionId}</span>
               <span className="text-muted-foreground/40">/</span>
-              <span>{EXAMPLE_PREDICTION_MARKET_NAME}</span>
+              <span>
+                {auction.marketplace ?? `Market #${auction.marketId}`}
+              </span>
             </div>
             <Badge variant={statusVariant}>{auction.status}</Badge>
             {auction.endTime ? (
@@ -319,7 +323,9 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
               <CardHeader className="pb-0">
                 <div className="flex items-center justify-between">
                   <Label>Bid history</Label>
-                  <span className="text-xs text-muted-foreground/60">{auction.bidCount} bid{auction.bidCount === 1 ? "" : "s"}</span>
+                  <span className="text-xs text-muted-foreground/60">
+                    {auction.bidCount} bid{auction.bidCount === 1 ? "" : "s"}
+                  </span>
                 </div>
               </CardHeader>
               <CardContent className="space-y-1">
@@ -360,7 +366,7 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
           <aside className="flex flex-col gap-6 lg:sticky lg:top-8 lg:self-start">
             <Card className="border-border/90 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_96%,transparent),color-mix(in_srgb,var(--secondary)_28%,transparent))]">
               {isOpen ? (
-                <AuctionBidGate />
+                <AuctionBidGate auctionId={auction.auctionId} currentBidUsdc={auction.currentBidUsdc} />
               ) : (
                 <>
                   <CardHeader className="gap-5 pb-0">
@@ -394,8 +400,8 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
                   </div>
                   <div className="min-w-0">
                     <Link
-                      href={`/seller/${auction.sellerAddress}`}
-                      className="block truncate text-sm font-medium text-foreground transition-colors hover:text-primary"
+                      href={`/seller/${encodeURIComponent(auction.sellerAddress)}`}
+                      className="block break-all text-sm font-medium text-foreground transition-colors hover:text-primary"
                     >
                       {auction.sellerAddress}
                     </Link>
@@ -418,12 +424,20 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <span className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground/60">Auction ID</span>
-                    <p className="font-mono text-sm text-foreground">#{auction.auctionId}</p>
+                    <span className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground/60">
+                      Auction ID
+                    </span>
+                    <p className="font-mono text-sm text-foreground">
+                      #{auction.auctionId}
+                    </p>
                   </div>
                   <div className="space-y-1">
-                    <span className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground/60">Market ID</span>
-                    <p className="font-mono text-sm text-foreground">{auction.marketId}</p>
+                    <span className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground/60">
+                      Market ID
+                    </span>
+                    <p className="font-mono text-sm text-foreground">
+                      {auction.marketId}
+                    </p>
                   </div>
                 </div>
 
@@ -433,7 +447,9 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground/70">Created</span>
                     <time className="text-foreground">
-                      {auction.createdAt ? formatTimestamp(auction.createdAt) : "Unavailable"}
+                      {auction.createdAt
+                        ? formatTimestamp(auction.createdAt)
+                        : "Unavailable"}
                     </time>
                   </div>
                   {auction.endTime ? (
@@ -448,7 +464,12 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
 
                 <Separator />
 
-                <Button asChild variant="outline" size="sm" className="w-full gap-1.5">
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className="w-full gap-1.5"
+                >
                   <a
                     href={`https://sepolia.etherscan.io/address/${SECRET_MARKETPLACE_ADDRESS}`}
                     target="_blank"
