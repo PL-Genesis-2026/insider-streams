@@ -44,30 +44,22 @@ import {
   VAULT_ADDRESS,
 } from "@private-streams/common";
 import type { Database } from "@private-streams/common";
+import { formatUnits, type Address, type Hex } from "viem";
+import type { PrivateKeyAccount } from "viem/accounts";
+
 import {
-  createPublicClient,
-  createWalletClient,
-  http,
-  formatUnits,
-  type Address,
-  type Hex,
-} from "viem";
-import { privateKeyToAccount } from "viem/accounts";
-import { sepolia } from "viem/chains";
-import { execSync } from "child_process";
-import { resolve, dirname } from "path";
-import { fileURLToPath } from "url";
+  envRequired,
+  banner,
+  step,
+  assert,
+  createClients,
+  waitForTx,
+  resetStepCounter,
+  runCRE,
+  poll,
+} from "./e2e-helpers.js";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
-
-function envRequired(name: string): string {
-  const val = process.env[name];
-  if (!val) {
-    console.error(`ERROR: ${name} not set`);
-    process.exit(1);
-  }
-  return val;
-}
 
 const OWNER_PK = envRequired("OWNER_PK") as Hex;
 const BIDDER_PK = envRequired("BIDDER_PK") as Hex;
@@ -94,12 +86,6 @@ const VAULT_DEPOSIT = 3_000_000n; // 3 tokens — fund bidder's private balance
 const DEPOSIT_AMOUNT = 2_000_000n; // 2 tokens — bidder → platform EOA (deposit)
 const WITHDRAWAL_AMOUNT = 1_000_000n; // 1 token — platform EOA → bidder (withdrawal)
 
-// Project root for CRE invocation
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const PROJECT_ROOT = resolve(__dirname, "../..");
-const CRE_BIN = `${process.env.HOME}/.cre/bin/cre`;
-
 // ─── ABI fragments ───────────────────────────────────────────────────────────
 
 const vaultAbi = [
@@ -117,68 +103,17 @@ const vaultAbi = [
 
 // ─── Clients ─────────────────────────────────────────────────────────────────
 
-const ownerAccount = privateKeyToAccount(OWNER_PK);
+const { publicClient, ownerClient, ownerAccount, bidderClient, bidderAccount } =
+  createClients({ ownerPk: OWNER_PK, bidderPk: BIDDER_PK, rpcUrl: RPC_URL });
+
+const ownerWallet = ownerClient;
+const bidderWallet = bidderClient!;
 const ownerAddr = ownerAccount.address;
-const bidderAccount = privateKeyToAccount(BIDDER_PK);
-const bidderAddr = bidderAccount.address;
-
-const publicClient = createPublicClient({
-  chain: sepolia,
-  transport: http(RPC_URL),
-});
-
-const ownerWallet = createWalletClient({
-  account: ownerAccount,
-  chain: sepolia,
-  transport: http(RPC_URL),
-});
-
-const bidderWallet = createWalletClient({
-  account: bidderAccount,
-  chain: sepolia,
-  transport: http(RPC_URL),
-});
+const bidderAddr = bidderAccount!.address;
 
 const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_KEY);
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-let stepNum = 0;
-function step(msg: string) {
-  stepNum++;
-  console.log(`\n━━━ Step ${stepNum}: ${msg} ━━━`);
-}
-
-function assert(condition: boolean, msg: string) {
-  if (!condition) {
-    console.error(`ASSERTION FAILED: ${msg}`);
-    process.exit(1);
-  }
-}
-
-async function waitForTx(hash: Hex, label: string) {
-  console.log(`  Waiting for ${label}... (${hash})`);
-  const receipt = await publicClient.waitForTransactionReceipt({ hash });
-  assert(receipt.status === "success", `${label} reverted`);
-  console.log(`  ✓ ${label} confirmed (block ${receipt.blockNumber})`);
-  return receipt;
-}
-
-/** Poll a condition until it returns truthy or maxAttempts is exceeded */
-async function poll<T>(
-  fn: () => Promise<T | null | undefined>,
-  label: string,
-  maxAttempts = 30,
-  intervalMs = 10_000,
-): Promise<T> {
-  for (let i = 1; i <= maxAttempts; i++) {
-    console.log(`  Polling ${label} (attempt ${i}/${maxAttempts})...`);
-    const result = await fn();
-    if (result) return result;
-    if (i < maxAttempts) await new Promise((r) => setTimeout(r, intervalMs));
-  }
-  throw new Error(`Timed out polling for ${label}`);
-}
+// ─── Private Token API helpers ──────────────────────────────────────────────
 
 /**
  * Fetch transactions from Private Token API using EIP-712 signed request.
@@ -252,7 +187,7 @@ async function fetchApiTransactions(): Promise<
  * Returns the API transaction_id.
  */
 async function executePrivateTransfer(
-  signer: ReturnType<typeof privateKeyToAccount>,
+  signer: PrivateKeyAccount,
   recipient: Address,
   amount: bigint,
 ): Promise<string> {
@@ -307,38 +242,11 @@ async function executePrivateTransfer(
   return data.transaction_id;
 }
 
-/** Run CRE user-balance-recording-fallback simulation — throws on failure */
-function runCRESimulation(): string {
-  console.log("  Running CRE user-balance-recording-fallback simulation...");
-  const output = execSync(
-    `${CRE_BIN} workflow simulate user-balance-recording-fallback --target local-simulation --non-interactive --trigger-index 0`,
-    {
-      cwd: `${PROJECT_ROOT}/cre-workflows`,
-      encoding: "utf-8",
-      timeout: 120_000,
-      env: {
-        ...process.env,
-        PATH: `${process.env.HOME}/.cre/bin:${process.env.PATH}`,
-      },
-    },
-  );
-  // Print relevant lines
-  const lines = output.split("\n");
-  const userLogs = lines.filter(
-    (l) => l.includes("[USER LOG]") || l.includes("Workflow Simulation Result"),
-  );
-  for (const line of userLogs) {
-    console.log(`  CRE: ${line.trim()}`);
-  }
-  return output;
-}
-
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log("╔══════════════════════════════════════════════════════╗");
-  console.log("║     Deposit Reconciler E2E Test                     ║");
-  console.log("╚══════════════════════════════════════════════════════╝");
+  resetStepCounter();
+  banner("Deposit Reconciler E2E Test");
   console.log(`  Owner (platform EOA): ${ownerAddr}`);
   console.log(`  Bidder (user):        ${bidderAddr}`);
   console.log(`  Token (USDC):         ${SIMPLE_TOKEN}`);
@@ -368,7 +276,7 @@ async function main() {
     functionName: "mint",
     args: [bidderAddr, VAULT_DEPOSIT + 1_000_000n], // extra buffer
   });
-  await waitForTx(mintHash, "mint");
+  await waitForTx(publicClient, mintHash, "mint");
 
   const balance = await publicClient.readContract({
     address: SIMPLE_TOKEN,
@@ -388,7 +296,7 @@ async function main() {
     functionName: "approve",
     args: [VAULT, VAULT_DEPOSIT],
   });
-  await waitForTx(approveHash, "approve vault");
+  await waitForTx(publicClient, approveHash, "approve vault");
 
   const vaultDepositHash = await bidderWallet.writeContract({
     address: VAULT,
@@ -397,6 +305,7 @@ async function main() {
     args: [SIMPLE_TOKEN, VAULT_DEPOSIT],
   });
   await waitForTx(
+    publicClient,
     vaultDepositHash,
     `vault deposit (${formatUnits(VAULT_DEPOSIT, CONFIDENTIAL_USDC_DECIMALS)} DEMO)`,
   );
@@ -407,7 +316,7 @@ async function main() {
     async () => {
       // Fetch from bidder's perspective to check their private balance is funded
       const timestamp = Math.floor(Date.now() / 1000);
-      const signature = await bidderAccount.signTypedData({
+      const signature = await bidderAccount!.signTypedData({
         domain: EIP712_DOMAIN,
         types: {
           "List Transactions": [
@@ -454,14 +363,13 @@ async function main() {
       return null;
     },
     "vault deposit in API",
-    30,
-    10_000,
+    { maxAttempts: 20, intervalMs: 2_000, backoff: true },
   );
 
   // ── Step 3: Bidder → Owner private transfer (deposit into platform) ────────
   step("Bidder does private transfer TO platform EOA (deposit)");
   const depositTxId = await executePrivateTransfer(
-    bidderAccount,
+    bidderAccount!,
     ownerAddr,
     DEPOSIT_AMOUNT,
   );
@@ -487,13 +395,12 @@ async function main() {
       return null;
     },
     "incoming transfer in API",
-    30,
-    10_000,
+    { maxAttempts: 20, intervalMs: 2_000, backoff: true },
   );
 
   // ── Step 5: Run CRE user-balance-recording-fallback simulation ──────────────
   step("Run CRE user-balance-recording-fallback simulation (first run)");
-  runCRESimulation();
+  runCRE({ workflow: "user-balance-recording-fallback", triggerIndex: 0 });
 
   // ── Step 6: Verify deposit in Supabase ─────────────────────────────────────
   step("Verify deposit in Supabase transfers table");
@@ -546,7 +453,7 @@ async function main() {
     .eq("status", "confirmed")
     .eq("user_address", bidderAddr.toLowerCase());
 
-  runCRESimulation();
+  runCRE({ workflow: "user-balance-recording-fallback", triggerIndex: 0 });
 
   const { count: countAfter } = await supabase
     .from("transfers")
@@ -591,13 +498,12 @@ async function main() {
       return null;
     },
     "outgoing transfer in API",
-    30,
-    10_000,
+    { maxAttempts: 20, intervalMs: 2_000, backoff: true },
   );
 
   // ── Step 11: Run CRE simulation to pick up the withdrawal ──────────────────
   step("Run CRE simulation (picks up outgoing transfer)");
-  runCRESimulation();
+  runCRE({ workflow: "user-balance-recording-fallback", triggerIndex: 0 });
 
   // ── Step 12: Verify withdrawal in Supabase ─────────────────────────────────
   step("Verify withdrawal in Supabase transfers table");
@@ -648,18 +554,15 @@ async function main() {
   );
 
   // ── Summary ────────────────────────────────────────────────────────────────
-  console.log("\n╔══════════════════════════════════════════════════════╗");
-  console.log("║     ALL TESTS PASSED ✓                              ║");
-  console.log("╠══════════════════════════════════════════════════════╣");
+  banner("ALL TESTS PASSED");
   console.log(
-    `║  Vault deposit:   ${vaultDepositHash.slice(0, 20)}... (funds private balance)`,
+    `  Vault deposit:   ${vaultDepositHash.slice(0, 20)}... (funds private balance)`,
   );
-  console.log(`║  Deposit (in):    ${depositTxId} (bidder → platform)`);
-  console.log(`║  Withdrawal (out): ${withdrawalTxId} (platform → bidder)`);
+  console.log(`  Deposit (in):    ${depositTxId} (bidder → platform)`);
+  console.log(`  Withdrawal (out): ${withdrawalTxId} (platform → bidder)`);
   console.log(
-    `║  Balance:         ${formatUnits(availBefore, CONFIDENTIAL_USDC_DECIMALS)} → ${formatUnits(availAfter, CONFIDENTIAL_USDC_DECIMALS)} DEMO`,
+    `  Balance:         ${formatUnits(availBefore, CONFIDENTIAL_USDC_DECIMALS)} → ${formatUnits(availAfter, CONFIDENTIAL_USDC_DECIMALS)} DEMO`,
   );
-  console.log("╚══════════════════════════════════════════════════════╝");
 }
 
 main()
