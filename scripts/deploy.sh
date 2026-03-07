@@ -341,8 +341,8 @@ else
   AUCTION_OUTPUT=$(ssh -t "$REMOTE_HOST" bash -c "'
     set -euo pipefail
     export NVM_DIR=\"\$HOME/.nvm\" && [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\"; export PATH=\"\$HOME/.cre/bin:\$HOME/.foundry/bin:\$HOME/.bun/bin:\$HOME/.local/bin:\$PATH\"
-    cd \"$REPO_PATH\"
-    ./scripts/e2e_tests/secret-marketplace-auction-closer-e2e.sh 2>&1
+    cd \"$REPO_PATH/scripts\"
+    npx tsx --env-file=.env e2e_tests/secret-marketplace-auction-closer-e2e.ts 2>&1
   '" 2>&1) || true
 
   if echo "$AUCTION_OUTPUT" | grep -q "PASS"; then
@@ -361,8 +361,8 @@ else
   MARKET_OUTPUT=$(ssh -t "$REMOTE_HOST" bash -c "'
     set -euo pipefail
     export NVM_DIR=\"\$HOME/.nvm\" && [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\"; export PATH=\"\$HOME/.cre/bin:\$HOME/.foundry/bin:\$HOME/.bun/bin:\$HOME/.local/bin:\$PATH\"
-    cd \"$REPO_PATH\"
-    ./scripts/e2e_tests/simple-market-e2e.sh 2>&1
+    cd \"$REPO_PATH/scripts\"
+    npx tsx --env-file=.env e2e_tests/simple-market-e2e.ts 2>&1
   '" 2>&1) || true
 
   if echo "$MARKET_OUTPUT" | grep -q "PASS"; then
@@ -375,23 +375,23 @@ else
     E2E_FAILURES=$((E2E_FAILURES + 1))
   fi
 
-  # 3c: user-balance-recording-fallback (CRE simulation only, no E2E script)
+  # 3c: user-balance-recording-fallback E2E
   echo ""
-  info "  Running user-balance-recording-fallback CRE simulation..."
+  info "  Running user-balance-recording-fallback E2E..."
   DEPOSIT_EXIT=0
   DEPOSIT_OUTPUT=$(ssh -t "$REMOTE_HOST" bash -c "'
     set -euo pipefail
     export NVM_DIR=\"\$HOME/.nvm\" && [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\"; export PATH=\"\$HOME/.cre/bin:\$HOME/.foundry/bin:\$HOME/.bun/bin:\$HOME/.local/bin:\$PATH\"
-    cd \"$REPO_PATH/cre-workflows\"
-    cre workflow simulate user-balance-recording-fallback --target local-simulation --non-interactive --trigger-index 0 2>&1
+    cd \"$REPO_PATH/scripts\"
+    npx tsx --env-file=.env e2e_tests/user-balance-recording-fallback-e2e.ts 2>&1
   '" 2>&1) || DEPOSIT_EXIT=$?
 
-  if [ "$DEPOSIT_EXIT" -eq 0 ] && ! echo "$DEPOSIT_OUTPUT" | grep -qi "error\|panic\|fatal"; then
+  if [ "$DEPOSIT_EXIT" -eq 0 ] && echo "$DEPOSIT_OUTPUT" | grep -qi "PASSED\|PASS"; then
     USER_BALANCE_RECORDING_FALLBACK_RESULT="pass"
-    success "user-balance-recording-fallback simulation passed"
+    success "user-balance-recording-fallback E2E passed"
   else
     USER_BALANCE_RECORDING_FALLBACK_RESULT="fail"
-    fail "user-balance-recording-fallback simulation failed"
+    fail "user-balance-recording-fallback E2E failed"
     echo "$DEPOSIT_OUTPUT" | tail -20
     E2E_FAILURES=$((E2E_FAILURES + 1))
   fi
