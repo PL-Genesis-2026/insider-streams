@@ -28,8 +28,11 @@ import {
   SellerReputationScoreUpdated,
   SecurityWarning,
   SellerRegistered,
-  MarketplaceUpdated
+  MarketplaceUpdated,
+  Auction,
+  Seller
 } from "../generated/schema"
+import { BigInt } from "@graphprotocol/graph-ts"
 
 export function handleAuctionClosed(event: AuctionClosedEvent): void {
   let entity = new AuctionClosed(
@@ -45,6 +48,21 @@ export function handleAuctionClosed(event: AuctionClosedEvent): void {
   entity.transactionHash = event.transaction.hash
 
   entity.save()
+
+  // Update Auction summary
+  let auction = Auction.load(event.params.auctionId.toString())
+  if (auction != null) {
+    auction.status = "Closed"
+    auction.save()
+  }
+
+  // Update Seller summary
+  let seller = Seller.load(event.params.sellerId)
+  if (seller != null) {
+    seller.openAuctionCount = seller.openAuctionCount - 1
+    seller.totalEarnings = seller.totalEarnings.plus(event.params.winningBid)
+    seller.save()
+  }
 }
 
 export function handleAuctionCreated(event: AuctionCreatedEvent): void {
@@ -62,6 +80,45 @@ export function handleAuctionCreated(event: AuctionCreatedEvent): void {
   entity.transactionHash = event.transaction.hash
 
   entity.save()
+
+  // Upsert Seller — may not exist if registered before startBlock
+  let sellerId = event.params.sellerId
+  let seller = Seller.load(sellerId)
+  if (seller == null) {
+    seller = new Seller(sellerId)
+    seller.sellerId = sellerId
+    seller.reputationScore = BigInt.fromI32(0)
+    seller.totalAuctionCount = 0
+    seller.openAuctionCount = 0
+    seller.auctionsWithCorrectPredictionsCount = 0
+    seller.auctionsWithWrongPredictionsCount = 0
+    seller.unscorableAuctionCount = 0
+    seller.totalEarnings = BigInt.fromI32(0)
+    seller.blockNumber = event.block.number
+    seller.blockTimestamp = event.block.timestamp
+    seller.transactionHash = event.transaction.hash
+    seller.save()
+  }
+
+  // Create Auction summary
+  let auction = new Auction(event.params.auctionId.toString())
+  auction.auctionId = event.params.auctionId
+  auction.eventId = event.params.eventId
+  auction.sellerId = sellerId
+  auction.seller = sellerId
+  auction.eventTitle = event.params.eventTitle
+  auction.endTime = event.params.endTime
+  auction.currentBid = BigInt.fromI32(0)
+  auction.status = "Open"
+  auction.blockNumber = event.block.number
+  auction.blockTimestamp = event.block.timestamp
+  auction.transactionHash = event.transaction.hash
+  auction.save()
+
+  // Update Seller summary
+  seller.totalAuctionCount = seller.totalAuctionCount + 1
+  seller.openAuctionCount = seller.openAuctionCount + 1
+  seller.save()
 }
 
 export function handleAuctionCancelled(event: AuctionCancelledEvent): void {
@@ -78,6 +135,20 @@ export function handleAuctionCancelled(event: AuctionCancelledEvent): void {
   entity.transactionHash = event.transaction.hash
 
   entity.save()
+
+  // Update Auction summary
+  let auction = Auction.load(event.params.auctionId.toString())
+  if (auction != null) {
+    auction.status = "Cancelled"
+    auction.save()
+  }
+
+  // Update Seller summary
+  let seller = Seller.load(event.params.sellerId)
+  if (seller != null) {
+    seller.openAuctionCount = seller.openAuctionCount - 1
+    seller.save()
+  }
 }
 
 export function handleBidPlaced(event: BidPlacedEvent): void {
@@ -87,12 +158,20 @@ export function handleBidPlaced(event: BidPlacedEvent): void {
   entity.auctionId = event.params.auctionId
   entity.bidAmount = event.params.bidAmount
   entity.previousBid = event.params.previousBid
+  entity.auction = event.params.auctionId.toString()
 
   entity.blockNumber = event.block.number
   entity.blockTimestamp = event.block.timestamp
   entity.transactionHash = event.transaction.hash
 
   entity.save()
+
+  // Update Auction summary
+  let auction = Auction.load(event.params.auctionId.toString())
+  if (auction != null) {
+    auction.currentBid = event.params.bidAmount
+    auction.save()
+  }
 }
 
 export function handleExpectedAuthorUpdated(
@@ -207,6 +286,31 @@ export function handleSellerReputationScoreUpdated(event: SellerReputationScoreU
   entity.transactionHash = event.transaction.hash
 
   entity.save()
+
+  // Update Auction summary
+  let auction = Auction.load(event.params.auctionId.toString())
+  if (auction != null) {
+    auction.predictionOutcome = event.params.predictionOutcome
+    auction.scoreChange = event.params.scoreChange
+    auction.save()
+  }
+
+  // Update Seller summary
+  let seller = Seller.load(event.params.sellerId)
+  if (seller != null) {
+    seller.reputationScore = event.params.newScore
+
+    let outcome = event.params.predictionOutcome
+    if (outcome == 1) {
+      seller.auctionsWithCorrectPredictionsCount = seller.auctionsWithCorrectPredictionsCount + 1
+    } else if (outcome == 2) {
+      seller.auctionsWithWrongPredictionsCount = seller.auctionsWithWrongPredictionsCount + 1
+    } else {
+      seller.unscorableAuctionCount = seller.unscorableAuctionCount + 1
+    }
+
+    seller.save()
+  }
 }
 
 export function handleSecurityWarning(event: SecurityWarningEvent): void {
@@ -233,6 +337,25 @@ export function handleSellerRegistered(event: SellerRegisteredEvent): void {
   entity.transactionHash = event.transaction.hash
 
   entity.save()
+
+  // Create Seller summary (idempotent — createAuction auto-registers)
+  let sellerId = event.params.sellerId
+  let seller = Seller.load(sellerId)
+  if (seller == null) {
+    seller = new Seller(sellerId)
+    seller.sellerId = sellerId
+    seller.reputationScore = BigInt.fromI32(0)
+    seller.totalAuctionCount = 0
+    seller.openAuctionCount = 0
+    seller.auctionsWithCorrectPredictionsCount = 0
+    seller.auctionsWithWrongPredictionsCount = 0
+    seller.unscorableAuctionCount = 0
+    seller.totalEarnings = BigInt.fromI32(0)
+    seller.blockNumber = event.block.number
+    seller.blockTimestamp = event.block.timestamp
+    seller.transactionHash = event.transaction.hash
+    seller.save()
+  }
 }
 
 export function handleMarketplaceUpdated(event: MarketplaceUpdatedEvent): void {
