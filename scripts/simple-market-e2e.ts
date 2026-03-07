@@ -61,7 +61,9 @@ const { publicClient, ownerClient, ownerAccount, bidderClient, bidderAccount } =
 const MIN_BALANCE = 10_000_000n; // 10 USDC
 const MINT_AMOUNT = 10_000_000_000n; // 10,000 USDC
 const APPROVAL_AMOUNT = 100_000_000_000n; // 100,000 USDC blanket
+const MIN_ALLOWANCE = 10_000_000n; // 10 USDC — threshold to trigger approve
 const PREDICTION_AMOUNT = 1_000_000n; // 1 USDC
+const EVENT_DURATION = BigInt(60); // 60 seconds
 const QUESTION = "The New York Yankees won the 2009 World Series.";
 // SimpleMarket.Outcome: 0=Unresolved, 1=No, 2=Yes
 const OUTCOME_YES = 2;
@@ -87,24 +89,43 @@ async function main() {
     MINT_AMOUNT,
   );
 
-  // ── Step 2: Approve USDC ────────────────────────────────────────────────────
-  step("Owner approving USDC for ExamplePredictionMarket...");
-  const approveOwnerHash = await ownerClient.writeContract({
+  // ── Step 2: Approve USDC (only if needed) ──────────────────────────────────
+  step("Ensuring USDC approvals...");
+  const ownerAllowance = await publicClient.readContract({
     address: MOCK_USDC,
     abi: mockUsdcAbi,
-    functionName: "approve",
-    args: [SIMPLE_MARKET, APPROVAL_AMOUNT],
+    functionName: "allowance",
+    args: [ownerAccount.address, SIMPLE_MARKET],
   });
-  await waitForTx(publicClient, approveOwnerHash, "Owner USDC approval");
+  if (ownerAllowance < MIN_ALLOWANCE) {
+    const h = await ownerClient.writeContract({
+      address: MOCK_USDC,
+      abi: mockUsdcAbi,
+      functionName: "approve",
+      args: [SIMPLE_MARKET, APPROVAL_AMOUNT],
+    });
+    await waitForTx(publicClient, h, "Owner USDC approval");
+  } else {
+    console.log(`  ok Owner allowance sufficient`);
+  }
 
-  step("Bidder approving USDC for ExamplePredictionMarket...");
-  const approveHash = await bidderClient!.writeContract({
+  const bidderAllowance = await publicClient.readContract({
     address: MOCK_USDC,
     abi: mockUsdcAbi,
-    functionName: "approve",
-    args: [SIMPLE_MARKET, APPROVAL_AMOUNT],
+    functionName: "allowance",
+    args: [bidderAccount!.address, SIMPLE_MARKET],
   });
-  await waitForTx(publicClient, approveHash, "Bidder USDC approval");
+  if (bidderAllowance < MIN_ALLOWANCE) {
+    const h = await bidderClient!.writeContract({
+      address: MOCK_USDC,
+      abi: mockUsdcAbi,
+      functionName: "approve",
+      args: [SIMPLE_MARKET, APPROVAL_AMOUNT],
+    });
+    await waitForTx(publicClient, h, "Bidder USDC approval");
+  } else {
+    console.log(`  ok Bidder allowance sufficient`);
+  }
 
   // ── Step 3: Create event ───────────────────────────────────────────────────
   step("Owner creating event...");
@@ -112,7 +133,7 @@ async function main() {
     address: SIMPLE_MARKET,
     abi: examplePredictionMarketAbi,
     functionName: "newEvent",
-    args: [QUESTION, BigInt(3 * 60)],
+    args: [QUESTION, EVENT_DURATION],
   });
   const eventReceipt = await waitForTx(
     publicClient,

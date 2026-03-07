@@ -2,8 +2,9 @@ query RecentAuctions {
   auctionCreateds(first: 10, orderBy: blockTimestamp, orderDirection: desc) {
     id
     auctionId
-    seller
-    reservePrice
+    sellerId
+    eventId
+    eventTitle
     endTime
     blockTimestamp
     transactionHash
@@ -14,8 +15,8 @@ query RecentBids {
   bidPlaceds(first: 10, orderBy: blockTimestamp, orderDirection: desc) {
     id
     auctionId
-    bidder
     bidAmount
+    previousBid
     blockTimestamp
     transactionHash
   }
@@ -25,10 +26,9 @@ query RecentClosedAuctions {
   auctionCloseds(first: 10, orderBy: blockTimestamp, orderDirection: desc) {
     id
     auctionId
-    buyer
-    seller
+    sellerId
     winningBid
-    externalMarketId
+    eventId
     blockTimestamp
     transactionHash
   }
@@ -38,9 +38,9 @@ query RecentForceClosedAuctions {
   auctionForceCloseds(first: 10, orderBy: blockTimestamp, orderDirection: desc) {
     id
     auctionId
-    seller
-    refundedBidder
-    refundAmount
+    sellerId
+    heldAmount
+    eventId
     reputationDelta
     blockTimestamp
     transactionHash

@@ -1,5 +1,5 @@
 import { MOCK_USDC_DECIMALS } from "@private-streams/common";
-import { formatUnits, getAddress } from "viem";
+import { formatUnits } from "viem";
 import { graphqlClient } from "@/lib/graphql";
 import { getSecretByAuctionId, type JsonValue } from "@/lib/supabase/secrets";
 import type { AuctionDetailSubgraphQuery } from "../__generated__/sdk";
@@ -11,38 +11,29 @@ type BidRecord = AuctionDetailSubgraphQuery["bids"][number];
 type ClosedAuctionRecord = AuctionDetailSubgraphQuery["closedAuction"][number];
 type ForceClosedAuctionRecord =
   AuctionDetailSubgraphQuery["forceClosedAuction"][number];
-type TradeExecutedRecord = AuctionDetailSubgraphQuery["tradeExecuted"][number];
 type ReputationUpdatedRecord =
   AuctionDetailSubgraphQuery["reputationUpdates"][number];
 
 export type AuctionDetailBid = {
-  bidderAddress: string;
   amountUsdc: number;
+  previousBidUsdc: number;
   timestamp: string;
   transactionHash: string;
 };
 
 export type AuctionDetailClose = {
-  buyerAddress: string;
   winningBidUsdc: number;
   timestamp: string;
 };
 
 export type AuctionDetailForceClose = {
-  refundedBidderAddress: string;
-  refundAmountUsdc: number;
+  heldAmountUsdc: number;
   reputationDelta: number;
   timestamp: string;
 };
 
-export type AuctionDetailTrade = {
-  buyerAddress: string;
-  amountUsdc: number;
-  timestamp: string;
-};
-
 export type AuctionDetailReputationUpdate = {
-  delta: number;
+  reputationDelta: number;
   newScore: number;
   timestamp: string;
 };
@@ -54,18 +45,16 @@ export type AuctionDetailSecretRecord = {
 
 export type AuctionDetailData = {
   auctionId: string;
-  sellerAddress: string;
-  externalMarketId: string;
-  reservePriceUsdc?: number;
+  sellerId: string;
+  eventId: string;
+  eventTitle?: string;
   endTime?: string;
   createdAt?: string;
   status: "Open" | "Closed" | "ForceClosed";
   currentBidUsdc?: number;
-  currentBidderAddress?: string;
   bids: AuctionDetailBid[];
   closedAuction?: AuctionDetailClose;
   forceClosedAuction?: AuctionDetailForceClose;
-  tradeExecuted?: AuctionDetailTrade;
   reputationUpdates: AuctionDetailReputationUpdate[];
   secretRecord?: AuctionDetailSecretRecord;
 };
@@ -89,8 +78,8 @@ function scalarToIso(value: unknown) {
 
 function mapBid(record: BidRecord): AuctionDetailBid {
   return {
-    bidderAddress: getAddress(String(record.bidder)),
     amountUsdc: bigintToUsdc(scalarToBigInt(record.bidAmount)),
+    previousBidUsdc: bigintToUsdc(scalarToBigInt(record.previousBid)),
     timestamp: scalarToIso(record.blockTimestamp),
     transactionHash: String(record.transactionHash),
   };
@@ -98,7 +87,6 @@ function mapBid(record: BidRecord): AuctionDetailBid {
 
 function mapClosedAuction(record: ClosedAuctionRecord): AuctionDetailClose {
   return {
-    buyerAddress: getAddress(String(record.buyer)),
     winningBidUsdc: bigintToUsdc(scalarToBigInt(record.winningBid)),
     timestamp: scalarToIso(record.blockTimestamp),
   };
@@ -108,17 +96,8 @@ function mapForceClosedAuction(
   record: ForceClosedAuctionRecord,
 ): AuctionDetailForceClose {
   return {
-    refundedBidderAddress: getAddress(String(record.refundedBidder)),
-    refundAmountUsdc: bigintToUsdc(scalarToBigInt(record.refundAmount)),
+    heldAmountUsdc: bigintToUsdc(scalarToBigInt(record.heldAmount)),
     reputationDelta: record.reputationDelta,
-    timestamp: scalarToIso(record.blockTimestamp),
-  };
-}
-
-function mapTradeExecuted(record: TradeExecutedRecord): AuctionDetailTrade {
-  return {
-    buyerAddress: getAddress(String(record.buyer)),
-    amountUsdc: bigintToUsdc(scalarToBigInt(record.automaticBetAmount)),
     timestamp: scalarToIso(record.blockTimestamp),
   };
 }
@@ -127,7 +106,7 @@ function mapReputationUpdate(
   record: ReputationUpdatedRecord,
 ): AuctionDetailReputationUpdate {
   return {
-    delta: record.delta,
+    reputationDelta: record.reputationDelta,
     newScore: Number(scalarToBigInt(record.newScore)),
     timestamp: scalarToIso(record.blockTimestamp),
   };
@@ -152,25 +131,25 @@ async function getSecretRecord(
   }
 }
 
-function resolveSellerAddress(
+function resolveSellerId(
   createdAuction: AuctionDetailSubgraphQuery["createdAuction"][number] | undefined,
   closedAuction: AuctionDetailSubgraphQuery["closedAuction"][number] | undefined,
   forceClosedAuction: AuctionDetailSubgraphQuery["forceClosedAuction"][number] | undefined,
 ): string | undefined {
   const raw =
-    createdAuction?.seller ?? closedAuction?.seller ?? forceClosedAuction?.seller;
-  return raw !== undefined ? getAddress(String(raw)) : undefined;
+    createdAuction?.sellerId ?? closedAuction?.sellerId ?? forceClosedAuction?.sellerId;
+  return raw !== undefined ? String(raw) : undefined;
 }
 
-function resolveExternalMarketId(
+function resolveEventId(
   createdAuction: AuctionDetailSubgraphQuery["createdAuction"][number] | undefined,
   closedAuction: AuctionDetailSubgraphQuery["closedAuction"][number] | undefined,
   forceClosedAuction: AuctionDetailSubgraphQuery["forceClosedAuction"][number] | undefined,
 ): string | undefined {
   const raw =
-    createdAuction?.externalMarketId ??
-    closedAuction?.externalMarketId ??
-    forceClosedAuction?.externalMarketId;
+    createdAuction?.eventId ??
+    closedAuction?.eventId ??
+    forceClosedAuction?.eventId;
   return raw !== undefined ? String(raw) : undefined;
 }
 
@@ -192,18 +171,18 @@ export async function getAuctionDetail({
     return null;
   }
 
-  const sellerAddress = resolveSellerAddress(
+  const sellerId = resolveSellerId(
     createdAuction,
     closedAuction,
     forceClosedAuction,
   );
-  const externalMarketId = resolveExternalMarketId(
+  const eventId = resolveEventId(
     createdAuction,
     closedAuction,
     forceClosedAuction,
   );
 
-  if (sellerAddress === undefined || externalMarketId === undefined) {
+  if (sellerId === undefined || eventId === undefined) {
     return null;
   }
 
@@ -211,12 +190,11 @@ export async function getAuctionDetail({
 
   return {
     auctionId,
-    sellerAddress,
-    externalMarketId,
-    reservePriceUsdc:
-      createdAuction?.reservePrice !== undefined
-        ? bigintToUsdc(scalarToBigInt(createdAuction.reservePrice))
-        : undefined,
+    sellerId,
+    eventId,
+    eventTitle: createdAuction?.eventTitle
+      ? String(createdAuction.eventTitle)
+      : undefined,
     endTime:
       createdAuction?.endTime !== undefined
         ? scalarToIso(createdAuction.endTime)
@@ -235,18 +213,10 @@ export async function getAuctionDetail({
       : latestBid
         ? bigintToUsdc(scalarToBigInt(latestBid.bidAmount))
         : undefined,
-    currentBidderAddress: closedAuction
-      ? getAddress(String(closedAuction.buyer))
-      : latestBid
-        ? getAddress(String(latestBid.bidder))
-        : undefined,
     bids: result.bids.map(mapBid),
     closedAuction: closedAuction ? mapClosedAuction(closedAuction) : undefined,
     forceClosedAuction: forceClosedAuction
       ? mapForceClosedAuction(forceClosedAuction)
-      : undefined,
-    tradeExecuted: result.tradeExecuted[0]
-      ? mapTradeExecuted(result.tradeExecuted[0])
       : undefined,
     reputationUpdates: result.reputationUpdates.map(mapReputationUpdate),
     secretRecord,

@@ -16,7 +16,7 @@
  */
 
 import { PrivateTokenApiClient } from "../src/index.js";
-import { SIMPLE_TOKEN_ADDRESS } from "@private-streams/common";
+import { MOCK_USDC_ADDRESS } from "@private-streams/common";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -49,7 +49,7 @@ async function main() {
 
   console.log(`Owner:  ${owner.account}`);
   console.log(`Tester: ${tester.account}`);
-  console.log(`Token:  ${SIMPLE_TOKEN_ADDRESS}\n`);
+  console.log(`Token:  ${MOCK_USDC_ADDRESS}\n`);
 
   // 1. getBalances
   console.log("─── 1/5 getBalances ───");
@@ -77,7 +77,7 @@ async function main() {
   console.log("─── 4/5 privateTransfer ───");
   const transfer = await owner.privateTransfer({
     recipient: tester.account,
-    token: SIMPLE_TOKEN_ADDRESS,
+    token: MOCK_USDC_ADDRESS,
     amount: "1",
   });
   console.log("Private transfer:", JSON.stringify(transfer));
@@ -90,7 +90,7 @@ async function main() {
   // 5. withdraw (1 wei of DEMO token)
   console.log("─── 5/5 withdraw ───");
   const withdrawal = await tester.withdraw({
-    token: SIMPLE_TOKEN_ADDRESS,
+    token: MOCK_USDC_ADDRESS,
     amount: "1",
   });
   console.log("Withdraw:", JSON.stringify(withdrawal));
