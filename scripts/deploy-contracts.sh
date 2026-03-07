@@ -5,16 +5,16 @@
 # of old addresses across the codebase (source files, configs, scripts, .env files).
 #
 # Usage:
-#   ./scripts/deploy-contracts.sh                     # interactive — prompts for each contract
-#   ./scripts/deploy-contracts.sh --market            # non-interactive — deploy ExamplePredictionMarket only
-#   ./scripts/deploy-contracts.sh --usdc --market     # non-interactive — deploy ConfidentialUSDC + ExamplePredictionMarket
-#   ./scripts/deploy-contracts.sh --all               # non-interactive — deploy everything
+#   ./scripts/deploy-contracts.sh                                      # interactive — prompts for each contract
+#   ./scripts/deploy-contracts.sh --prediction-market                  # non-interactive — deploy ExamplePredictionMarket only
+#   ./scripts/deploy-contracts.sh --confidential-usdc --prediction-market  # non-interactive — deploy ConfidentialUSDC + ExamplePredictionMarket
+#   ./scripts/deploy-contracts.sh --all                                # non-interactive — deploy everything
 #
 # Flags:
-#   --usdc          Deploy ConfidentialUSDC
-#   --market        Deploy ExamplePredictionMarket
-#   --marketplace   Deploy SecretMarketplace
-#   --all           Deploy all three contracts
+#   --confidential-usdc    Deploy ConfidentialUSDC
+#   --prediction-market    Deploy ExamplePredictionMarket
+#   --secret-marketplace   Deploy SecretMarketplace
+#   --all                  Deploy all three contracts
 #
 # Requires:
 #   - contracts/.env with PRIVATE_KEY and RPC_URL
@@ -42,17 +42,17 @@ DEPLOY_SECRET_MARKETPLACE=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --usdc)
+    --confidential-usdc)
       DEPLOY_CONFIDENTIAL_USDC=true
       CLI_MODE=true
       shift
       ;;
-    --market)
+    --prediction-market)
       DEPLOY_EXAMPLE_PREDICTION_MARKET=true
       CLI_MODE=true
       shift
       ;;
-    --marketplace)
+    --secret-marketplace)
       DEPLOY_SECRET_MARKETPLACE=true
       CLI_MODE=true
       shift
@@ -65,18 +65,18 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     -h|--help)
-      echo "Usage: $0 [--usdc] [--market] [--marketplace] [--all]"
+      echo "Usage: $0 [--confidential-usdc] [--prediction-market] [--secret-marketplace] [--all]"
       echo ""
-      echo "  No flags  — interactive mode (prompts for each contract)"
-      echo "  --usdc         Deploy ConfidentialUSDC"
-      echo "  --market       Deploy ExamplePredictionMarket"
-      echo "  --marketplace  Deploy SecretMarketplace"
-      echo "  --all          Deploy all three contracts"
+      echo "  No flags               — interactive mode (prompts for each contract)"
+      echo "  --confidential-usdc    Deploy ConfidentialUSDC"
+      echo "  --prediction-market    Deploy ExamplePredictionMarket"
+      echo "  --secret-marketplace   Deploy SecretMarketplace"
+      echo "  --all                  Deploy all three contracts"
       exit 0
       ;;
     *)
       echo -e "${RED}Unknown flag: $1${NC}"
-      echo "Usage: $0 [--usdc] [--market] [--marketplace] [--all]"
+      echo "Usage: $0 [--confidential-usdc] [--prediction-market] [--secret-marketplace] [--all]"
       exit 1
       ;;
   esac

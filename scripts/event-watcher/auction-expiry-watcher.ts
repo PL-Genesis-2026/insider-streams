@@ -1,0 +1,75 @@
+/**
+ * Auction-expiry watcher — polls getOpenAuctions() for expired auctions
+ * and triggers the secret-marketplace-auction-closer CRE workflow.
+ */
+
+import type { PublicClient } from "viem";
+import {
+  SECRET_MARKETPLACE_ADDRESS,
+  secretMarketplaceAbi,
+} from "@private-streams/common";
+import { runCRE } from "./cre-runner.js";
+import { log } from "./index.js";
+
+let isRunning = false;
+
+export async function pollExpiredAuctions(
+  publicClient: PublicClient,
+): Promise<void> {
+  if (isRunning) {
+    log("auction-expiry", "Previous run still active, skipping");
+    return;
+  }
+
+  try {
+    isRunning = true;
+
+    const openAuctions = (await publicClient.readContract({
+      address: SECRET_MARKETPLACE_ADDRESS,
+      abi: secretMarketplaceAbi,
+      functionName: "getOpenAuctions",
+    })) as bigint[];
+
+    if (openAuctions.length === 0) {
+      log("auction-expiry", "No open auctions");
+      return;
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    let hasExpired = false;
+
+    for (const auctionId of openAuctions) {
+      const auction = (await publicClient.readContract({
+        address: SECRET_MARKETPLACE_ADDRESS,
+        abi: secretMarketplaceAbi,
+        functionName: "getAuction",
+        args: [auctionId],
+      })) as { endTime: bigint };
+
+      if (Number(auction.endTime) <= now) {
+        log("auction-expiry", `Auction ${auctionId} expired (endTime=${auction.endTime}, now=${now})`);
+        hasExpired = true;
+        break;
+      }
+    }
+
+    if (!hasExpired) {
+      log("auction-expiry", `${openAuctions.length} open auction(s), none expired`);
+      return;
+    }
+
+    log("auction-expiry", "Triggering CRE secret-marketplace-auction-closer...");
+    try {
+      runCRE({
+        workflow: "secret-marketplace-auction-closer",
+        triggerIndex: 0,
+        broadcast: true,
+      });
+      log("auction-expiry", "CRE secret-marketplace-auction-closer completed");
+    } catch (err) {
+      log("auction-expiry", `CRE secret-marketplace-auction-closer FAILED: ${err}`);
+    }
+  } finally {
+    isRunning = false;
+  }
+}

@@ -1,8 +1,8 @@
 {
   "sepolia": {
     "SecretMarketplace": {
-      "address": "0x8e99C312489f64D2C94B611A9d8f28A7566cb42D",
-      "startBlock": 10391293
+      "address": "0x6420943F07c8427C4E6f27BDa09cB711e8BB2A93",
+      "startBlock": 10403122
     }
   }
 }

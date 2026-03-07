@@ -14,8 +14,8 @@ const sdk = getSdk(graphqlClient);
 
 type BidRecord = AuctionDetailSubgraphQuery["bids"][number];
 type ClosedAuctionRecord = AuctionDetailSubgraphQuery["closedAuction"][number];
-type ForceClosedAuctionRecord =
-  AuctionDetailSubgraphQuery["forceClosedAuction"][number];
+type CancelledAuctionRecord =
+  AuctionDetailSubgraphQuery["cancelledAuction"][number];
 type ReputationUpdatedRecord =
   AuctionDetailSubgraphQuery["reputationUpdates"][number];
 
@@ -31,14 +31,14 @@ export type AuctionDetailClose = {
   timestamp: string;
 };
 
-export type AuctionDetailForceClose = {
+export type AuctionDetailCancelledAuction = {
   refundedAmountUsdc: number;
-  reputationDelta: number;
   timestamp: string;
 };
 
 export type AuctionDetailReputationUpdate = {
-  reputationDelta: number;
+  predictionOutcome: number;
+  scoreChange: number;
   newScore: number;
   timestamp: string;
 };
@@ -58,11 +58,11 @@ export type AuctionDetailData = {
   outcome?: EventData["outcome"];
   endTime?: string;
   createdAt?: string;
-  status: "Open" | "Closed" | "ForceClosed";
+  status: "Open" | "Closed" | "Cancelled";
   currentBidUsdc?: number;
   bids: AuctionDetailBid[];
   closedAuction?: AuctionDetailClose;
-  forceClosedAuction?: AuctionDetailForceClose;
+  cancelledAuction?: AuctionDetailCancelledAuction;
   reputationUpdates: AuctionDetailReputationUpdate[];
   secretRecord?: AuctionDetailSecretRecord;
 };
@@ -100,12 +100,11 @@ function mapClosedAuction(record: ClosedAuctionRecord): AuctionDetailClose {
   };
 }
 
-function mapForceClosedAuction(
-  record: ForceClosedAuctionRecord,
-): AuctionDetailForceClose {
+function mapCancelledAuction(
+  record: CancelledAuctionRecord,
+): AuctionDetailCancelledAuction {
   return {
-    refundedAmountUsdc: bigintToUsdc(scalarToBigInt(record.refundAmount)),
-    reputationDelta: record.reputationDelta,
+    refundedAmountUsdc: bigintToUsdc(scalarToBigInt(record.cancelledBidAmount)),
     timestamp: scalarToIso(record.blockTimestamp),
   };
 }
@@ -114,7 +113,8 @@ function mapReputationUpdate(
   record: ReputationUpdatedRecord,
 ): AuctionDetailReputationUpdate {
   return {
-    reputationDelta: record.delta,
+    predictionOutcome: record.predictionOutcome,
+    scoreChange: record.scoreChange,
     newScore: Number(scalarToBigInt(record.newScore)),
     timestamp: scalarToIso(record.blockTimestamp),
   };
@@ -150,14 +150,14 @@ function resolveSellerAddress(
   closedAuction:
     | AuctionDetailSubgraphQuery["closedAuction"][number]
     | undefined,
-  forceClosedAuction:
-    | AuctionDetailSubgraphQuery["forceClosedAuction"][number]
+  cancelledAuction:
+    | AuctionDetailSubgraphQuery["cancelledAuction"][number]
     | undefined,
 ): string | undefined {
   const raw =
-    createdAuction?.seller ??
-    closedAuction?.seller ??
-    forceClosedAuction?.seller;
+    createdAuction?.sellerId ??
+    closedAuction?.sellerId ??
+    cancelledAuction?.sellerId;
   return raw !== undefined ? String(raw) : undefined;
 }
 
@@ -168,14 +168,14 @@ function resolveMarketId(
   closedAuction:
     | AuctionDetailSubgraphQuery["closedAuction"][number]
     | undefined,
-  forceClosedAuction:
-    | AuctionDetailSubgraphQuery["forceClosedAuction"][number]
+  cancelledAuction:
+    | AuctionDetailSubgraphQuery["cancelledAuction"][number]
     | undefined,
 ): string | undefined {
   const raw =
-    createdAuction?.externalMarketId ??
-    closedAuction?.externalMarketId ??
-    forceClosedAuction?.externalMarketId;
+    createdAuction?.eventId ??
+    closedAuction?.eventId ??
+    cancelledAuction?.eventId;
   return raw !== undefined ? String(raw) : undefined;
 }
 
@@ -190,22 +190,22 @@ export async function getAuctionDetail({
 
   const createdAuction = result.createdAuction[0];
   const closedAuction = result.closedAuction[0];
-  const forceClosedAuction = result.forceClosedAuction[0];
+  const cancelledAuction = result.cancelledAuction[0];
   const latestBid = result.bids[0];
 
-  if (!createdAuction && !closedAuction && !forceClosedAuction) {
+  if (!createdAuction && !closedAuction && !cancelledAuction) {
     return null;
   }
 
   const sellerAddress = resolveSellerAddress(
     createdAuction,
     closedAuction,
-    forceClosedAuction,
+    cancelledAuction,
   );
   const marketId = resolveMarketId(
     createdAuction,
     closedAuction,
-    forceClosedAuction,
+    cancelledAuction,
   );
 
   if (sellerAddress === undefined || marketId === undefined) {
@@ -229,8 +229,8 @@ export async function getAuctionDetail({
       createdAuction?.blockTimestamp !== undefined
         ? scalarToIso(createdAuction.blockTimestamp)
         : undefined,
-    status: forceClosedAuction
-      ? "ForceClosed"
+    status: cancelledAuction
+      ? "Cancelled"
       : closedAuction
         ? "Closed"
         : "Open",
@@ -241,8 +241,8 @@ export async function getAuctionDetail({
         : undefined,
     bids: result.bids.map(mapBid),
     closedAuction: closedAuction ? mapClosedAuction(closedAuction) : undefined,
-    forceClosedAuction: forceClosedAuction
-      ? mapForceClosedAuction(forceClosedAuction)
+    cancelledAuction: cancelledAuction
+      ? mapCancelledAuction(cancelledAuction)
       : undefined,
     reputationUpdates: result.reputationUpdates.map(mapReputationUpdate),
     secretRecord,
