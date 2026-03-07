@@ -25,9 +25,9 @@ query RecentClosedAuctions {
   auctionCloseds(first: 10, orderBy: blockTimestamp, orderDirection: desc) {
     id
     auctionId
-    seller
+    sellerId
     winningBid
-    externalMarketId
+    eventId
     blockTimestamp
     transactionHash
   }

@@ -20,9 +20,9 @@ query HomepageAuctionLists(
     orderDirection: desc
   ) {
     auctionId
-    seller
+    sellerId
     winningBid
-    externalMarketId
+    eventId
   }
 }
 
