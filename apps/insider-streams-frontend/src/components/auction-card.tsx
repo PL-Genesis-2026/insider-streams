@@ -14,10 +14,9 @@ import { cn } from "@/lib/utils";
 export type AuctionCardData = {
   auctionId: string;
   sellerAddress: string;
-  externalMarketId: string;
+  eventId: string;
   status: string;
   currentBidUsdc?: number;
-  reserveUsdc?: number;
   endTime?: string;
   category?: string;
   title?: string;
@@ -63,7 +62,7 @@ function MetaRail({ auction }: { auction: AuctionCardData }) {
           {auction.category ?? "TODO: category not available from live source"}
         </span>
         <span className="text-muted-foreground/50">/</span>
-        <span>Market #{auction.externalMarketId}</span>
+        <span>Event #{auction.eventId}</span>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant={statusVariant}>{auction.status}</Badge>
@@ -88,12 +87,10 @@ function BidModule({ auction }: { auction: AuctionCardData }) {
       </p>
       <div className="mt-5 border-t border-border pt-4">
         <p className="text-xs uppercase tracking-[0.22em] text-accent">
-          Reserve
+          Event
         </p>
         <p className="mt-2 font-serif text-[1.8rem] leading-none font-medium tracking-[-0.05em] text-foreground">
-          {auction.reserveUsdc === undefined
-            ? "TODO: reserve not available from live source"
-            : usdFormat.format(auction.reserveUsdc)}
+          #{auction.eventId}
         </p>
       </div>
     </div>

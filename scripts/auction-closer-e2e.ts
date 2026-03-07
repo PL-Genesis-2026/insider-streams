@@ -57,8 +57,10 @@ const { publicClient, ownerClient, ownerAccount, bidderClient, bidderAccount } =
 const MIN_BALANCE = 10_000_000n; // 10 USDC
 const MINT_AMOUNT = 10_000_000_000n; // 10,000 USDC
 const APPROVAL_AMOUNT = 100_000_000_000n; // 100,000 USDC blanket
+const MIN_ALLOWANCE = 10_000_000n; // 10 USDC — threshold to trigger approve
 const BID_AMOUNT = 2_000_000n; // 2 USDC
-const AUCTION_DURATION = 120; // 2 minutes
+const EVENT_DURATION = BigInt(60); // 60 seconds
+const AUCTION_DURATION = 60; // 60 seconds
 const SELLER_NAME = "TestSeller";
 
 // ─── E2E Flow ────────────────────────────────────────────────────────────────
@@ -89,24 +91,43 @@ async function main() {
     MINT_AMOUNT,
   );
 
-  // ── Step 2: Approve USDC ────────────────────────────────────────────────────
-  step("Owner approving USDC for SecretMarketplace...");
-  const approveHash = await ownerClient.writeContract({
+  // ── Step 2: Approve USDC (only if needed) ──────────────────────────────────
+  step("Ensuring USDC approvals...");
+  const allowanceSM = await publicClient.readContract({
     address: MOCK_USDC,
     abi: mockUsdcAbi,
-    functionName: "approve",
-    args: [SECRET_MARKETPLACE, APPROVAL_AMOUNT],
+    functionName: "allowance",
+    args: [ownerAccount.address, SECRET_MARKETPLACE],
   });
-  await waitForTx(publicClient, approveHash, "Owner USDC approval");
+  if (allowanceSM < MIN_ALLOWANCE) {
+    const h = await ownerClient.writeContract({
+      address: MOCK_USDC,
+      abi: mockUsdcAbi,
+      functionName: "approve",
+      args: [SECRET_MARKETPLACE, APPROVAL_AMOUNT],
+    });
+    await waitForTx(publicClient, h, "Owner approved SecretMarketplace");
+  } else {
+    console.log(`  ok SecretMarketplace allowance sufficient`);
+  }
 
-  step("Owner approving USDC for ExamplePredictionMarket...");
-  const approveMarketHash = await ownerClient.writeContract({
+  const allowanceMarket = await publicClient.readContract({
     address: MOCK_USDC,
     abi: mockUsdcAbi,
-    functionName: "approve",
-    args: [SIMPLE_MARKET, APPROVAL_AMOUNT],
+    functionName: "allowance",
+    args: [ownerAccount.address, SIMPLE_MARKET],
   });
-  await waitForTx(publicClient, approveMarketHash, "Owner USDC approval for market");
+  if (allowanceMarket < MIN_ALLOWANCE) {
+    const h = await ownerClient.writeContract({
+      address: MOCK_USDC,
+      abi: mockUsdcAbi,
+      functionName: "approve",
+      args: [SIMPLE_MARKET, APPROVAL_AMOUNT],
+    });
+    await waitForTx(publicClient, h, "Owner approved ExamplePredictionMarket");
+  } else {
+    console.log(`  ok ExamplePredictionMarket allowance sufficient`);
+  }
 
   // ── Step 3: Create event ───────────────────────────────────────────────────
   step("Owner creating ExamplePredictionMarket event...");
@@ -114,7 +135,7 @@ async function main() {
     address: SIMPLE_MARKET,
     abi: examplePredictionMarketAbi,
     functionName: "newEvent",
-    args: ["Auction closer E2E test", BigInt(3 * 60)],
+    args: ["Auction closer E2E test", EVENT_DURATION],
   });
   const eventReceipt = await waitForTx(
     publicClient,

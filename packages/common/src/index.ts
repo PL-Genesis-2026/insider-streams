@@ -1,8 +1,8 @@
 // Shared constants, utilities, and generated ABIs for private-streams
 export {
+  examplePredictionMarketAbi,
   mockUsdcAbi,
   secretMarketplaceAbi,
-  examplePredictionMarketAbi,
 } from "./__generated__/contract-types";
 
 export type { Database } from "./__generated__/supabase-types";
@@ -17,10 +17,5 @@ export const SIMPLE_MARKET_ADDRESS =
 export const SECRET_MARKETPLACE_ADDRESS =
   "0x8221Ef6351c2CA9Ae3Ae65266076f3E14279F52a" as const;
 
-// Compliant Private Token addresses (Eth Sepolia)
-export const SIMPLE_TOKEN_ADDRESS =
-  "0x1662dA7fd24B5622140401751c9113D7E0237fae" as const;
-export const POLICY_ENGINE_ADDRESS =
-  "0x84E807C3CAe7F2a02b2447F2221d44D89C2F0A3c" as const;
 export const VAULT_ADDRESS =
   "0xE588a6c73933BFD66Af9b4A07d48bcE59c0D2d13" as const;
