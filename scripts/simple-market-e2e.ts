@@ -23,7 +23,7 @@
 
 import {
   MOCK_USDC_ADDRESS,
-  SIMPLE_MARKET_ADDRESS,
+  EXAMPLE_PREDICTION_MARKET_ADDRESS,
   mockUsdcAbi,
   examplePredictionMarketAbi,
 } from "@private-streams/common";
@@ -50,8 +50,8 @@ const FIREBASE_PROJECT_ID = envRequired("FIREBASE_PROJECT_ID");
 
 const MOCK_USDC = (process.env.MOCK_USDC_ADDRESS ??
   MOCK_USDC_ADDRESS) as Address;
-const SIMPLE_MARKET = (process.env.SIMPLE_MARKET_ADDRESS ??
-  SIMPLE_MARKET_ADDRESS) as Address;
+const SIMPLE_MARKET = (process.env.EXAMPLE_PREDICTION_MARKET_ADDRESS ??
+  EXAMPLE_PREDICTION_MARKET_ADDRESS) as Address;
 
 const { publicClient, ownerClient, ownerAccount, bidderClient, bidderAccount } =
   createClients({ ownerPk: OWNER_PK, bidderPk: BIDDER_PK, rpcUrl: RPC_URL });

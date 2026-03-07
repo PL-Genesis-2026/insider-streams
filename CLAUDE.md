@@ -186,14 +186,14 @@ The deploy script replaces addresses automatically, but you should verify no sta
 
 | File                           | What to update                                                                                                                                                                                            |
 | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/common/src/index.ts` | `MOCK_USDC_ADDRESS`, `SIMPLE_MARKET_ADDRESS`, `SECRET_MARKETPLACE_ADDRESS`, `SIMPLE_TOKEN_ADDRESS`, `POLICY_ENGINE_ADDRESS`, `VAULT_ADDRESS` — **this is what frontends, scripts, and API client import** |
+| `packages/common/src/index.ts` | `MOCK_USDC_ADDRESS`, `EXAMPLE_PREDICTION_MARKET_ADDRESS`, `SECRET_MARKETPLACE_ADDRESS`, `VAULT_ADDRESS` — **this is what frontends, scripts, and API client import** |
 | `README.md`                    | Contract addresses table and any script examples referencing addresses                                                                                                                                    |
 
 **E2E test scripts:**
 
 | File                              | Variables with hardcoded defaults                 |
 | --------------------------------- | ------------------------------------------------- |
-| `scripts/simple-market-e2e.ts`    | `MOCK_USDC_ADDRESS`, `SIMPLE_MARKET_ADDRESS`      |
+| `scripts/simple-market-e2e.ts`    | `MOCK_USDC_ADDRESS`, `EXAMPLE_PREDICTION_MARKET_ADDRESS` |
 | `scripts/auction-closer-e2e.ts`   | `MOCK_USDC_ADDRESS`, `SECRET_MARKETPLACE_ADDRESS` |
 
 **CRE workflow configs:**
@@ -210,8 +210,8 @@ After updating CRE workflow configs, the workflow must be redeployed and tested 
 
 | File                                                   | Env vars used                                                     |
 | ------------------------------------------------------ | ----------------------------------------------------------------- |
-| `contracts/script/DeployExamplePredictionMarket.s.sol`  | `PAYMENT_TOKEN`, `CRE_FORWARDER_ADDRESS`                          |
-| `contracts/script/DeploySecretMarketplace.s.sol`       | `PAYMENT_TOKEN`, `SIMPLE_MARKET_ADDRESS`, `CRE_FORWARDER_ADDRESS` |
+| `contracts/script/DeployExamplePredictionMarket.s.sol`  | `MOCK_USDC_ADDRESS`, `CRE_FORWARDER_ADDRESS`                                    |
+| `contracts/script/DeploySecretMarketplace.s.sol`       | `MOCK_USDC_ADDRESS`, `EXAMPLE_PREDICTION_MARKET_ADDRESS`, `CRE_FORWARDER_ADDRESS` |
 
 **Private token scripts** (only if Vault or ConfidentialUSDC changed):
 
@@ -255,8 +255,8 @@ After running codegen, run `turbo run build` and report on any errors.
 Individual deploy scripts exist in `contracts/script/`:
 
 - `DeployMockUSDC.s.sol` — rarely changes
-- `DeployExamplePredictionMarket.s.sol` — env: `PAYMENT_TOKEN`, `CRE_FORWARDER_ADDRESS`
-- `DeploySecretMarketplace.s.sol` — env: `PAYMENT_TOKEN`, `SIMPLE_MARKET_ADDRESS`, `CRE_FORWARDER_ADDRESS`
+- `DeployExamplePredictionMarket.s.sol` — env: `MOCK_USDC_ADDRESS`, `CRE_FORWARDER_ADDRESS`
+- `DeploySecretMarketplace.s.sol` — env: `MOCK_USDC_ADDRESS`, `EXAMPLE_PREDICTION_MARKET_ADDRESS`, `CRE_FORWARDER_ADDRESS`
 - `DeployAll.s.sol` — deploys everything (only for fresh environments)
 
 After deploying, follow the full procedure in **"After a Contract Deployment"** above.
