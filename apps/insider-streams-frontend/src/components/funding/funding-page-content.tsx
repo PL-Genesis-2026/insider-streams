@@ -10,6 +10,7 @@ import {
   AlertCircle,
   ArrowRight,
   CheckCircle2,
+  ChevronDown,
   Loader2,
   RefreshCw,
 } from "lucide-react";
@@ -19,9 +20,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import { FundingStatusBadge } from "@/components/funding/funding-status-badge";
 import { ConnectWalletButton } from "@/components/wallet/connect-wallet-button";
 import { SwitchNetworkButton } from "@/components/wallet/switch-network-button";
+import { getFundingStatusCopy } from "@/lib/funding/get-funding-snapshot";
 import { formatAddress } from "@/lib/wallet/format-address";
 import {
   formatFundingBalance,
@@ -59,10 +62,6 @@ function findUsdcBalance(
   });
 }
 
-function hasPositiveBalance(value?: string | null) {
-  return value !== undefined && value !== null && BigInt(value) > BigInt(0);
-}
-
 function StepDone({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-3 text-sm text-muted-foreground">
@@ -81,10 +80,30 @@ function StepLoading({ children }: { children: React.ReactNode }) {
   );
 }
 
+function DiagnosticRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 text-sm">
+      <span className="text-muted-foreground/70">{label}</span>
+      <span className="text-right text-foreground">{value}</span>
+    </div>
+  );
+}
+
 export function FundingPageContent() {
   const walletSession = useWalletSession();
   const fundingSnapshot = useFundingSnapshot();
-  const privateBalancesMutation = usePrivateBalancesMutation(
+  const statusCopy = getFundingStatusCopy(fundingSnapshot.status);
+  const {
+    data: privateBalanceLookup,
+    isPending: isCheckingPrivateBalances,
+    mutateAsync: loadPrivateBalances,
+  } = usePrivateBalancesMutation(
     walletSession.address,
   );
   const privateTransferMutation = usePrivateTransferFundingMutation(
@@ -110,7 +129,6 @@ export function FundingPageContent() {
 
   const vaultFunding = useVaultFunding(walletSession.address, parsedAmount);
   const platformRecipientAddress = fundingSnapshot.platformRecipientAddress;
-  const privateBalanceLookup = privateBalancesMutation.data;
   const privateUsdcBalance = useMemo(
     () =>
       findUsdcBalance(
@@ -121,7 +139,6 @@ export function FundingPageContent() {
     [privateBalanceLookup],
   );
   const availableBalance = fundingSnapshot.balance?.available_balance ?? null;
-  const hasAvailableBalance = hasPositiveBalance(availableBalance);
 
   const alreadyFunded =
     fundingSnapshot.status === "funded" ||
@@ -129,15 +146,34 @@ export function FundingPageContent() {
 
   useEffect(() => {
     if (alreadyFunded && !availableBalance && !privateBalanceLookup) {
-      void privateBalancesMutation.mutateAsync();
+      void loadPrivateBalances();
     }
-  }, [alreadyFunded, availableBalance, privateBalanceLookup]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [alreadyFunded, availableBalance, privateBalanceLookup, loadPrivateBalances]);
 
   const displayBalance =
     getDisplayFundingBalance(fundingSnapshot.balance) ??
     (privateUsdcBalance
       ? formatFundingBalance(privateUsdcBalance.amount)
       : null);
+  const latestTransfer = fundingSnapshot.transfers[0];
+  const hasRecordedSnapshot =
+    fundingSnapshot.balance !== undefined || fundingSnapshot.transfers.length > 0;
+  const privateBalanceState =
+    privateBalanceLookup === undefined
+      ? "Not checked yet"
+      : privateBalanceLookup.status === "not_funded_yet"
+        ? "No private wallet credit yet"
+        : privateUsdcBalance
+          ? formatFundingBalance(privateUsdcBalance.amount)
+          : "Private wallet active, but no USDC balance";
+  const diagnosticsNote =
+    walletSession.isConnected && walletSession.isSupportedChain
+      ? fundingSnapshot.status === "not_funded_yet" && !hasRecordedSnapshot
+        ? "This wallet has no funding snapshot yet. That usually means no deposit has been recorded for this address, or the private-token credit has not landed yet."
+        : fundingSnapshot.status === "funding_unavailable"
+          ? "The funding snapshot request failed. The wallet may be connected correctly, but the app could not read the balance or transfer history."
+          : null
+      : null;
 
   async function handleFund() {
     if (!parsedAmount) return;
@@ -161,7 +197,7 @@ export function FundingPageContent() {
     setError(null);
     setBalanceCheckEmpty(false);
     try {
-      const result = await privateBalancesMutation.mutateAsync();
+      const result = await loadPrivateBalances();
       const usdcBalance = findUsdcBalance(
         result.status === "ready" ? result.balances : [],
       );
@@ -203,10 +239,10 @@ export function FundingPageContent() {
         <header className="space-y-4">
           <FundingStatusBadge status={fundingSnapshot.status} />
           <h1 className="font-serif text-[3rem] leading-[0.95] font-medium tracking-[-0.04em]">
-            Fund your wallet
+            {statusCopy.title}
           </h1>
           <p className="text-[1.05rem] leading-8 text-muted-foreground">
-            Deposit USDC to start bidding on auctions.
+            {statusCopy.description}
           </p>
         </header>
 
@@ -238,7 +274,7 @@ export function FundingPageContent() {
                   <p className="font-serif text-[2rem] leading-none font-medium tracking-[-0.04em]">
                     {displayBalance}
                   </p>
-                ) : privateBalancesMutation.isPending ? (
+                ) : isCheckingPrivateBalances ? (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Loader2 className="size-4 animate-spin" />
                     <span>Loading balance</span>
@@ -274,6 +310,92 @@ export function FundingPageContent() {
                   </span>
                 </div>
 
+                <details className="group rounded-[calc(var(--radius)-2px)] border border-border/70 bg-muted/20">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
+                    Wallet diagnostics
+                    <ChevronDown className="size-3.5 transition-transform group-open:rotate-180" />
+                  </summary>
+                  <div className="space-y-3 px-4 pb-4">
+                    <div className="flex items-center justify-end">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-auto px-0 text-xs text-muted-foreground"
+                        onClick={() => {
+                          void fundingSnapshot.refresh();
+                        }}
+                      >
+                        Refresh snapshot
+                      </Button>
+                    </div>
+                    <DiagnosticRow
+                      label="Address"
+                      value={walletSession.address ?? "Unavailable"}
+                    />
+                    <DiagnosticRow
+                      label="Network"
+                      value={
+                        walletSession.currentChainName ??
+                        walletSession.requiredChainName
+                      }
+                    />
+                    <DiagnosticRow
+                      label="Funding status"
+                      value={statusCopy.title}
+                    />
+                    <DiagnosticRow
+                      label="Recorded balance"
+                      value={displayBalance ?? "None recorded yet"}
+                    />
+                    <DiagnosticRow
+                      label="Private balance check"
+                      value={privateBalanceState}
+                    />
+                    <DiagnosticRow
+                      label="Transfer history"
+                      value={
+                        fundingSnapshot.transfers.length === 0
+                          ? "No transfers recorded"
+                          : `${fundingSnapshot.transfers.length} recent transfer${fundingSnapshot.transfers.length === 1 ? "" : "s"}`
+                      }
+                    />
+                    <DiagnosticRow
+                      label="Platform recipient"
+                      value={
+                        fundingSnapshot.platformRecipientAddress ?? "Unavailable"
+                      }
+                    />
+                    {latestTransfer ? (
+                      <>
+                        <Separator className="my-3" />
+                        <div className="space-y-2 text-sm">
+                          <p className="text-xs font-medium uppercase tracking-[0.22em] text-accent">
+                            Latest transfer
+                          </p>
+                          <DiagnosticRow
+                            label="Amount"
+                            value={formatFundingBalance(latestTransfer.amount)}
+                          />
+                          <DiagnosticRow
+                            label="Status"
+                            value={latestTransfer.status}
+                          />
+                          <DiagnosticRow
+                            label="Recorded"
+                            value={new Date(latestTransfer.created_at).toLocaleString()}
+                          />
+                        </div>
+                      </>
+                    ) : null}
+                    {diagnosticsNote ? (
+                      <p className="mt-3 text-sm leading-7 text-muted-foreground">
+                        {diagnosticsNote}
+                      </p>
+                    ) : null}
+                  </div>
+                </details>
+
                 {step === "idle" ? (
                   <div className="space-y-4">
                     <div className="grid gap-2">
@@ -303,12 +425,12 @@ export function FundingPageContent() {
                       variant="ghost"
                       size="sm"
                       className="w-full text-muted-foreground"
-                      disabled={privateBalancesMutation.isPending}
+                      disabled={isCheckingPrivateBalances}
                       onClick={() => {
                         void handleCheckBalance();
                       }}
                     >
-                      {privateBalancesMutation.isPending
+                      {isCheckingPrivateBalances
                         ? "Checking..."
                         : "Already deposited? Check balance"}
                     </Button>
@@ -342,12 +464,12 @@ export function FundingPageContent() {
                     <Button
                       variant="outline"
                       className="w-full"
-                      disabled={privateBalancesMutation.isPending}
+                      disabled={isCheckingPrivateBalances}
                       onClick={() => {
                         void handleCheckBalance();
                       }}
                     >
-                      {privateBalancesMutation.isPending ? (
+                      {isCheckingPrivateBalances ? (
                         <>
                           <Loader2 className="size-4 animate-spin" />
                           Checking...

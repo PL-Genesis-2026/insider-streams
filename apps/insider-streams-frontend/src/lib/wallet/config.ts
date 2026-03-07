@@ -9,6 +9,7 @@ import { env } from "@/env";
 export const requiredChain = sepolia;
 export const walletProjectId = env.NEXT_PUBLIC_PROJECT_ID;
 export const walletNetworks = [requiredChain] as const;
+const APPKIT_INSTANCE_KEY = "__insider_streams_appkit__";
 
 const wagmiAdapter = new WagmiAdapter({
   projectId: walletProjectId,
@@ -22,7 +23,15 @@ const wagmiAdapter = new WagmiAdapter({
   },
 });
 
-createAppKit({
+type GlobalAppKit = typeof globalThis & {
+  __insider_streams_appkit__?: ReturnType<typeof createAppKit>;
+};
+
+const globalAppKit = globalThis as GlobalAppKit;
+
+export const appKit =
+  globalAppKit[APPKIT_INSTANCE_KEY] ??
+  createAppKit({
   adapters: [wagmiAdapter],
   projectId: walletProjectId,
   networks: [...walletNetworks],
@@ -38,6 +47,8 @@ createAppKit({
     socials: false,
     swaps: false,
   },
-});
+  });
+
+globalAppKit[APPKIT_INSTANCE_KEY] = appKit;
 
 export const walletConfig = wagmiAdapter.wagmiConfig;
