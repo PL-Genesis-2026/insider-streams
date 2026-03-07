@@ -2,6 +2,7 @@ import type { AuctionCardData } from "@/components/auction-card";
 import { graphqlClient } from "@/lib/graphql";
 import { CONFIDENTIAL_USDC_DECIMALS } from "@private-streams/common";
 import { formatUnits } from "viem";
+import { getSecretsByAuctionIds, type EventData } from "@/lib/supabase/secrets";
 import { getSdk } from "../__generated__/sdk";
 
 const sdk = getSdk(graphqlClient);
@@ -31,24 +32,31 @@ export async function getHomepageAuctions({
     return { open: [], closed: [] };
   }
 
-  const [latestOpenBids, closedAuctionReferences] = await Promise.all([
-    Promise.all(
-      openAuctions.map(async (auction) => {
-        const { bidPlaceds } = await sdk.HomepageLatestBid({
-          auctionId: auction.auctionId,
-        });
+  const allAuctionIds = [
+    ...openAuctions.map((auction) => String(auction.auctionId)),
+    ...closedAuctions.map((auction) => String(auction.auctionId)),
+  ];
 
-        return [String(auction.auctionId), bidPlaceds[0]] as const;
-      }),
-    ),
-    closedAuctions.length === 0
-      ? Promise.resolve([])
-      : sdk
-          .HomepageClosedAuctionReferences({
-            auctionIds: closedAuctions.map((auction) => auction.auctionId),
-          })
-          .then((result) => result.referenceAuctions),
-  ]);
+  const [latestOpenBids, closedAuctionReferences, secretRows] =
+    await Promise.all([
+      Promise.all(
+        openAuctions.map(async (auction) => {
+          const { bidPlaceds } = await sdk.HomepageLatestBid({
+            auctionId: auction.auctionId,
+          });
+
+          return [String(auction.auctionId), bidPlaceds[0]] as const;
+        }),
+      ),
+      closedAuctions.length === 0
+        ? Promise.resolve([])
+        : sdk
+            .HomepageClosedAuctionReferences({
+              auctionIds: closedAuctions.map((auction) => auction.auctionId),
+            })
+            .then((result) => result.referenceAuctions),
+      getSecretsByAuctionIds(allAuctionIds),
+    ]);
 
   const latestBidByAuctionId = new Map(latestOpenBids);
   const closedAuctionReferenceById = new Map(
@@ -57,14 +65,20 @@ export async function getHomepageAuctions({
       auction,
     ]),
   );
+  const secretByAuctionId = new Map(
+    secretRows.map((row) => [row.auction_id, row]),
+  );
 
   const open = openAuctions.map((a): AuctionCardData => {
     const latestBid = latestBidByAuctionId.get(String(a.auctionId));
+    const eventData: EventData | null | undefined = secretByAuctionId.get(
+      String(a.auctionId),
+    )?.event_data;
 
     return {
       auctionId: String(a.auctionId),
-      sellerAddress: String(a.sellerId),
-      eventId: String(a.eventId),
+      sellerAddress: String(a.seller),
+      marketId: String(a.externalMarketId),
       status: "Open",
       currentBidUsdc: latestBid
         ? Number(
@@ -75,16 +89,22 @@ export async function getHomepageAuctions({
           )
         : undefined,
       endTime: new Date(Number(String(a.endTime)) * 1000).toISOString(),
+      marketplace: eventData?.marketplace,
+      title: eventData?.event,
+      outcome: eventData?.outcome,
     };
   });
 
   const closed = closedAuctions.map((a): AuctionCardData => {
     const reference = closedAuctionReferenceById.get(String(a.auctionId));
+    const eventData: EventData | null | undefined = secretByAuctionId.get(
+      String(a.auctionId),
+    )?.event_data;
 
     return {
       auctionId: String(a.auctionId),
-      sellerAddress: String(a.sellerId),
-      eventId: String(a.eventId),
+      sellerAddress: String(a.seller),
+      marketId: String(a.externalMarketId),
       status: "Closed",
       currentBidUsdc: Number(
         formatUnits(BigInt(String(a.winningBid)), CONFIDENTIAL_USDC_DECIMALS),
@@ -92,6 +112,9 @@ export async function getHomepageAuctions({
       endTime: reference
         ? new Date(Number(String(reference.endTime)) * 1000).toISOString()
         : undefined,
+      marketplace: eventData?.marketplace,
+      title: eventData?.event,
+      outcome: eventData?.outcome,
     };
   });
 

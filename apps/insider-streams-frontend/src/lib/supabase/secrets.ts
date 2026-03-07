@@ -12,11 +12,18 @@ const jsonSchema: z.ZodType<JsonValue> = z.lazy(() =>
   ]),
 );
 
+const eventDataSchema = z.object({
+  marketplace: z.string(),
+  event: z.string(),
+  marketId: z.number(),
+  outcome: z.enum(["yes", "no"]),
+});
+
 const secretRowSchema = z.object({
   id: z.union([z.string(), z.number().int()]),
-  auction_id: z.number().int().nullable(),
-  secret_data: jsonSchema,
-  market_data: jsonSchema,
+  auction_id: z.string(),
+  secret_data: z.string(),
+  event_data: eventDataSchema.nullable(),
   seller_id: z.string(),
   buyer: z.string().nullable(),
   created_at: z.string(),
@@ -32,13 +39,22 @@ export type JsonValue =
   | JsonValue[];
 
 export type SecretRow = z.infer<typeof secretRowSchema>;
+export type EventData = z.infer<typeof eventDataSchema>;
+
+export function parseSecretData(value: string): JsonValue | undefined {
+  try {
+    return jsonSchema.parse(JSON.parse(value));
+  } catch {
+    return undefined;
+  }
+}
 
 export async function listSecrets() {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from("secrets")
     .select(
-      "id, auction_id, secret_data, market_data, seller_id, buyer, created_at, updated_at",
+      "id, auction_id, secret_data, event_data, seller_id, buyer, created_at, updated_at",
     )
     .order("created_at", { ascending: false });
 
@@ -49,12 +65,12 @@ export async function listSecrets() {
   return z.array(secretRowSchema).parse(data ?? []);
 }
 
-export async function getSecretByAuctionId(auctionId: number) {
+export async function getSecretByAuctionId(auctionId: string) {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from("secrets")
     .select(
-      "id, auction_id, secret_data, market_data, seller_id, buyer, created_at, updated_at",
+      "id, auction_id, secret_data, event_data, seller_id, buyer, created_at, updated_at",
     )
     .eq("auction_id", auctionId)
     .maybeSingle();
@@ -66,4 +82,24 @@ export async function getSecretByAuctionId(auctionId: number) {
   }
 
   return data ? secretRowSchema.parse(data) : null;
+}
+
+export async function getSecretsByAuctionIds(auctionIds: string[]) {
+  if (auctionIds.length === 0) {
+    return [];
+  }
+
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("secrets")
+    .select(
+      "id, auction_id, secret_data, event_data, seller_id, buyer, created_at, updated_at",
+    )
+    .in("auction_id", auctionIds);
+
+  if (error) {
+    throw new Error(`Failed to load secrets for auctions: ${error.message}`);
+  }
+
+  return z.array(secretRowSchema).parse(data ?? []);
 }
