@@ -29,7 +29,7 @@ const privateTransferTypes = {
 export const privateTokenApiDomain = {
   name: "CompliantPrivateTokenDemo",
   version: "0.0.1",
-  chainId: requiredChain.id,
+  chainId: sepolia.id,
   verifyingContract: VAULT_ADDRESS,
 } as const;
 
