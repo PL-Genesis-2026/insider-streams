@@ -18,8 +18,13 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { EXAMPLE_PREDICTION_MARKET_NAME } from "@private-streams/common";
+import {
+  EXAMPLE_PREDICTION_MARKET_NAME,
+  CONFIDENTIAL_USDC_DECIMALS,
+} from "@private-streams/common";
+import { formatUnits } from "viem";
 import { cn } from "@/lib/utils";
+import type { PrivateBidRecord } from "@/lib/private-data/types";
 
 export type AuctionCardData = {
   auctionId: string;
@@ -40,6 +45,8 @@ type AuctionCardProps = {
   auction: AuctionCardData;
   className?: string;
   href?: string;
+  privateBid?: PrivateBidRecord;
+  isOwnAuction?: boolean;
 };
 
 const usdFormat = new Intl.NumberFormat("en-US", {
@@ -66,7 +73,37 @@ function getCardDescription(auction: AuctionCardData) {
   return `Seller ${shortenAddress(auction.sellerAddress)} competing in market #${auction.marketId}.`;
 }
 
-function MetaRail({ auction }: { auction: AuctionCardData }) {
+function formatBidAmount(amount: string): string {
+  const formatted = formatUnits(BigInt(amount), CONFIDENTIAL_USDC_DECIMALS);
+  return `$${Number(formatted).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+}
+
+function BidStatusBadge({ bid }: { bid: PrivateBidRecord }) {
+  switch (bid.status) {
+    case "active":
+      return (
+        <Badge variant="accent">Your bid: {formatBidAmount(bid.amount)}</Badge>
+      );
+    case "won":
+      return <Badge variant="secondary">Won</Badge>;
+    case "outbid":
+      return <Badge variant="muted">Outbid</Badge>;
+    case "refunded":
+      return <Badge variant="muted">Refunded</Badge>;
+    default:
+      return null;
+  }
+}
+
+function MetaRail({
+  auction,
+  privateBid,
+  isOwnAuction,
+}: {
+  auction: AuctionCardData;
+  privateBid?: PrivateBidRecord;
+  isOwnAuction?: boolean;
+}) {
   const statusVariant =
     auction.status === "Settled" || auction.status === "Closed"
       ? "secondary"
@@ -81,6 +118,8 @@ function MetaRail({ auction }: { auction: AuctionCardData }) {
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant={statusVariant}>{auction.status}</Badge>
+        {isOwnAuction && <Badge variant="outline">Your auction</Badge>}
+        {privateBid && <BidStatusBadge bid={privateBid} />}
         {timeLabel && (
           <span className="text-sm text-muted-foreground">{timeLabel}</span>
         )}
@@ -192,7 +231,13 @@ function TraceRow({ auction }: { auction: AuctionCardData }) {
   );
 }
 
-export function AuctionCard({ auction, className, href }: AuctionCardProps) {
+export function AuctionCard({
+  auction,
+  className,
+  href,
+  privateBid,
+  isOwnAuction,
+}: AuctionCardProps) {
   const titleLabel = auction.title ?? `Auction #${auction.auctionId}`;
 
   const cardContent = (
@@ -203,7 +248,11 @@ export function AuctionCard({ auction, className, href }: AuctionCardProps) {
       )}
     >
       <CardHeader className="gap-4 pb-5">
-        <MetaRail auction={auction} />
+        <MetaRail
+          auction={auction}
+          privateBid={privateBid}
+          isOwnAuction={isOwnAuction}
+        />
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_250px] lg:items-start">
           <div className="min-w-0">
