@@ -1,6 +1,6 @@
 import { VAULT_ADDRESS } from "@private-streams/common";
 import { getAddress, type Address } from "viem";
-import { requiredChain } from "@/lib/wallet/config";
+import { sepolia } from "@reown/appkit/networks";
 
 export const PRIVATE_TOKEN_API_BASE_URL =
   "https://convergence2026-token-api.cldev.cloud";
