@@ -7,24 +7,24 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 /// @notice Mintable/burnable ERC-20 representing YES or NO shares in a prediction market.
 /// @dev Only the deployer (ExamplePredictionMarket) can mint and burn.
 contract ExamplePredictionMarketShareToken is ERC20 {
-    address public immutable market;
+    address public immutable marketplace;
 
-    error OnlyMarket();
+    error OnlyMarketplace();
 
-    modifier onlyMarket() {
-        if (msg.sender != market) revert OnlyMarket();
+    modifier onlyMarketplace() {
+        if (msg.sender != marketplace) revert OnlyMarketplace();
         _;
     }
 
     constructor(string memory name_, string memory symbol_) ERC20(name_, symbol_) {
-        market = msg.sender;
+        marketplace = msg.sender;
     }
 
-    function mint(address to, uint256 amount) external onlyMarket {
+    function mint(address to, uint256 amount) external onlyMarketplace {
         _mint(to, amount);
     }
 
-    function burn(address from, uint256 amount) external onlyMarket {
+    function burn(address from, uint256 amount) external onlyMarketplace {
         _burn(from, amount);
     }
 

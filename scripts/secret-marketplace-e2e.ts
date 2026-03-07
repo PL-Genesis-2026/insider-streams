@@ -7,7 +7,7 @@
  *   - BidPlaced
  *   - AuctionClosed
  *   - AuctionForceClosed + ReputationUpdated
- *   - ExternalMarketResolved + ReputationUpdated
+ *   - ExternalEventResolved + ReputationUpdated
  *
  * Then exercises the Supabase web2 private bidding workflow:
  *   - Deposit (credit balance)
@@ -19,7 +19,7 @@
  *   - Withdrawal lifecycle
  *
  * Env vars required:
- *   OWNER_PK                    — deploys, creates markets, closes auctions, settles
+ *   OWNER_PK                    — deploys, creates events, closes auctions, settles
  *   BIDDER_PK                   — unused on-chain (admin-only model) but needed for Supabase tests
  *   RPC_URL                     — Eth Sepolia RPC
  *   MOCK_USDC_ADDRESS           — MockUSDC contract
@@ -70,7 +70,7 @@ const MOCK_USDC = (process.env.MOCK_USDC_ADDRESS ??
   MOCK_USDC_ADDRESS) as Address;
 const SECRET_MARKETPLACE = (process.env.SECRET_MARKETPLACE_ADDRESS ??
   SECRET_MARKETPLACE_ADDRESS) as Address;
-// NOTE: We read the ExamplePredictionMarket address from SecretMarketplace.simpleMarket() at runtime
+// NOTE: We read the ExamplePredictionMarket address from SecretMarketplace.marketplace() at runtime
 // to avoid mismatch between the two contracts. See Step 0 below.
 let SIMPLE_MARKET: Address;
 
@@ -130,7 +130,7 @@ async function main() {
   SIMPLE_MARKET = (await publicClient.readContract({
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
-    functionName: "simpleMarket",
+    functionName: "marketplace",
   })) as Address;
 
   console.log("===================================================");
@@ -140,7 +140,7 @@ async function main() {
   console.log(`  Bidder (web2):    ${bidderAccount.address}`);
   console.log(`  MockUSDC:         ${MOCK_USDC}`);
   console.log(
-    `  ExamplePredictionMarket: ${SIMPLE_MARKET} (from SecretMarketplace.simpleMarket())`,
+    `  ExamplePredictionMarket: ${SIMPLE_MARKET} (from SecretMarketplace.marketplace())`,
   );
   console.log(`  SecretMarketplace: ${SECRET_MARKETPLACE}`);
   console.log("===================================================\n");
@@ -200,21 +200,21 @@ async function main() {
   // AUCTION 1: Normal flow → AuctionCreated, BidPlaced, AuctionClosed
   // ══════════════════════════════════════════════════════════════════════════
 
-  console.log("\n>> Step 2: Create market + auction (normal flow)...");
-  const createMarketHash = await ownerClient.writeContract({
+  console.log("\n>> Step 2: Create event + auction (normal flow)...");
+  const createEventHash = await ownerClient.writeContract({
     address: SIMPLE_MARKET,
     abi: examplePredictionMarketAbi,
-    functionName: "newMarket",
-    args: [QUESTION_1],
+    functionName: "newEvent",
+    args: [QUESTION_1, BigInt(3 * 60)],
   });
-  const marketReceipt = await waitForTx(createMarketHash, "Market created");
-  const marketLogs = parseEventLogs({
+  const eventReceipt = await waitForTx(createEventHash, "Event created");
+  const eventLogs = parseEventLogs({
     abi: examplePredictionMarketAbi,
-    logs: marketReceipt.logs,
-    eventName: "MarketCreated",
+    logs: eventReceipt.logs,
+    eventName: "EventCreated",
   });
-  const marketId1 = marketLogs[0].args.marketId;
-  console.log(`  Market ID: ${marketId1}`);
+  const eventId1 = eventLogs[0].args.eventId;
+  console.log(`  Event ID: ${eventId1}`);
 
   // EVENT: AuctionCreated
   const now1 = BigInt(Math.floor(Date.now() / 1000));
@@ -223,7 +223,7 @@ async function main() {
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
     functionName: "createAuction",
-    args: [SELLER_NAME, marketId1, QUESTION_1, endTime1],
+    args: [SELLER_NAME, eventId1, QUESTION_1, endTime1],
   });
   const auctionReceipt = await waitForTx(
     createAuctionHash,
@@ -277,19 +277,19 @@ async function main() {
   });
   await waitForTx(closeHash, "[EVENT: AuctionClosed]");
 
-  // EVENT: ExternalMarketResolved + ReputationUpdated (resolve market 1 with delta=+1)
+  // EVENT: ExternalEventResolved + ReputationUpdated (resolve event 1 with delta=+1)
   console.log(
-    "\n>> Step 6: Resolve external market (delta=+1)...",
+    "\n>> Step 6: Resolve external event (delta=+1)...",
   );
   const resolveHash = await ownerClient.writeContract({
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
-    functionName: "resolveExternalMarket",
-    args: [marketId1, 1],
+    functionName: "resolveExternalEvent",
+    args: [eventId1, 1],
   });
   await waitForTx(
     resolveHash,
-    "[EVENT: ExternalMarketResolved + ReputationUpdated]",
+    "[EVENT: ExternalEventResolved + ReputationUpdated]",
   );
 
   // Verify reputation after resolve
@@ -311,20 +311,20 @@ async function main() {
   console.log(
     "\n>> Step 7: Create auction 2 (will be force-closed)...",
   );
-  const createMarket2Hash = await ownerClient.writeContract({
+  const createEvent2Hash = await ownerClient.writeContract({
     address: SIMPLE_MARKET,
     abi: examplePredictionMarketAbi,
-    functionName: "newMarket",
-    args: [QUESTION_2],
+    functionName: "newEvent",
+    args: [QUESTION_2, BigInt(3 * 60)],
   });
-  const market2Receipt = await waitForTx(createMarket2Hash, "Market 2 created");
-  const market2Logs = parseEventLogs({
+  const event2Receipt = await waitForTx(createEvent2Hash, "Event 2 created");
+  const event2Logs = parseEventLogs({
     abi: examplePredictionMarketAbi,
-    logs: market2Receipt.logs,
-    eventName: "MarketCreated",
+    logs: event2Receipt.logs,
+    eventName: "EventCreated",
   });
-  const marketId2 = market2Logs[0].args.marketId;
-  console.log(`  Market ID: ${marketId2}`);
+  const eventId2 = event2Logs[0].args.eventId;
+  console.log(`  Event ID: ${eventId2}`);
 
   const now2 = BigInt(Math.floor(Date.now() / 1000));
   const endTime2 = now2 + BigInt(FORCE_CLOSE_AUCTION_DURATION);
@@ -332,7 +332,7 @@ async function main() {
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
     functionName: "createAuction",
-    args: [SELLER_NAME, marketId2, QUESTION_2, endTime2],
+    args: [SELLER_NAME, eventId2, QUESTION_2, endTime2],
   });
   const auction2Receipt = await waitForTx(
     createAuction2Hash,
@@ -541,9 +541,9 @@ async function main() {
     auction_id: testAuctionId,
     secret_data: "ETH merge date leaked — confidence 0.95",
     event_data: {
-      marketplace: "SimpleMarket",
+      marketplace: "ExamplePredictionMarket",
       event: QUESTION_2,
-      marketId: Number(marketId2),
+      eventId: Number(eventId2),
       outcome: "yes",
     },
     seller_id: testSellerId,
@@ -821,7 +821,7 @@ async function main() {
   console.log("    [x] AuctionCreated          (x2)");
   console.log("    [x] BidPlaced               (x2)");
   console.log("    [x] AuctionClosed           (x1)");
-  console.log("    [x] ExternalMarketResolved  (x1)");
+  console.log("    [x] ExternalEventResolved   (x1)");
   console.log("    [x] AuctionForceClosed      (x1)");
   console.log(
     "    [x] ReputationUpdated       (x2: resolve +1, force-close -1)",

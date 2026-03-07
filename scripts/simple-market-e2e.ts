@@ -2,17 +2,17 @@
  * SimpleMarket + CRE Prediction Market E2E Test Script
  *
  * Full lifecycle test on Eth Sepolia:
- *   1. Owner creates a market with a question
+ *   1. Owner creates an event with a question
  *   2. Bidder approves USDC + buys YES shares
- *   3. Waits for market closure (3 minutes)
+ *   3. Waits for event closure (3 minutes)
  *   4. Owner requests settlement
  *   5. CRE prediction-market-demo simulation (dry run)
  *   6. CRE prediction-market-demo broadcast (on-chain settlement)
- *   7. Verifies on-chain market is Settled
+ *   7. Verifies on-chain event is Settled
  *   8. Verifies Firestore document exists with question + AI response
  *
  * Env vars required:
- *   OWNER_PK             — creates market, requests settlement
+ *   OWNER_PK             — creates event, requests settlement
  *   BIDDER_PK            — buys shares (must be different from owner)
  *   RPC_URL              — Eth Sepolia RPC
  *   FIREBASE_API_KEY     — Firebase API key
@@ -106,26 +106,26 @@ async function main() {
   });
   await waitForTx(publicClient, approveHash, "Bidder USDC approval");
 
-  // ── Step 3: Create market ───────────────────────────────────────────────────
-  step("Owner creating market...");
-  const createMarketHash = await ownerClient.writeContract({
+  // ── Step 3: Create event ───────────────────────────────────────────────────
+  step("Owner creating event...");
+  const createEventHash = await ownerClient.writeContract({
     address: SIMPLE_MARKET,
     abi: examplePredictionMarketAbi,
-    functionName: "newMarket",
-    args: [QUESTION],
+    functionName: "newEvent",
+    args: [QUESTION, BigInt(3 * 60)],
   });
-  const marketReceipt = await waitForTx(
+  const eventReceipt = await waitForTx(
     publicClient,
-    createMarketHash,
-    "Market created",
+    createEventHash,
+    "Event created",
   );
-  const marketLogs = parseEventLogs({
+  const eventLogs = parseEventLogs({
     abi: examplePredictionMarketAbi,
-    logs: marketReceipt.logs,
-    eventName: "MarketCreated",
+    logs: eventReceipt.logs,
+    eventName: "EventCreated",
   });
-  const marketId = marketLogs[0].args.marketId;
-  console.log(`  Market ID: ${marketId}`);
+  const eventId = eventLogs[0].args.eventId;
+  console.log(`  Event ID: ${eventId}`);
 
   // ── Step 4: Buy YES shares (replaces old makePrediction) ────────────────────
   step("Bidder buying YES shares...");
@@ -133,20 +133,20 @@ async function main() {
     address: SIMPLE_MARKET,
     abi: examplePredictionMarketAbi,
     functionName: "buyShares",
-    args: [marketId, OUTCOME_YES, PREDICTION_AMOUNT],
+    args: [eventId, OUTCOME_YES, PREDICTION_AMOUNT],
   });
   await waitForTx(publicClient, buyHash, `Bought YES shares (${PREDICTION_AMOUNT} USDC)`);
 
-  // ── Step 5: Wait for market closure ─────────────────────────────────────────
-  step("Waiting for market to close...");
-  const market = await publicClient.readContract({
+  // ── Step 5: Wait for event closure ─────────────────────────────────────────
+  step("Waiting for event to close...");
+  const event = await publicClient.readContract({
     address: SIMPLE_MARKET,
     abi: examplePredictionMarketAbi,
-    functionName: "getMarket",
-    args: [marketId],
+    functionName: "getEvent",
+    args: [eventId],
   });
-  console.log(`  Market closes at: ${market.marketClose}`);
-  await waitForTimestamp(publicClient, market.marketClose, "Market closure");
+  console.log(`  Event closes at: ${event.eventClose}`);
+  await waitForTimestamp(publicClient, event.eventClose, "Event closure");
 
   // ── Step 6: Request settlement ──────────────────────────────────────────────
   step("Owner requesting settlement...");
@@ -154,7 +154,7 @@ async function main() {
     address: SIMPLE_MARKET,
     abi: examplePredictionMarketAbi,
     functionName: "requestSettlement",
-    args: [marketId],
+    args: [eventId],
   });
   const settleReceipt = await waitForTx(
     publicClient,
@@ -199,20 +199,20 @@ async function main() {
   );
 
   // ── Step 9: Verify on-chain ─────────────────────────────────────────────────
-  step("Verifying on-chain market status...");
-  const finalMarket = await publicClient.readContract({
+  step("Verifying on-chain event status...");
+  const finalEvent = await publicClient.readContract({
     address: SIMPLE_MARKET,
     abi: examplePredictionMarketAbi,
-    functionName: "getMarket",
-    args: [marketId],
+    functionName: "getEvent",
+    args: [eventId],
   });
   // Status: 0=Open, 1=SettlementRequested, 2=Settled, 3=NeedsManual
   assert(
-    finalMarket.status === 2,
-    `Expected status=2 (Settled), got status=${finalMarket.status}`,
+    finalEvent.status === 2,
+    `Expected status=2 (Settled), got status=${finalEvent.status}`,
   );
-  console.log(`  ok Market ${marketId} is Settled (status=2)`);
-  console.log(`  Outcome: ${finalMarket.outcome === 2 ? "YES" : finalMarket.outcome === 1 ? "NO" : `Unknown(${finalMarket.outcome})`}`);
+  console.log(`  ok Event ${eventId} is Settled (status=2)`);
+  console.log(`  Outcome: ${finalEvent.outcome === 2 ? "YES" : finalEvent.outcome === 1 ? "NO" : `Unknown(${finalEvent.outcome})`}`);
 
   // ── Step 10: Verify Firestore ───────────────────────────────────────────────
   step("Verifying Firestore document...");
@@ -254,7 +254,7 @@ async function main() {
 
   // ── Summary ─────────────────────────────────────────────────────────────────
   banner("PASS — SimpleMarket + CRE E2E");
-  console.log(`  Market ID:     ${marketId}`);
+  console.log(`  Event ID:      ${eventId}`);
   console.log(`  Question:      ${QUESTION}`);
   console.log(`  On-chain:      Settled`);
   console.log(`  Firestore:     ${firestoreDocId ? "Verified" : "Skipped (no doc ID)"}`);

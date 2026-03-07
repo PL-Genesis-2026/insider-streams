@@ -23,13 +23,13 @@ describe("Describe entity assertions", () => {
     let seller = Address.fromString(
       "0x0000000000000000000000000000000000000001"
     )
-    let externalMarketId = BigInt.fromI32(234)
+    let externalEventId = BigInt.fromI32(234)
     let newAuctionClosedEvent = createAuctionClosedEvent(
       auctionId,
       buyer,
       winningBid,
       seller,
-      externalMarketId
+      externalEventId
     )
     handleAuctionClosed(newAuctionClosedEvent)
   })
@@ -72,7 +72,7 @@ describe("Describe entity assertions", () => {
     assert.fieldEquals(
       "AuctionClosed",
       "0xa16081f360e3847006db660bae1c6d1b2e17ec2a-1",
-      "externalMarketId",
+      "externalEventId",
       "234"
     )
 

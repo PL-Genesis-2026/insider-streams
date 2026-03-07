@@ -29,17 +29,17 @@ contract SecretMarketplaceTest is Test {
         // Grant CRE role
         sm.grantRole(sm.CRE_ROLE(), creAddress);
 
-        // newMarket requires 10 USDC initial liquidity
+        // newEvent requires 10 USDC initial liquidity
         usdc.mint(address(this), MINT_AMOUNT);
         usdc.approve(address(market), type(uint256).max);
         usdc.approve(address(sm), type(uint256).max);
 
-        // Create markets on ExamplePredictionMarket so createAuction validation passes
-        market.newMarket("Test market 0");  // marketId=0
-        market.newMarket("Test market 1");  // marketId=1
-        market.newMarket("Test market 2");  // marketId=2
-        market.newMarket("Test market 3");  // marketId=3
-        market.newMarket("Test market 4");  // marketId=4
+        // Create events on ExamplePredictionMarket so createAuction validation passes
+        market.newEvent("Test event 0", 3 minutes);  // eventId=0
+        market.newEvent("Test event 1", 3 minutes);  // eventId=1
+        market.newEvent("Test event 2", 3 minutes);  // eventId=2
+        market.newEvent("Test event 3", 3 minutes);  // eventId=3
+        market.newEvent("Test event 4", 3 minutes);  // eventId=4
     }
 
     // ===========================
@@ -135,28 +135,28 @@ contract SecretMarketplaceTest is Test {
         sm.createAuction("Alice", 0, "Test Event", block.timestamp + 1 hours);
     }
 
-    function test_createAuction_tracksMarketForResolution() public {
+    function test_createAuction_tracksEventForResolution() public {
         _createDefaultAuction(); // eventId 0
 
-        uint256[] memory unresolved = sm.getUnresolvedMarkets();
+        uint256[] memory unresolved = sm.getUnresolvedEvents();
         assertEq(unresolved.length, 1);
         assertEq(unresolved[0], 0);
 
-        uint256[] memory linked = sm.getMarketAuctions(0);
+        uint256[] memory linked = sm.getEventAuctions(0);
         assertEq(linked.length, 1);
         assertEq(linked[0], 0);
     }
 
-    function test_createAuction_multipleAuctionsSameMarket() public {
+    function test_createAuction_multipleAuctionsSameEvent() public {
         _createAuction("Alice", 0, "Event A", block.timestamp + 1 hours);
         _createAuction("Bob", 0, "Event A", block.timestamp + 1 hours);
 
-        // Market tracked only once
-        uint256[] memory unresolved = sm.getUnresolvedMarkets();
+        // Event tracked only once
+        uint256[] memory unresolved = sm.getUnresolvedEvents();
         assertEq(unresolved.length, 1);
 
         // Both auctions linked
-        uint256[] memory linked = sm.getMarketAuctions(0);
+        uint256[] memory linked = sm.getEventAuctions(0);
         assertEq(linked.length, 2);
     }
 
@@ -183,8 +183,8 @@ contract SecretMarketplaceTest is Test {
         sm.createAuction("Alice", 0, "Event", block.timestamp - 1);
     }
 
-    function test_createAuction_revert_marketDoesNotExist() public {
-        vm.expectRevert(abi.encodeWithSelector(SecretMarketplace.MarketDoesNotExist.selector, 99));
+    function test_createAuction_revert_eventDoesNotExist() public {
+        vm.expectRevert(abi.encodeWithSelector(SecretMarketplace.EventDoesNotExist.selector, 99));
         sm.createAuction("Alice", 99, "Event", block.timestamp + 1 hours);
     }
 
@@ -400,10 +400,10 @@ contract SecretMarketplaceTest is Test {
     }
 
     // ===========================
-    // === RESOLVE MARKET ========
+    // === RESOLVE EVENT =========
     // ===========================
 
-    function test_resolveExternalMarket_updatesReputationForAllAuctions() public {
+    function test_resolveExternalEvent_updatesReputationForAllAuctions() public {
         _createAuction("Alice", 0, "Event", block.timestamp + 1 hours);
         _createAuction("Bob", 0, "Event", block.timestamp + 1 hours);
         _placeBid(0, BID_AMOUNT);
@@ -414,8 +414,8 @@ contract SecretMarketplaceTest is Test {
         sm.closeAuction(0);
         sm.closeAuction(1);
 
-        // Resolve market with +1 delta for all
-        sm.resolveExternalMarket(0, int8(1));
+        // Resolve event with +1 delta for all
+        sm.resolveExternalEvent(0, int8(1));
 
         SecretMarketplace.Seller memory s1 = sm.getSeller("Alice");
         SecretMarketplace.Seller memory s2 = sm.getSeller("Bob");
@@ -423,11 +423,11 @@ contract SecretMarketplaceTest is Test {
         assertEq(s2.reputationScore, 1);
     }
 
-    function test_resolveExternalMarket_forceClosesOpenAuctions() public {
+    function test_resolveExternalEvent_forceClosesOpenAuctions() public {
         _createAuction("Alice", 0, "Event", block.timestamp + 1 hours);
         _placeBid(0, BID_AMOUNT);
 
-        sm.resolveExternalMarket(0, int8(1));
+        sm.resolveExternalEvent(0, int8(1));
 
         // Auction force-closed
         SecretMarketplace.Auction memory a = sm.getAuction(0);
@@ -441,7 +441,7 @@ contract SecretMarketplaceTest is Test {
         assertEq(s.reputationScore, 1);
     }
 
-    function test_resolveExternalMarket_skipsAlreadyResolvedReputation() public {
+    function test_resolveExternalEvent_skipsAlreadyResolvedReputation() public {
         _createAuction("Alice", 0, "Event", block.timestamp + 1 hours);
         _placeBid(0, BID_AMOUNT);
 
@@ -449,49 +449,49 @@ contract SecretMarketplaceTest is Test {
         sm.forceCloseAuction(0, int8(1));
         assertEq(sm.getSeller("Alice").reputationScore, 1);
 
-        // Now resolve the market — should NOT double-count
-        sm.resolveExternalMarket(0, int8(1));
+        // Now resolve the event — should NOT double-count
+        sm.resolveExternalEvent(0, int8(1));
         assertEq(sm.getSeller("Alice").reputationScore, 1); // still 1, not 2
     }
 
-    function test_resolveExternalMarket_removesFromUnresolvedList() public {
+    function test_resolveExternalEvent_removesFromUnresolvedList() public {
         _createAuction("Alice", 0, "E0", block.timestamp + 1 hours);
         _createAuction("Bob", 1, "E1", block.timestamp + 1 hours);
 
-        assertEq(sm.getUnresolvedMarkets().length, 2);
+        assertEq(sm.getUnresolvedEvents().length, 2);
 
         vm.warp(block.timestamp + 2 hours);
         sm.closeAuction(0);
-        sm.resolveExternalMarket(0, int8(1));
+        sm.resolveExternalEvent(0, int8(1));
 
-        assertEq(sm.getUnresolvedMarkets().length, 1);
-        assertEq(sm.getUnresolvedMarkets()[0], 1);
+        assertEq(sm.getUnresolvedEvents().length, 1);
+        assertEq(sm.getUnresolvedEvents()[0], 1);
     }
 
-    function test_resolveExternalMarket_revert_alreadyResolved() public {
+    function test_resolveExternalEvent_revert_alreadyResolved() public {
         _createAuction("Alice", 0, "Event", block.timestamp + 1 hours);
         vm.warp(block.timestamp + 2 hours);
         sm.closeAuction(0);
-        sm.resolveExternalMarket(0, int8(1));
+        sm.resolveExternalEvent(0, int8(1));
 
-        vm.expectRevert(abi.encodeWithSelector(SecretMarketplace.MarketAlreadyResolved.selector, 0));
-        sm.resolveExternalMarket(0, int8(-1));
+        vm.expectRevert(abi.encodeWithSelector(SecretMarketplace.EventAlreadyResolved.selector, 0));
+        sm.resolveExternalEvent(0, int8(-1));
     }
 
-    function test_resolveExternalMarket_revert_notAdminOrCRE() public {
+    function test_resolveExternalEvent_revert_notAdminOrCRE() public {
         _createAuction("Alice", 0, "Event", block.timestamp + 1 hours);
 
         vm.expectRevert();
         vm.prank(nobody);
-        sm.resolveExternalMarket(0, int8(1));
+        sm.resolveExternalEvent(0, int8(1));
     }
 
-    function test_resolveExternalMarket_zeroDelta_noReputationChange() public {
+    function test_resolveExternalEvent_zeroDelta_noReputationChange() public {
         _createAuction("Alice", 0, "Event", block.timestamp + 1 hours);
         vm.warp(block.timestamp + 2 hours);
         sm.closeAuction(0);
 
-        sm.resolveExternalMarket(0, int8(0));
+        sm.resolveExternalEvent(0, int8(0));
         assertEq(sm.getSeller("Alice").reputationScore, 0);
     }
 
@@ -524,7 +524,7 @@ contract SecretMarketplaceTest is Test {
         assertEq(uint8(a.status), uint8(SecretMarketplace.AuctionStatus.ForceClosed));
     }
 
-    function test_processReport_resolveMarket() public {
+    function test_processReport_resolveEvent() public {
         _createAuction("Alice", 0, "Event", block.timestamp + 1 hours);
         vm.warp(block.timestamp + 2 hours);
         sm.closeAuction(0);
@@ -533,7 +533,7 @@ contract SecretMarketplaceTest is Test {
         vm.prank(forwarder);
         sm.onReport("", report);
 
-        assertTrue(sm.marketResolved(0));
+        assertTrue(sm.eventResolved(0));
     }
 
     function test_processReport_revert_notForwarder() public {
@@ -600,30 +600,30 @@ contract SecretMarketplaceTest is Test {
         sm.forceCloseAuction(id, int8(1));
     }
 
-    function test_emits_ExternalMarketResolved() public {
+    function test_emits_ExternalEventResolved() public {
         _createAuction("Alice", 0, "Event", block.timestamp + 1 hours);
         vm.warp(block.timestamp + 2 hours);
         sm.closeAuction(0);
 
         vm.expectEmit(true, false, false, true);
-        emit SecretMarketplace.ExternalMarketResolved(0, int8(1), 1);
-        sm.resolveExternalMarket(0, int8(1));
+        emit SecretMarketplace.ExternalEventResolved(0, int8(1), 1);
+        sm.resolveExternalEvent(0, int8(1));
     }
 
     // ===========================
-    // ====== SET SIMPLE MARKET ==
+    // ====== SET MARKETPLACE ====
     // ===========================
 
-    function test_setSimpleMarket() public {
+    function test_setMarketplace() public {
         address newMarket = makeAddr("newMarket");
-        sm.setSimpleMarket(newMarket);
-        assertEq(address(sm.simpleMarket()), newMarket);
+        sm.setMarketplace(newMarket);
+        assertEq(address(sm.marketplace()), newMarket);
     }
 
-    function test_setSimpleMarket_revert_notAdmin() public {
+    function test_setMarketplace_revert_notAdmin() public {
         vm.expectRevert();
         vm.prank(nobody);
-        sm.setSimpleMarket(makeAddr("newMarket"));
+        sm.setMarketplace(makeAddr("newMarket"));
     }
 
     // ===========================
@@ -657,8 +657,8 @@ contract SecretMarketplaceTest is Test {
         sm.withdrawFunds(recipient, BID_AMOUNT);
         assertEq(usdc.balanceOf(recipient), BID_AMOUNT);
 
-        // 8. Resolve market → reputation +1
-        sm.resolveExternalMarket(0, int8(1));
+        // 8. Resolve event → reputation +1
+        sm.resolveExternalEvent(0, int8(1));
         SecretMarketplace.Seller memory s = sm.getSeller("Insider Alice");
         assertEq(s.reputationScore, 1);
     }

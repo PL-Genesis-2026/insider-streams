@@ -89,10 +89,10 @@ export interface GeminiApiResponse {
 }
 
 /**
- * Market details extracted from the SettlementRequested event log.
+ * Event details extracted from the SettlementRequested event log.
  */
 export interface LogDetails {
-  marketId: string;
+  eventId: string;
   question: string;
 }
 

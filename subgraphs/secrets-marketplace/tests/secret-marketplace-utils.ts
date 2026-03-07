@@ -20,7 +20,7 @@ export function createAuctionClosedEvent(
   buyer: Address,
   winningBid: BigInt,
   seller: Address,
-  externalMarketId: BigInt
+  externalEventId: BigInt
 ): AuctionClosed {
   let auctionClosedEvent = changetype<AuctionClosed>(newMockEvent())
 
@@ -46,8 +46,8 @@ export function createAuctionClosedEvent(
   )
   auctionClosedEvent.parameters.push(
     new ethereum.EventParam(
-      "externalMarketId",
-      ethereum.Value.fromUnsignedBigInt(externalMarketId)
+      "externalEventId",
+      ethereum.Value.fromUnsignedBigInt(externalEventId)
     )
   )
 
@@ -57,7 +57,7 @@ export function createAuctionClosedEvent(
 export function createAuctionCreatedEvent(
   auctionId: BigInt,
   seller: Address,
-  externalMarketId: BigInt,
+  externalEventId: BigInt,
   reservePrice: BigInt,
   endTime: BigInt
 ): AuctionCreated {
@@ -76,8 +76,8 @@ export function createAuctionCreatedEvent(
   )
   auctionCreatedEvent.parameters.push(
     new ethereum.EventParam(
-      "externalMarketId",
-      ethereum.Value.fromUnsignedBigInt(externalMarketId)
+      "externalEventId",
+      ethereum.Value.fromUnsignedBigInt(externalEventId)
     )
   )
   auctionCreatedEvent.parameters.push(
@@ -101,7 +101,7 @@ export function createAuctionForceClosedEvent(
   refundedBidder: Address,
   refundAmount: BigInt,
   seller: Address,
-  externalMarketId: BigInt,
+  externalEventId: BigInt,
   reputationDelta: i32
 ): AuctionForceClosed {
   let auctionForceClosedEvent = changetype<AuctionForceClosed>(newMockEvent())
@@ -131,8 +131,8 @@ export function createAuctionForceClosedEvent(
   )
   auctionForceClosedEvent.parameters.push(
     new ethereum.EventParam(
-      "externalMarketId",
-      ethereum.Value.fromUnsignedBigInt(externalMarketId)
+      "externalEventId",
+      ethereum.Value.fromUnsignedBigInt(externalEventId)
     )
   )
   auctionForceClosedEvent.parameters.push(
@@ -343,7 +343,7 @@ export function createSecurityWarningEvent(message: string): SecurityWarning {
 
 export function createTradeExecutedEvent(
   auctionId: BigInt,
-  externalMarketId: BigInt,
+  externalEventId: BigInt,
   buyer: Address,
   amount: BigInt
 ): TradeExecuted {
@@ -359,8 +359,8 @@ export function createTradeExecutedEvent(
   )
   tradeExecutedEvent.parameters.push(
     new ethereum.EventParam(
-      "externalMarketId",
-      ethereum.Value.fromUnsignedBigInt(externalMarketId)
+      "externalEventId",
+      ethereum.Value.fromUnsignedBigInt(externalEventId)
     )
   )
   tradeExecutedEvent.parameters.push(

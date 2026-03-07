@@ -2,7 +2,7 @@
  * Auction Closer E2E Test Script
  *
  * Full lifecycle test on Eth Sepolia:
- *   1. Owner creates a SimpleMarket market
+ *   1. Owner creates an ExamplePredictionMarket event
  *   2. Owner creates a SecretMarketplace auction (short duration)
  *   3. Bidder approves USDC + places bid
  *   4. Waits for auction to expire
@@ -11,7 +11,7 @@
  *   7. Verifies auction is closed and removed from open list
  *
  * Env vars required:
- *   OWNER_PK   — creates market + auction
+ *   OWNER_PK   — creates event + auction
  *   BIDDER_PK  — places bid (must be different from owner)
  *   RPC_URL    — Eth Sepolia RPC
  *
@@ -64,11 +64,11 @@ const SELLER_NAME = "TestSeller";
 // ─── E2E Flow ────────────────────────────────────────────────────────────────
 
 async function main() {
-  // Read the SimpleMarket address from SecretMarketplace
+  // Read the ExamplePredictionMarket address from SecretMarketplace
   const SIMPLE_MARKET = (await publicClient.readContract({
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
-    functionName: "simpleMarket",
+    functionName: "marketplace",
   })) as Address;
 
   banner("Auction Closer E2E Test");
@@ -108,26 +108,26 @@ async function main() {
   });
   await waitForTx(publicClient, approveMarketHash, "Owner USDC approval for market");
 
-  // ── Step 3: Create market ───────────────────────────────────────────────────
-  step("Owner creating ExamplePredictionMarket market...");
-  const createMarketHash = await ownerClient.writeContract({
+  // ── Step 3: Create event ───────────────────────────────────────────────────
+  step("Owner creating ExamplePredictionMarket event...");
+  const createEventHash = await ownerClient.writeContract({
     address: SIMPLE_MARKET,
     abi: examplePredictionMarketAbi,
-    functionName: "newMarket",
-    args: ["Auction closer E2E test"],
+    functionName: "newEvent",
+    args: ["Auction closer E2E test", BigInt(3 * 60)],
   });
-  const marketReceipt = await waitForTx(
+  const eventReceipt = await waitForTx(
     publicClient,
-    createMarketHash,
-    "Market created",
+    createEventHash,
+    "Event created",
   );
-  const marketLogs = parseEventLogs({
+  const eventLogs = parseEventLogs({
     abi: examplePredictionMarketAbi,
-    logs: marketReceipt.logs,
-    eventName: "MarketCreated",
+    logs: eventReceipt.logs,
+    eventName: "EventCreated",
   });
-  const marketId = marketLogs[0].args.marketId;
-  console.log(`  Market ID: ${marketId}`);
+  const eventId = eventLogs[0].args.eventId;
+  console.log(`  Event ID: ${eventId}`);
 
   // ── Step 4: Create auction (admin-only, 4 args) ────────────────────────────
   step("Owner creating auction...");
@@ -138,7 +138,7 @@ async function main() {
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
     functionName: "createAuction",
-    args: [SELLER_NAME, marketId, "Auction closer E2E test", endTime],
+    args: [SELLER_NAME, eventId, "Auction closer E2E test", endTime],
   });
   const auctionReceipt = await waitForTx(
     publicClient,
@@ -232,7 +232,7 @@ async function main() {
   // ── Summary ─────────────────────────────────────────────────────────────────
   banner("PASS — Auction Closer E2E");
   console.log(`  Auction ID:        ${auctionId}`);
-  console.log(`  Market ID:         ${marketId}`);
+  console.log(`  Event ID:          ${eventId}`);
   console.log(`  Bid Amount:        ${BID_AMOUNT}`);
   console.log(`  On-chain status:   Closed`);
 }

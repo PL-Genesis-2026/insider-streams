@@ -1,4 +1,8 @@
 
+We need to set up an auction close workflow. This will be an update to the auction-closer CRE job.
+When an auction is closed, if there's ann bid for it in Supabase, we need to update that bid's status to won (and there might be a timestamp to update, check the DB). Won bids should increment the 
+
+
 The Balances view I think has some flaws. Can you walk me through this?
 
 Let me describe my understanding at a high level
@@ -6,7 +10,7 @@ pending_witdrawls, completed_withdrawls -> If this is referring to the records W
 total_deposited, this can be total_transferred_in (we want to avoid calling transfers in deposits in backend docs, although it's called a balance in user facing components, to avoid confusion)
 locked_balance is fine
 spent_on_wins this is the total amount the user has spent on won bids right? If so, good.
-
+Con
 One type of balance we need to check, this is complex, but we need to consider funds earned by a seller when a buyer has won an auction they created, so if a private bid is one, that means we should increment the seller's balance by the same amount that we decrement the buyer's balance by. 
 
 Can you update the

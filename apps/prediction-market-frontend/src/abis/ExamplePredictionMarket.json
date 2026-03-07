@@ -8,11 +8,6 @@
         "internalType": "address"
       },
       {
-        "name": "marketAddress",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
         "name": "forwarderAddress",
         "type": "address",
         "internalType": "address"
@@ -22,75 +17,33 @@
   },
   {
     "type": "function",
-    "name": "ACTION_CLOSE_AUCTION",
+    "name": "INITIAL_LIQUIDITY",
     "inputs": [],
     "outputs": [
       {
         "name": "",
-        "type": "uint8",
-        "internalType": "uint8"
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
   },
   {
     "type": "function",
-    "name": "ACTION_FORCE_CLOSE_AUCTION",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "ACTION_RESOLVE_EVENT",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "CRE_ROLE",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "DEFAULT_ADMIN_ROLE",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "closeAuction",
+    "name": "buyShares",
     "inputs": [
       {
-        "name": "auctionId",
+        "name": "eventId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "outcome",
+        "type": "uint8",
+        "internalType": "enum ExamplePredictionMarket.Outcome"
+      },
+      {
+        "name": "usdcAmount",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -100,75 +53,82 @@
   },
   {
     "type": "function",
-    "name": "createAuction",
+    "name": "events",
     "inputs": [
       {
-        "name": "seller",
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "question",
         "type": "string",
         "internalType": "string"
       },
       {
-        "name": "eventId",
+        "name": "creator",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "eventOpen",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "eventTitle",
+        "name": "eventClose",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "status",
+        "type": "uint8",
+        "internalType": "enum ExamplePredictionMarket.Status"
+      },
+      {
+        "name": "outcome",
+        "type": "uint8",
+        "internalType": "enum ExamplePredictionMarket.Outcome"
+      },
+      {
+        "name": "settledAt",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "evidenceURI",
         "type": "string",
         "internalType": "string"
       },
       {
-        "name": "endTime",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
+        "name": "confidenceBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
       {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "eventAuctions",
-    "inputs": [
+        "name": "yesToken",
+        "type": "address",
+        "internalType": "contract ExamplePredictionMarketShareToken"
+      },
       {
-        "name": "",
+        "name": "noToken",
+        "type": "address",
+        "internalType": "contract ExamplePredictionMarketShareToken"
+      },
+      {
+        "name": "yesReserve",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "",
+        "name": "noReserve",
         "type": "uint256",
         "internalType": "uint256"
-      }
-    ],
-    "outputs": [
+      },
       {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "eventResolved",
-    "inputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
+        "name": "liquidityWithdrawn",
         "type": "bool",
         "internalType": "bool"
       }
@@ -177,17 +137,27 @@
   },
   {
     "type": "function",
-    "name": "forceCloseAuction",
+    "name": "forceSettle",
     "inputs": [
       {
-        "name": "auctionId",
+        "name": "eventId",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "reputationDelta",
-        "type": "int8",
-        "internalType": "int8"
+        "name": "outcome",
+        "type": "uint8",
+        "internalType": "enum ExamplePredictionMarket.Outcome"
+      },
+      {
+        "name": "confidenceBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "evidenceURI",
+        "type": "string",
+        "internalType": "string"
       }
     ],
     "outputs": [],
@@ -195,10 +165,10 @@
   },
   {
     "type": "function",
-    "name": "getAuction",
+    "name": "getEvent",
     "inputs": [
       {
-        "name": "auctionId",
+        "name": "eventId",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -207,63 +177,79 @@
       {
         "name": "",
         "type": "tuple",
-        "internalType": "struct SecretMarketplace.Auction",
+        "internalType": "struct ExamplePredictionMarket.Event",
         "components": [
           {
-            "name": "seller",
+            "name": "question",
             "type": "string",
             "internalType": "string"
           },
           {
-            "name": "endTime",
+            "name": "creator",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "eventOpen",
             "type": "uint256",
             "internalType": "uint256"
           },
           {
-            "name": "currentBid",
+            "name": "eventClose",
             "type": "uint256",
             "internalType": "uint256"
-          },
-          {
-            "name": "eventId",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "eventTitle",
-            "type": "string",
-            "internalType": "string"
           },
           {
             "name": "status",
             "type": "uint8",
-            "internalType": "enum SecretMarketplace.AuctionStatus"
+            "internalType": "enum ExamplePredictionMarket.Status"
           },
           {
-            "name": "reputationResolved",
+            "name": "outcome",
+            "type": "uint8",
+            "internalType": "enum ExamplePredictionMarket.Outcome"
+          },
+          {
+            "name": "settledAt",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "evidenceURI",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "confidenceBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "yesToken",
+            "type": "address",
+            "internalType": "contract ExamplePredictionMarketShareToken"
+          },
+          {
+            "name": "noToken",
+            "type": "address",
+            "internalType": "contract ExamplePredictionMarketShareToken"
+          },
+          {
+            "name": "yesReserve",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "noReserve",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "liquidityWithdrawn",
             "type": "bool",
             "internalType": "bool"
           }
         ]
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getEventAuctions",
-    "inputs": [
-      {
-        "name": "externalEventId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256[]",
-        "internalType": "uint256[]"
       }
     ],
     "stateMutability": "view"
@@ -322,157 +308,88 @@
   },
   {
     "type": "function",
-    "name": "getOpenAuctions",
-    "inputs": [],
+    "name": "getNoPrice",
+    "inputs": [
+      {
+        "name": "eventId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "outputs": [
       {
         "name": "",
-        "type": "uint256[]",
-        "internalType": "uint256[]"
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
   },
   {
     "type": "function",
-    "name": "getRoleAdmin",
+    "name": "getUri",
     "inputs": [
       {
-        "name": "role",
-        "type": "bytes32",
-        "internalType": "bytes32"
+        "name": "eventId",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "outputs": [
       {
         "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getSeller",
-    "inputs": [
-      {
-        "name": "sellerName",
         "type": "string",
         "internalType": "string"
       }
     ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getYesPrice",
+    "inputs": [
+      {
+        "name": "eventId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "outputs": [
       {
         "name": "",
-        "type": "tuple",
-        "internalType": "struct SecretMarketplace.Seller",
-        "components": [
-          {
-            "name": "reputationScore",
-            "type": "int256",
-            "internalType": "int256"
-          },
-          {
-            "name": "registered",
-            "type": "bool",
-            "internalType": "bool"
-          }
-        ]
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
   },
   {
     "type": "function",
-    "name": "getSellerAuctions",
+    "name": "newEvent",
     "inputs": [
       {
-        "name": "sellerName",
+        "name": "question",
         "type": "string",
         "internalType": "string"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256[]",
-        "internalType": "uint256[]"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getUnresolvedEvents",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256[]",
-        "internalType": "uint256[]"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "grantRole",
-    "inputs": [
-      {
-        "name": "role",
-        "type": "bytes32",
-        "internalType": "bytes32"
       },
       {
-        "name": "account",
-        "type": "address",
-        "internalType": "address"
+        "name": "duration",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
-    "outputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "stateMutability": "nonpayable"
   },
   {
     "type": "function",
-    "name": "hasRole",
-    "inputs": [
-      {
-        "name": "role",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "account",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "marketplace",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "contract IExamplePredictionMarket"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "nextAuctionId",
+    "name": "nextEventId",
     "inputs": [],
     "outputs": [
       {
@@ -503,25 +420,6 @@
   },
   {
     "type": "function",
-    "name": "openAuctionIds",
-    "inputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "owner",
     "inputs": [],
     "outputs": [
@@ -548,30 +446,17 @@
   },
   {
     "type": "function",
-    "name": "placeBid",
+    "name": "redeemShares",
     "inputs": [
       {
-        "name": "auctionId",
+        "name": "eventId",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "bidAmount",
+        "name": "amount",
         "type": "uint256",
         "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "registerSeller",
-    "inputs": [
-      {
-        "name": "name",
-        "type": "string",
-        "internalType": "string"
       }
     ],
     "outputs": [],
@@ -586,81 +471,16 @@
   },
   {
     "type": "function",
-    "name": "renounceRole",
+    "name": "requestSettlement",
     "inputs": [
       {
-        "name": "role",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "callerConfirmation",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "resolveExternalEvent",
-    "inputs": [
-      {
-        "name": "externalEventId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "delta",
-        "type": "int8",
-        "internalType": "int8"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "revokeRole",
-    "inputs": [
-      {
-        "name": "role",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "account",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "sellerAuctions",
-    "inputs": [
-      {
-        "name": "",
-        "type": "string",
-        "internalType": "string"
-      },
-      {
-        "name": "",
+        "name": "eventId",
         "type": "uint256",
         "internalType": "uint256"
       }
     ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -716,12 +536,17 @@
   },
   {
     "type": "function",
-    "name": "setMarketplace",
+    "name": "settleEventManually",
     "inputs": [
       {
-        "name": "newMarketplace",
-        "type": "address",
-        "internalType": "address"
+        "name": "eventId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "outcome",
+        "type": "uint8",
+        "internalType": "enum ExamplePredictionMarket.Outcome"
       }
     ],
     "outputs": [],
@@ -761,34 +586,10 @@
   },
   {
     "type": "function",
-    "name": "unresolvedEventIds",
+    "name": "withdrawLiquidity",
     "inputs": [
       {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "withdrawFunds",
-    "inputs": [
-      {
-        "name": "to",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "amount",
+        "name": "eventId",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -798,45 +599,8 @@
   },
   {
     "type": "event",
-    "name": "AuctionClosed",
+    "name": "EventCreated",
     "inputs": [
-      {
-        "name": "auctionId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "winningBid",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "seller",
-        "type": "string",
-        "indexed": false,
-        "internalType": "string"
-      },
-      {
-        "name": "eventId",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "AuctionCreated",
-    "inputs": [
-      {
-        "name": "auctionId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
       {
         "name": "eventId",
         "type": "uint256",
@@ -844,84 +608,46 @@
         "internalType": "uint256"
       },
       {
-        "name": "seller",
-        "type": "string",
-        "indexed": false,
-        "internalType": "string"
-      },
-      {
-        "name": "eventTitle",
-        "type": "string",
-        "indexed": false,
-        "internalType": "string"
-      },
-      {
-        "name": "endTime",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "AuctionForceClosed",
-    "inputs": [
-      {
-        "name": "auctionId",
-        "type": "uint256",
+        "name": "creator",
+        "type": "address",
         "indexed": true,
-        "internalType": "uint256"
+        "internalType": "address"
       },
       {
-        "name": "heldAmount",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "seller",
+        "name": "question",
         "type": "string",
         "indexed": false,
         "internalType": "string"
       },
       {
-        "name": "eventId",
+        "name": "eventOpen",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
       },
       {
-        "name": "reputationDelta",
-        "type": "int8",
-        "indexed": false,
-        "internalType": "int8"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "BidPlaced",
-    "inputs": [
-      {
-        "name": "auctionId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "bidAmount",
+        "name": "eventClose",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
       },
       {
-        "name": "previousBid",
+        "name": "duration",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
+      },
+      {
+        "name": "yesToken",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "noToken",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
       }
     ],
     "anonymous": false
@@ -985,31 +711,6 @@
   },
   {
     "type": "event",
-    "name": "ExternalEventResolved",
-    "inputs": [
-      {
-        "name": "externalEventId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "delta",
-        "type": "int8",
-        "indexed": false,
-        "internalType": "int8"
-      },
-      {
-        "name": "auctionsAffected",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
     "name": "ForwarderAddressUpdated",
     "inputs": [
       {
@@ -1029,19 +730,25 @@
   },
   {
     "type": "event",
-    "name": "MarketplaceUpdated",
+    "name": "LiquidityWithdrawn",
     "inputs": [
       {
-        "name": "previousMarketplace",
+        "name": "eventId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "creator",
         "type": "address",
         "indexed": true,
         "internalType": "address"
       },
       {
-        "name": "newMarketplace",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
+        "name": "usdcOut",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
       }
     ],
     "anonymous": false
@@ -1067,112 +774,6 @@
   },
   {
     "type": "event",
-    "name": "ReputationUpdated",
-    "inputs": [
-      {
-        "name": "seller",
-        "type": "string",
-        "indexed": false,
-        "internalType": "string"
-      },
-      {
-        "name": "auctionId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "delta",
-        "type": "int8",
-        "indexed": false,
-        "internalType": "int8"
-      },
-      {
-        "name": "newScore",
-        "type": "int256",
-        "indexed": false,
-        "internalType": "int256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "RoleAdminChanged",
-    "inputs": [
-      {
-        "name": "role",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "previousAdminRole",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "newAdminRole",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "RoleGranted",
-    "inputs": [
-      {
-        "name": "role",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "account",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "sender",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "RoleRevoked",
-    "inputs": [
-      {
-        "name": "role",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "account",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "sender",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
     "name": "SecurityWarning",
     "inputs": [
       {
@@ -1186,10 +787,16 @@
   },
   {
     "type": "event",
-    "name": "SellerRegistered",
+    "name": "SettlementRequested",
     "inputs": [
       {
-        "name": "seller",
+        "name": "eventId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "question",
         "type": "string",
         "indexed": false,
         "internalType": "string"
@@ -1198,62 +805,130 @@
     "anonymous": false
   },
   {
-    "type": "error",
-    "name": "AccessControlBadConfirmation",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "AccessControlUnauthorizedAccount",
+    "type": "event",
+    "name": "SettlementResponse",
     "inputs": [
       {
-        "name": "account",
+        "name": "eventId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "status",
+        "type": "uint8",
+        "indexed": true,
+        "internalType": "enum ExamplePredictionMarket.Status"
+      },
+      {
+        "name": "outcome",
+        "type": "uint8",
+        "indexed": true,
+        "internalType": "enum ExamplePredictionMarket.Outcome"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "SharesPurchased",
+    "inputs": [
+      {
+        "name": "eventId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "buyer",
         "type": "address",
+        "indexed": true,
         "internalType": "address"
       },
       {
-        "name": "neededRole",
-        "type": "bytes32",
-        "internalType": "bytes32"
+        "name": "outcome",
+        "type": "uint8",
+        "indexed": true,
+        "internalType": "enum ExamplePredictionMarket.Outcome"
+      },
+      {
+        "name": "usdcIn",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "sharesOut",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "SharesRedeemed",
+    "inputs": [
+      {
+        "name": "eventId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "redeemer",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "sharesIn",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "usdcOut",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "AlreadySettled",
+    "inputs": [
+      {
+        "name": "current",
+        "type": "uint8",
+        "internalType": "enum ExamplePredictionMarket.Status"
       }
     ]
   },
   {
     "type": "error",
-    "name": "AuctionAlreadySettled",
+    "name": "AmountZero",
     "inputs": []
   },
   {
     "type": "error",
-    "name": "AuctionDoesNotExist",
+    "name": "DurationZero",
     "inputs": []
   },
   {
     "type": "error",
-    "name": "AuctionNotActive",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "AuctionNotEnded",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "BidTooLow",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "EndTimeInPast",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "EventAlreadyResolved",
+    "name": "EventNotClosed",
     "inputs": [
       {
-        "name": "eventId",
+        "name": "nowTs",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "closeTs",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -1261,10 +936,15 @@
   },
   {
     "type": "error",
-    "name": "EventDoesNotExist",
+    "name": "EventNotOpen",
     "inputs": [
       {
-        "name": "eventId",
+        "name": "nowTs",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "closeTs",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -1289,6 +969,11 @@
   {
     "type": "error",
     "name": "InvalidForwarderAddress",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidOutcome",
     "inputs": []
   },
   {
@@ -1341,6 +1026,38 @@
   },
   {
     "type": "error",
+    "name": "LiquidityAlreadyWithdrawn",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ManualSettlementNotAllowed",
+    "inputs": [
+      {
+        "name": "current",
+        "type": "uint8",
+        "internalType": "enum ExamplePredictionMarket.Status"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "NotCreator",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotSettledYet",
+    "inputs": [
+      {
+        "name": "current",
+        "type": "uint8",
+        "internalType": "enum ExamplePredictionMarket.Status"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "OwnableInvalidOwner",
     "inputs": [
       {
@@ -1374,12 +1091,23 @@
   },
   {
     "type": "error",
-    "name": "UnknownAction",
+    "name": "SettlementNotRequested",
     "inputs": [
       {
-        "name": "action",
+        "name": "current",
         "type": "uint8",
-        "internalType": "uint8"
+        "internalType": "enum ExamplePredictionMarket.Status"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "StatusNotOpen",
+    "inputs": [
+      {
+        "name": "current",
+        "type": "uint8",
+        "internalType": "enum ExamplePredictionMarket.Status"
       }
     ]
   },

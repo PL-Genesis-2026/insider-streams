@@ -8,10 +8,10 @@ import { configSchema, type Config, type FirestoreWriteResponse, type GeminiResp
 // Import Gemini, Firestore, and EVM settlement helpers
 import { askGemini } from "./gemini";
 import { writeToFirestore } from "./firebase";
-import { settleMarket } from "./evm";
+import { settleEvent } from "./evm";
 
 /** ABI for the SettlementRequested event CRE listens for. */
-const eventAbi = parseAbi(["event SettlementRequested(uint256 indexed marketId, string question)"]);
+const eventAbi = parseAbi(["event SettlementRequested(uint256 indexed eventId, string question)"]);
 const eventSignature = "SettlementRequested(uint256,string)";
 
 /*********************************
@@ -19,7 +19,7 @@ const eventSignature = "SettlementRequested(uint256,string)";
  *********************************/
 
 /**
- * Handles SettlementRequested events from the SimpleMarket contract.
+ * Handles SettlementRequested events from the ExamplePredictionMarket contract.
  * Orchestrates the full settlement flow: Gemini AI query → on-chain settlement → Firestore audit.
  *
  * @param runtime - CRE runtime instance with config and secrets
@@ -40,29 +40,29 @@ const onLogTrigger = (runtime: Runtime<Config>, log: EVMLog): string => {
     const decodedLog = decodeEventLog({ abi: eventAbi, data, topics });
     runtime.log(`Event name: ${decodedLog.eventName}`);
 
-    const marketId: bigint = decodedLog.args.marketId as bigint;
+    const eventId: bigint = decodedLog.args.eventId as bigint;
     const question: string = decodedLog.args.question as string;
 
-    runtime.log(`Settlement request detected for Market Id: ${marketId.toString()}`);
+    runtime.log(`Settlement request detected for Event Id: ${eventId.toString()}`);
     runtime.log(`"${question}"`);
 
     // ========================================
     // Step 2: Query Gemini AI for Outcome
     // ========================================
-    // Calls Gemini API with Google search grounding to determine market outcome.
+    // Calls Gemini API with Google search grounding to determine event outcome.
     // See gemini.ts for implementation details.
 
-    const result: GeminiResponse = askGemini(runtime, marketId.toString(), question);
+    const result: GeminiResponse = askGemini(runtime, eventId.toString(), question);
     runtime.log(`Successfully sent data to API. Status: ${result.statusCode}`);
-    runtime.log(`Gemini Response for market: ${result.geminiResponse}`);
+    runtime.log(`Gemini Response for event: ${result.geminiResponse}`);
 
     // ========================================
     // Step 3: Submit On-Chain Settlement
     // ========================================
-    // Encodes, signs, and submits the settlement report to the SimpleMarket contract.
+    // Encodes, signs, and submits the settlement report to the ExamplePredictionMarket contract.
     // See evm.ts for implementation details.
 
-    const txHash: string = settleMarket(runtime, marketId, result.geminiResponse, result.responseId);
+    const txHash: string = settleEvent(runtime, eventId, result.geminiResponse, result.responseId);
     runtime.log(`Settlement tx hash: ${txHash}`);
 
     // ========================================
@@ -88,7 +88,7 @@ const onLogTrigger = (runtime: Runtime<Config>, log: EVMLog): string => {
 
 /**
  * Initializes the CRE workflow by setting up the EVM log trigger.
- * Configures the workflow to listen for SettlementRequested events from the specified market contract.
+ * Configures the workflow to listen for SettlementRequested events from the specified marketplace contract.
  *
  * @param config - Validated workflow configuration
  * @returns Array of CRE handlers
@@ -110,7 +110,7 @@ const initWorkflow = (config: Config) => {
   // Compute the event topic hash for the event that we wish to monitor.
   const requestSettlementHash = keccak256(toHex(eventSignature));
 
-  // Trigger CRE only on emit of SettlementRequested logs from the market contract
+  // Trigger CRE only on emit of SettlementRequested logs from the marketplace contract
   return [
     cre.handler(
       evmClient.logTrigger({
