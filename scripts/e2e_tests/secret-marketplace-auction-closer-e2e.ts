@@ -174,7 +174,7 @@ async function main() {
   step("Owner creating auction (45s duration)...");
   // Compute endTime from latest on-chain block, not local clock, to avoid
   // clock skew causing the auction to expire before the bid tx lands.
-  // Use 60s (not 30s) to give enough headroom for Sepolia tx confirmation.
+  // Use 45s (not 30s) to give enough headroom for Sepolia tx confirmation.
   const latestBlock = await publicClient.getBlock({ blockTag: "latest" });
   const endTime = latestBlock.timestamp + BigInt(AUCTION_DURATION);
 
