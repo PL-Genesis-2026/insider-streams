@@ -17,6 +17,8 @@ import {
 import type { Database } from "@private-streams/common";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  BaseError,
+  ContractFunctionRevertedError,
   createPublicClient,
   createWalletClient,
   formatUnits,
@@ -231,6 +233,50 @@ export async function ensureUsdcBalance(
     );
   }
 }
+
+// ─── Contract error helpers ──────────────────────────────────────────────────
+
+export function getContractErrorName(error: unknown): string | undefined {
+  if (error instanceof BaseError) {
+    const revertError = error.walk(
+      (e) => e instanceof ContractFunctionRevertedError,
+    );
+    if (revertError instanceof ContractFunctionRevertedError) {
+      return revertError.data?.errorName;
+    }
+  }
+  return undefined;
+}
+
+export async function expectContractError(
+  fn: () => Promise<unknown>,
+  expectedError: string,
+  label: string,
+): Promise<void> {
+  try {
+    await fn();
+    console.error(`ASSERTION FAILED: ${label} should have reverted with ${expectedError}`);
+    process.exit(1);
+  } catch (err) {
+    const errorName = getContractErrorName(err);
+    if (errorName === expectedError) {
+      console.log(`  ok ${label} reverted with ${expectedError}`);
+    } else if (errorName) {
+      console.error(`ASSERTION FAILED: ${label} reverted with ${errorName}, expected ${expectedError}`);
+      process.exit(1);
+    } else {
+      // Check if the error message contains the expected error name (fallback)
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes(expectedError)) {
+        console.log(`  ok ${label} reverted with ${expectedError} (from message)`);
+      } else {
+        console.error(`ASSERTION FAILED: ${label} threw unexpected error: ${msg.slice(0, 200)}`);
+        process.exit(1);
+      }
+    }
+  }
+}
+
 
 /**
  * Check USDC allowance for a spender, approve if below threshold.
