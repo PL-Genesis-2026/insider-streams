@@ -14,9 +14,9 @@ pnpm dev:insider-streams
 
 | Contract | Address |
 |----------|---------|
-| MockUSDC | `0x1B69F56bEC6978D0B62C3f5612019cC6b72D6F7f` |
-| ExamplePredictionMarket | `0xEb4b84ad88FD5822067c6939e48744af9d87FCBb` |
-| SecretMarketplace | `0x8221Ef6351c2CA9Ae3Ae65266076f3E14279F52a` |
+| ConfidentialUSDC | `0x40d56cd551dB2c1e3867Af3232D3a1dcc04594B9` |
+| ExamplePredictionMarket | `0x73b9beC7D6924D90Fc9F1C653ED19ad25aff2107` |
+| SecretMarketplace | `0x366924196Df3990ef1Ab1b14cBF1beAdE1e5F496` |
 
 ## Create a Prediction Market
 
@@ -39,7 +39,7 @@ See [CRE Workflows README](cre-workflows/README.md) for details.
 cd contracts
 
 # Create a market
-EXAMPLE_PREDICTION_MARKET_ADDRESS=0xEb4b84ad88FD5822067c6939e48744af9d87FCBb \
+EXAMPLE_PREDICTION_MARKET_ADDRESS=0x73b9beC7D6924D90Fc9F1C653ED19ad25aff2107 \
 QUESTION="The New York Yankees won the 2009 World Series." \
 forge script script/CreateMarket.s.sol --rpc-url $RPC_URL --broadcast
 ```
@@ -49,7 +49,7 @@ forge script script/CreateMarket.s.sol --rpc-url $RPC_URL --broadcast
 ```bash
 cd contracts
 
-SECRET_MARKETPLACE_ADDRESS=0x8221Ef6351c2CA9Ae3Ae65266076f3E14279F52a \
+SECRET_MARKETPLACE_ADDRESS=0x366924196Df3990ef1Ab1b14cBF1beAdE1e5F496 \
 EXTERNAL_MARKET_ID=0 \
 RESERVE_PRICE=1000000 \
 AUCTION_DURATION=120 \
@@ -72,7 +72,7 @@ cre workflow simulate auction-closer --target local-simulation --broadcast
 ```bash
 cd contracts
 
-SECRET_MARKETPLACE_ADDRESS=0x8221Ef6351c2CA9Ae3Ae65266076f3E14279F52a \
+SECRET_MARKETPLACE_ADDRESS=0x366924196Df3990ef1Ab1b14cBF1beAdE1e5F496 \
 AUCTION_ID=0 \
 forge script script/secret-marketplace/CloseAuction.s.sol --rpc-url $RPC_URL --broadcast
 ```
@@ -84,7 +84,7 @@ Force-closes an auction regardless of expiry. Refunds the highest bidder and adj
 ```bash
 cd contracts
 
-SECRET_MARKETPLACE_ADDRESS=0x8221Ef6351c2CA9Ae3Ae65266076f3E14279F52a \
+SECRET_MARKETPLACE_ADDRESS=0x366924196Df3990ef1Ab1b14cBF1beAdE1e5F496 \
 AUCTION_ID=0 \
 REPUTATION_DELTA=-1 \
 forge script script/secret-marketplace/ForceCloseAuction.s.sol --rpc-url $RPC_URL --broadcast

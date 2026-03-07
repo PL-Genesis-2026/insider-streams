@@ -6,7 +6,7 @@ import {SecretMarketplace} from "../src/SecretMarketplace.sol";
 
 contract DeploySecretMarketplace is Script {
     function run() external {
-        address token = vm.envAddress("MOCK_USDC_ADDRESS");
+        address token = vm.envAddress("CONFIDENTIAL_USDC_ADDRESS");
         address market = vm.envAddress("EXAMPLE_PREDICTION_MARKET_ADDRESS");
         address forwarder = vm.envAddress("CRE_FORWARDER_ADDRESS");
         uint256 deployerPk = vm.envUint("PRIVATE_KEY");

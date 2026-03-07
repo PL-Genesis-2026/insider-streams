@@ -8,7 +8,7 @@ import { GraphQLClient } from "graphql-request";
 import { env } from "@/env";
 
 const STUDIO_SUBGRAPH_URL =
-  "https://api.studio.thegraph.com/query/1743303/insider-streams/version/latest";
+  "https://api.studio.thegraph.com/query/1743303/insider-streams-2/version/latest";
 
 function resolveSubgraphUrl(url: string) {
   // The Graph gateway URL requires an auth header in this project setup, so

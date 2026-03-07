@@ -1,7 +1,7 @@
-import { MOCK_USDC_DECIMALS } from "@private-streams/common";
-import { formatUnits } from "viem";
 import type { AuctionCardData } from "@/components/auction-card";
 import { graphqlClient } from "@/lib/graphql";
+import { CONFIDENTIAL_USDC_DECIMALS } from "@private-streams/common";
+import { formatUnits } from "viem";
 import { getSdk } from "../__generated__/sdk";
 
 const sdk = getSdk(graphqlClient);
@@ -52,7 +52,10 @@ export async function getHomepageAuctions({
 
   const latestBidByAuctionId = new Map(latestOpenBids);
   const closedAuctionReferenceById = new Map(
-    closedAuctionReferences.map((auction) => [String(auction.auctionId), auction]),
+    closedAuctionReferences.map((auction) => [
+      String(auction.auctionId),
+      auction,
+    ]),
   );
 
   const open = openAuctions.map((a): AuctionCardData => {
@@ -65,7 +68,10 @@ export async function getHomepageAuctions({
       status: "Open",
       currentBidUsdc: latestBid
         ? Number(
-            formatUnits(BigInt(String(latestBid.bidAmount)), MOCK_USDC_DECIMALS),
+            formatUnits(
+              BigInt(String(latestBid.bidAmount)),
+              CONFIDENTIAL_USDC_DECIMALS,
+            ),
           )
         : undefined,
       endTime: new Date(Number(String(a.endTime)) * 1000).toISOString(),
@@ -81,7 +87,7 @@ export async function getHomepageAuctions({
       eventId: String(a.eventId),
       status: "Closed",
       currentBidUsdc: Number(
-        formatUnits(BigInt(String(a.winningBid)), MOCK_USDC_DECIMALS),
+        formatUnits(BigInt(String(a.winningBid)), CONFIDENTIAL_USDC_DECIMALS),
       ),
       endTime: reference
         ? new Date(Number(String(reference.endTime)) * 1000).toISOString()

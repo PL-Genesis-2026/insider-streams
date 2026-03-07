@@ -18,7 +18,7 @@ contract DepositToVault is Script {
         address deployer = vm.addr(deployerPK);
 
         address tokenAddr = vm.envAddress("TOKEN_ADDRESS");
-        uint256 amount = 10 ether; // 10 tokens (18 decimals)
+        uint256 amount = 10_000_000; // 10 tokens (6 decimals)
 
         console.log("Depositor:", deployer);
         console.log("Token:", tokenAddr);

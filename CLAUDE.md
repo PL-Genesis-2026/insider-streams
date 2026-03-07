@@ -12,7 +12,7 @@ private-streams/
 ├── packages/
 │   ├── common/                          # Shared ABIs, addresses, utilities (@private-streams/common)
 │   └── chainlink-private-token-api-client/  # Typed API client for Compliant Private Token API
-├── contracts/                       # Foundry — MockUSDC + ExamplePredictionMarket + SecretMarketplace
+├── contracts/                       # Foundry — ConfidentialUSDC + ExamplePredictionMarket + SecretMarketplace
 ├── cre-workflows/                   # CRE TypeScript workflows (Bun-managed)
 │   ├── prediction-market-demo/      # Gemini AI settlement workflow
 │   ├── auction-closer/             # Cron-based auction closer workflow
@@ -121,9 +121,9 @@ Private keys are in `.env` files (never committed).
 
 ## Subgraph (The Graph)
 
-- **Subgraph name**: `insider-streams` (Subgraph Studio)
-- **Studio URL** (codegen/testing): `https://api.studio.thegraph.com/query/1743303/insider-streams/version/latest`
-- **Production URL**: `https://gateway.thegraph.com/api/subgraphs/id/GiEXREmvxbqNfQ3VxnhjKypYRNvEaeVjtAWncPHzPiuj`
+- **Subgraph name**: `insider-streams2` (Subgraph Studio)
+- **Studio URL** (codegen/testing): `https://api.studio.thegraph.com/query/1743303/insider-streams-2/version/latest`
+- **Production URL**: `https://gateway.thegraph.com/api/subgraphs/id/2vVUkMCH5m48s8Qj1ChgR2z3c98vAX3raBoJoYZ9RrBW`
 - **Deploy**: `npx graph auth --studio <KEY>` then `./scripts/deploy-subgraph.sh` (prompts for contract address, auto-fetches start block)
 - **Deploy with new address**: `./scripts/deploy-subgraph.sh --address 0x...` (non-interactive)
 - Version tracked in `subgraphs/secrets-marketplace/package.json`; bumped automatically by `deploy-subgraph.sh` after successful deploy
@@ -168,7 +168,7 @@ Use the interactive deploy script to deploy contracts and auto-replace addresses
 ./scripts/deploy-contracts.sh
 ```
 
-This script prompts which contracts to redeploy (MockUSDC, ExamplePredictionMarket, SecretMarketplace), deploys them via Foundry, then does a best-effort case-insensitive find-and-replace of the old addresses across the entire codebase (source files, configs, scripts, .env files). It also checks .env files for any stale addresses that may remain and warns about them.
+This script prompts which contracts to redeploy (ConfidentialUSDC, ExamplePredictionMarket, SecretMarketplace), deploys them via Foundry, then does a best-effort case-insensitive find-and-replace of the old addresses across the entire codebase (source files, configs, scripts, .env files). It also checks .env files for any stale addresses that may remain and warns about them.
 
 After the script finishes, you must still:
 
@@ -186,15 +186,15 @@ The deploy script replaces addresses automatically, but you should verify no sta
 
 | File                           | What to update                                                                                                                                                                                            |
 | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/common/src/index.ts` | `MOCK_USDC_ADDRESS`, `EXAMPLE_PREDICTION_MARKET_ADDRESS`, `SECRET_MARKETPLACE_ADDRESS`, `VAULT_ADDRESS` — **this is what frontends, scripts, and API client import** |
+| `packages/common/src/index.ts` | `CONFIDENTIAL_USDC_ADDRESS`, `EXAMPLE_PREDICTION_MARKET_ADDRESS`, `SECRET_MARKETPLACE_ADDRESS`, `VAULT_ADDRESS` — **this is what frontends, scripts, and API client import** |
 | `README.md`                    | Contract addresses table and any script examples referencing addresses                                                                                                                                    |
 
 **E2E test scripts:**
 
 | File                              | Variables with hardcoded defaults                 |
 | --------------------------------- | ------------------------------------------------- |
-| `scripts/simple-market-e2e.ts`    | `MOCK_USDC_ADDRESS`, `EXAMPLE_PREDICTION_MARKET_ADDRESS` |
-| `scripts/auction-closer-e2e.ts`   | `MOCK_USDC_ADDRESS`, `SECRET_MARKETPLACE_ADDRESS` |
+| `scripts/simple-market-e2e.ts`    | `CONFIDENTIAL_USDC_ADDRESS`, `EXAMPLE_PREDICTION_MARKET_ADDRESS` |
+| `scripts/auction-closer-e2e.ts`   | `CONFIDENTIAL_USDC_ADDRESS`, `SECRET_MARKETPLACE_ADDRESS` |
 
 **CRE workflow configs:**
 
@@ -210,8 +210,8 @@ After updating CRE workflow configs, the workflow must be redeployed and tested 
 
 | File                                                   | Env vars used                                                     |
 | ------------------------------------------------------ | ----------------------------------------------------------------- |
-| `contracts/script/DeployExamplePredictionMarket.s.sol`  | `MOCK_USDC_ADDRESS`, `CRE_FORWARDER_ADDRESS`                                    |
-| `contracts/script/DeploySecretMarketplace.s.sol`       | `MOCK_USDC_ADDRESS`, `EXAMPLE_PREDICTION_MARKET_ADDRESS`, `CRE_FORWARDER_ADDRESS` |
+| `contracts/script/DeployExamplePredictionMarket.s.sol`  | `CONFIDENTIAL_USDC_ADDRESS`, `CRE_FORWARDER_ADDRESS`                                    |
+| `contracts/script/DeploySecretMarketplace.s.sol`       | `CONFIDENTIAL_USDC_ADDRESS`, `EXAMPLE_PREDICTION_MARKET_ADDRESS`, `CRE_FORWARDER_ADDRESS` |
 
 **Private token scripts** (only if Vault or ConfidentialUSDC changed):
 
@@ -254,16 +254,16 @@ After running codegen, run `turbo run build` and report on any errors.
 
 Individual deploy scripts exist in `contracts/script/`:
 
-- `DeployMockUSDC.s.sol` — rarely changes
-- `DeployExamplePredictionMarket.s.sol` — env: `MOCK_USDC_ADDRESS`, `CRE_FORWARDER_ADDRESS`
-- `DeploySecretMarketplace.s.sol` — env: `MOCK_USDC_ADDRESS`, `EXAMPLE_PREDICTION_MARKET_ADDRESS`, `CRE_FORWARDER_ADDRESS`
+- `DeployConfidentialUSDC.s.sol` — rarely changes
+- `DeployExamplePredictionMarket.s.sol` — env: `CONFIDENTIAL_USDC_ADDRESS`, `CRE_FORWARDER_ADDRESS`
+- `DeploySecretMarketplace.s.sol` — env: `CONFIDENTIAL_USDC_ADDRESS`, `EXAMPLE_PREDICTION_MARKET_ADDRESS`, `CRE_FORWARDER_ADDRESS`
 - `DeployAll.s.sol` — deploys everything (only for fresh environments)
 
 After deploying, follow the full procedure in **"After a Contract Deployment"** above.
 
 ## Architecture Notes
 
-- `ExamplePredictionMarket.sol` accepts **any ERC-20** token (constructor arg) — we use MockUSDC, not Circle USDC
+- `ExamplePredictionMarket.sol` accepts **any ERC-20** token (constructor arg) — we use ConfidentialUSDC (6 decimals, onlyOwner minting)
 - `newEvent(question, duration)` creates prediction events with a caller-specified duration (no hardcoded default)
 - `forceSettle(eventId, outcome, confidenceBps, evidenceURI)` allows settling events without waiting for closure (debug/testing only; reverts if already settled)
 - CRE workflow listens for `SettlementRequested` events, calls Gemini AI with Google Search grounding, submits signed report on-chain

@@ -4,11 +4,11 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 import {ExamplePredictionMarket} from "../src/ExamplePredictionMarket.sol";
 import {ExamplePredictionMarketShareToken} from "../src/ExamplePredictionMarketShareToken.sol";
-import {MockUSDC} from "../src/mock/MockUSDC.sol";
+import {ConfidentialUSDC} from "../src/ConfidentialUSDC.sol";
 
 contract ExamplePredictionMarketTest is Test {
     ExamplePredictionMarket public sm;
-    MockUSDC public usdc;
+    ConfidentialUSDC public usdc;
 
     address creator = makeAddr("creator");
     address buyer1 = makeAddr("buyer1");
@@ -19,7 +19,7 @@ contract ExamplePredictionMarketTest is Test {
     uint256 constant INITIAL_LIQUIDITY = 10e6; // 10 USDC
 
     function setUp() public {
-        usdc = new MockUSDC(0);
+        usdc = new ConfidentialUSDC("USD Coin", "USDC", address(this));
         sm = new ExamplePredictionMarket(address(usdc), forwarder);
 
         usdc.mint(creator, MINT_AMOUNT);

@@ -12,18 +12,18 @@
  *   OWNER_PK                    — deploys, creates events, closes auctions, settles
  *   BIDDER_PK                   — unused on-chain (admin-only model)
  *   RPC_URL                     — Eth Sepolia RPC
- *   MOCK_USDC_ADDRESS           — MockUSDC contract
+ *   CONFIDENTIAL_USDC_ADDRESS           — ConfidentialUSDC contract
  *   SECRET_MARKETPLACE_ADDRESS  — SecretMarketplace contract
  *
  * Usage: pnpm e2e
  */
 
 import {
-  MOCK_USDC_ADDRESS,
-  mockUsdcAbi,
+  CONFIDENTIAL_USDC_ADDRESS,
+  confidentialUsdcAbi,
+  examplePredictionMarketAbi,
   SECRET_MARKETPLACE_ADDRESS,
   secretMarketplaceAbi,
-  examplePredictionMarketAbi,
 } from "@private-streams/common";
 import {
   createPublicClient,
@@ -50,8 +50,8 @@ function envRequired(name: string): string {
 
 const OWNER_PK = envRequired("OWNER_PK") as Hex;
 const RPC_URL = envRequired("RPC_URL");
-const MOCK_USDC = (process.env.MOCK_USDC_ADDRESS ??
-  MOCK_USDC_ADDRESS) as Address;
+const CONFIDENTIAL_USDC = (process.env.CONFIDENTIAL_USDC_ADDRESS ??
+  CONFIDENTIAL_USDC_ADDRESS) as Address;
 const SECRET_MARKETPLACE = (process.env.SECRET_MARKETPLACE_ADDRESS ??
   SECRET_MARKETPLACE_ADDRESS) as Address;
 // Read ExamplePredictionMarket address from SecretMarketplace.marketplace() at runtime
@@ -113,7 +113,7 @@ async function main() {
   console.log("  SecretMarketplace E2E");
   console.log("===================================================");
   console.log(`  Owner (admin):    ${ownerAccount.address}`);
-  console.log(`  MockUSDC:         ${MOCK_USDC}`);
+  console.log(`  ConfidentialUSDC:         ${CONFIDENTIAL_USDC}`);
   console.log(
     `  ExamplePredictionMarket: ${SIMPLE_MARKET} (from SecretMarketplace.marketplace())`,
   );
@@ -124,15 +124,15 @@ async function main() {
   console.log(">> Step 0: Ensuring owner has USDC and approvals...");
 
   const ownerBalance = await publicClient.readContract({
-    address: MOCK_USDC,
-    abi: mockUsdcAbi,
+    address: CONFIDENTIAL_USDC,
+    abi: confidentialUsdcAbi,
     functionName: "balanceOf",
     args: [ownerAccount.address],
   });
   if (ownerBalance < MIN_BALANCE) {
     const h = await ownerClient.writeContract({
-      address: MOCK_USDC,
-      abi: mockUsdcAbi,
+      address: CONFIDENTIAL_USDC,
+      abi: confidentialUsdcAbi,
       functionName: "mint",
       args: [ownerAccount.address, MINT_AMOUNT],
     });
@@ -145,15 +145,15 @@ async function main() {
 
   // Check allowance for SecretMarketplace
   const allowanceSM = await publicClient.readContract({
-    address: MOCK_USDC,
-    abi: mockUsdcAbi,
+    address: CONFIDENTIAL_USDC,
+    abi: confidentialUsdcAbi,
     functionName: "allowance",
     args: [ownerAccount.address, SECRET_MARKETPLACE],
   });
   if (allowanceSM < MIN_ALLOWANCE) {
     const h = await ownerClient.writeContract({
-      address: MOCK_USDC,
-      abi: mockUsdcAbi,
+      address: CONFIDENTIAL_USDC,
+      abi: confidentialUsdcAbi,
       functionName: "approve",
       args: [SECRET_MARKETPLACE, APPROVAL_AMOUNT],
     });
@@ -166,15 +166,15 @@ async function main() {
 
   // Check allowance for ExamplePredictionMarket
   const allowanceMarket = await publicClient.readContract({
-    address: MOCK_USDC,
-    abi: mockUsdcAbi,
+    address: CONFIDENTIAL_USDC,
+    abi: confidentialUsdcAbi,
     functionName: "allowance",
     args: [ownerAccount.address, SIMPLE_MARKET],
   });
   if (allowanceMarket < MIN_ALLOWANCE) {
     const h = await ownerClient.writeContract({
-      address: MOCK_USDC,
-      abi: mockUsdcAbi,
+      address: CONFIDENTIAL_USDC,
+      abi: confidentialUsdcAbi,
       functionName: "approve",
       args: [SIMPLE_MARKET, APPROVAL_AMOUNT],
     });

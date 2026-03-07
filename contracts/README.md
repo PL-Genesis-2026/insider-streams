@@ -25,9 +25,9 @@ All scripts require `PRIVATE_KEY` and `RPC_URL` env vars. Run with `forge script
 
 | Script | Purpose | Extra env vars |
 |--------|---------|----------------|
-| `DeployMockUSDC.s.sol` | Deploy MockUSDC token | — |
-| `DeployExamplePredictionMarket.s.sol` | Deploy ExamplePredictionMarket | `MOCK_USDC_ADDRESS`, `CRE_FORWARDER_ADDRESS` |
-| `DeploySecretMarketplace.s.sol` | Deploy SecretMarketplace | `MOCK_USDC_ADDRESS`, `EXAMPLE_PREDICTION_MARKET_ADDRESS`, `CRE_FORWARDER_ADDRESS` |
+| `DeployConfidentialUSDC.s.sol` | Deploy ConfidentialUSDC token | — |
+| `DeployExamplePredictionMarket.s.sol` | Deploy ExamplePredictionMarket | `CONFIDENTIAL_USDC_ADDRESS`, `CRE_FORWARDER_ADDRESS` |
+| `DeploySecretMarketplace.s.sol` | Deploy SecretMarketplace | `CONFIDENTIAL_USDC_ADDRESS`, `EXAMPLE_PREDICTION_MARKET_ADDRESS`, `CRE_FORWARDER_ADDRESS` |
 | `DeployAll.s.sol` | Deploy everything | `CRE_FORWARDER_ADDRESS` |
 
 ### ExamplePredictionMarket
@@ -36,14 +36,14 @@ All scripts require `PRIVATE_KEY` and `RPC_URL` env vars. Run with `forge script
 |--------|---------|----------------|
 | `CreateEvent.s.sol` | Create a new prediction event | `EXAMPLE_PREDICTION_MARKET_ADDRESS`, `QUESTION` |
 | `ForceSettle.s.sol` | Force-settle an event (debug) | `EXAMPLE_PREDICTION_MARKET_ADDRESS`, `EVENT_ID`, `OUTCOME` |
-| `MintMockUSDC.s.sol` | Mint USDC to an address | `MOCK_USDC_ADDRESS` |
+| `MintConfidentialUSDC.s.sol` | Mint ConfidentialUSDC to an address | `CONFIDENTIAL_USDC_ADDRESS` |
 
 ### SecretMarketplace (`script/secret-marketplace/`)
 
 | Script | Purpose | Extra env vars |
 |--------|---------|----------------|
 | `CreateAuction.s.sol` | Create an auction | `SECRET_MARKETPLACE_ADDRESS`, `EVENT_ID`, `SELLER_NAME`, `EVENT_TITLE`, `AUCTION_DURATION` |
-| `PlaceBid.s.sol` | Place a bid | `SECRET_MARKETPLACE_ADDRESS`, `MOCK_USDC_ADDRESS`, `AUCTION_ID`, `BID_AMOUNT` |
+| `PlaceBid.s.sol` | Place a bid | `SECRET_MARKETPLACE_ADDRESS`, `CONFIDENTIAL_USDC_ADDRESS`, `AUCTION_ID`, `BID_AMOUNT` |
 | `CloseAuction.s.sol` | Close an expired auction | `SECRET_MARKETPLACE_ADDRESS`, `AUCTION_ID` |
 | `ForceCloseAuction.s.sol` | Force-close an auction | `SECRET_MARKETPLACE_ADDRESS`, `AUCTION_ID`, `REPUTATION_DELTA` |
 
