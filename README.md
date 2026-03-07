@@ -22,13 +22,13 @@ pnpm dev:insider-streams
 
 ### With CRE (automated settlement)
 
-The [reputation-score-manager](cre-workflows/reputation-score-manager/) CRE workflow listens for `SettlementRequested` events, queries Gemini AI, and settles the market on-chain automatically.
+The [external-prediction-market-settler](cre-workflows/external-prediction-market-settler/) CRE workflow listens for `SettlementRequested` events, queries Gemini AI, and settles the market on-chain automatically.
 
 ```bash
 # Install CRE CLI: https://docs.chain.link/cre/getting-started/cli-installation/macos-linux
 # Then simulate the workflow:
 cd cre-workflows
-cre workflow simulate reputation-score-manager --target local-simulation --broadcast
+cre workflow simulate external-prediction-market-settler --target local-simulation --broadcast
 ```
 
 See [CRE Workflows README](cre-workflows/README.md) for details.
@@ -130,7 +130,7 @@ private-streams/
 ├── packages/common/                 # Shared ABIs, types, contract addresses
 ├── contracts/                       # Foundry — Solidity contracts
 ├── cre-workflows/                   # CRE TypeScript workflows
-│   ├── reputation-score-manager/  # AI-powered market settlement
+│   ├── external-prediction-market-settler/  # AI-powered market settlement
 │   └── secret-marketplace-auction-closer/      # Automated auction closing
 ├── subgraphs/secrets-marketplace/   # The Graph subgraph
 └── scripts/                         # E2E tests and utilities

@@ -13,7 +13,7 @@ TODO UPDATE ABOVE TO CHECK SUBGRAPH TOO
 
 ### e2e_tests/simple-market-e2e.sh
 
-Tests the [../cre-workflows/reputation-score-manager] CRE workflow (the CRE workflow that automatically settles events created on SimpleMarket.sol)
+Tests the [../cre-workflows/external-prediction-market-settler] CRE workflow (the CRE workflow that automatically settles events created on SimpleMarket.sol)
 
 Creates an auction, places a bet as an external user, calls the CRE workflow to identify the outcome of the auction, closes the auction
 
