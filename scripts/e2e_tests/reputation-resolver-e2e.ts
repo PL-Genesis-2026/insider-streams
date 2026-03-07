@@ -168,8 +168,8 @@ async function main() {
 
   // ── Step 5: Create auction A (SellerA predicts "yes") ──────────────────────
   step(`Creating auction A — ${SELLER_A} predicts "yes" (${AUCTION_DURATION}s duration)...`);
-  const nowA = BigInt(Math.floor(Date.now() / 1000));
-  const endTimeA = nowA + BigInt(AUCTION_DURATION);
+  const latestBlockA = await publicClient.getBlock({ blockTag: "latest" });
+  const endTimeA = latestBlockA.timestamp + BigInt(AUCTION_DURATION);
 
   const createAuctionAHash = await ownerClient.writeContract({
     address: SECRET_MARKETPLACE,
@@ -189,8 +189,8 @@ async function main() {
 
   // ── Step 6: Create auction B (SellerB predicts "no") ───────────────────────
   step(`Creating auction B — ${SELLER_B} predicts "no" (${AUCTION_DURATION}s duration)...`);
-  const nowB = BigInt(Math.floor(Date.now() / 1000));
-  const endTimeB = nowB + BigInt(AUCTION_DURATION);
+  const latestBlockB = await publicClient.getBlock({ blockTag: "latest" });
+  const endTimeB = latestBlockB.timestamp + BigInt(AUCTION_DURATION);
 
   const createAuctionBHash = await ownerClient.writeContract({
     address: SECRET_MARKETPLACE,
