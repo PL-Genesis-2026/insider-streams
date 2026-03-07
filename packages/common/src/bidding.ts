@@ -64,6 +64,7 @@ export async function executeBid(
   // 1. Check auction exists and is open; capture currentBid as source of truth
   let auctionStatus: number;
   let contractCurrentBid: bigint;
+  let auctionSellerId: string;
   try {
     const auctionData = await publicClient.readContract({
       address: marketplaceAddress,
@@ -81,6 +82,7 @@ export async function executeBid(
     }
     auctionStatus = auctionData.status;
     contractCurrentBid = auctionData.currentBid;
+    auctionSellerId = auctionData.sellerId;
   } catch {
     return {
       ok: false,
@@ -99,7 +101,23 @@ export async function executeBid(
     };
   }
 
-  // 2. Check bid amount against contract's currentBid (source of truth)
+  // 2. Ensure bidder is not the seller of this auction
+  const { data: sellerRow } = await supabase
+    .from("sellers")
+    .select("address")
+    .eq("id", auctionSellerId)
+    .single();
+
+  if (sellerRow && sellerRow.address.toLowerCase() === bidderAddr.toLowerCase()) {
+    return {
+      ok: false,
+      status: 400,
+      error: "Sellers cannot bid on their own auctions",
+      code: "SELF_BID_NOT_ALLOWED",
+    };
+  }
+
+  // 4. Check bid amount against contract's currentBid (source of truth)
   if (bidAmount <= contractCurrentBid) {
     return {
       ok: false,
@@ -109,7 +127,7 @@ export async function executeBid(
     };
   }
 
-  // 3. Check Supabase balance
+  // 5. Check Supabase balance
   const { data: balanceRow, error: balError } = await supabase
     .from("balances")
     .select("*")
