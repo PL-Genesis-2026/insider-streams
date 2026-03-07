@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import {
   Cormorant_Garamond,
   Geist,
@@ -37,17 +38,23 @@ export const metadata: Metadata = {
   description: "Signal auctions for prediction markets",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const requestHeaders = await headers();
+  const cookies = requestHeaders.get("cookie");
+
   return (
-    <html lang="en">
+    <html
+      lang="en"
+      className={`${geistSans.variable} ${geistMono.variable} ${emberDisplay.variable} ${emberBody.variable} theme-ember-editorial`}
+    >
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${emberDisplay.variable} ${emberBody.variable} theme-ember-editorial antialiased`}
       >
-        <Providers>
+        <Providers cookies={cookies}>
           <TooltipProvider>
             <AppNavbar />
             {children}

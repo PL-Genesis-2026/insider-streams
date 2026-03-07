@@ -14,13 +14,13 @@ import { cn } from "@/lib/utils";
 export type AuctionCardData = {
   auctionId: string;
   sellerAddress: string;
-  eventId: string;
+  marketId: string;
   status: string;
   currentBidUsdc?: number;
   endTime?: string;
-  category?: string;
+  marketplace?: string;
   title?: string;
-  summary?: string;
+  outcome?: "yes" | "no";
 };
 
 type AuctionCardProps = {
@@ -49,6 +49,14 @@ function closesInLabel(endTime: string | undefined, status: string) {
   return `${formatDistanceToNowStrict(end)} left`;
 }
 
+function getCardDescription(auction: AuctionCardData) {
+  if (auction.title && auction.outcome) {
+    return `${auction.outcome === "yes" ? "Yes" : "No"} outcome on ${auction.title}.`;
+  }
+
+  return `Seller ${shortenAddress(auction.sellerAddress)} competing in market #${auction.marketId}.`;
+}
+
 function MetaRail({ auction }: { auction: AuctionCardData }) {
   const statusVariant =
     auction.status === "Settled" || auction.status === "Closed"
@@ -58,11 +66,7 @@ function MetaRail({ auction }: { auction: AuctionCardData }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-[0.24em] text-accent">
-        <span>
-          {auction.category ?? "TODO: category not available from live source"}
-        </span>
-        <span className="text-muted-foreground/50">/</span>
-        <span>Event #{auction.eventId}</span>
+        <span>{auction.marketplace ?? `Market #${auction.marketId}`}</span>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant={statusVariant}>{auction.status}</Badge>
@@ -87,10 +91,10 @@ function BidModule({ auction }: { auction: AuctionCardData }) {
       </p>
       <div className="mt-5 border-t border-border pt-4">
         <p className="text-xs uppercase tracking-[0.22em] text-accent">
-          Event
+          Market
         </p>
         <p className="mt-2 font-serif text-[1.8rem] leading-none font-medium tracking-[-0.05em] text-foreground">
-          #{auction.eventId}
+          #{auction.marketId}
         </p>
       </div>
     </div>
@@ -119,8 +123,7 @@ function TraceRow({ auction }: { auction: AuctionCardData }) {
 }
 
 export function AuctionCard({ auction, className, href }: AuctionCardProps) {
-  const titleLabel =
-    auction.title ?? "TODO: title not available from live source";
+  const titleLabel = auction.title ?? `Auction #${auction.auctionId}`;
 
   const cardContent = (
     <Card
@@ -138,8 +141,7 @@ export function AuctionCard({ auction, className, href }: AuctionCardProps) {
               {titleLabel}
             </CardTitle>
             <CardDescription className="mt-4 max-w-2xl text-[1.02rem] leading-8">
-              {auction.summary ??
-                "TODO: summary not available from live source"}
+              {getCardDescription(auction)}
             </CardDescription>
           </div>
           <BidModule auction={auction} />
