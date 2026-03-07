@@ -427,7 +427,7 @@ else
     set -euo pipefail
     export NVM_DIR=\"\$HOME/.nvm\" && [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\"; export PATH=\"\$HOME/.cre/bin:\$HOME/.foundry/bin:\$HOME/.bun/bin:\$HOME/.local/bin:\$PATH\"
     cd \"$REPO_PATH/scripts\"
-    pnpm e2e:reputation 2>&1
+    pnpm e2e:reputation-resolver 2>&1
   '" 2>&1) || REPUTATION_EXIT=$?
 
   if [ "$REPUTATION_EXIT" -eq 0 ] && echo "$REPUTATION_OUTPUT" | grep -qi "PASS"; then
@@ -448,7 +448,7 @@ else
     set -euo pipefail
     export NVM_DIR=\"\$HOME/.nvm\" && [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\"; export PATH=\"\$HOME/.cre/bin:\$HOME/.foundry/bin:\$HOME/.bun/bin:\$HOME/.local/bin:\$PATH\"
     cd \"$REPO_PATH/scripts\"
-    pnpm e2e:force-close 2>&1
+    pnpm e2e:force-close-handler 2>&1
   '" 2>&1) || FORCE_CLOSE_EXIT=$?
 
   if [ "$FORCE_CLOSE_EXIT" -eq 0 ] && echo "$FORCE_CLOSE_OUTPUT" | grep -qi "PASS"; then

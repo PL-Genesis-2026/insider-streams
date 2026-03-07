@@ -164,8 +164,8 @@ All E2E scripts are TypeScript and run via `tsx` with `--env-file=.env` from the
 pnpm e2e:secret-marketplace                      # SecretMarketplace full event lifecycle
 pnpm e2e:external-prediction-market-settler                # ExamplePredictionMarket + CRE settlement lifecycle
 pnpm e2e:secret-marketplace-auction-closer       # Auction create → bid → expire → CRE close
-pnpm e2e:reputation                              # Reputation resolver — per-auction reputation after event settlement
-pnpm e2e:force-close                             # Force close handler — bid refund on AuctionForceClosed
+pnpm e2e:reputation-resolver                     # Reputation resolver — per-auction reputation after event settlement
+pnpm e2e:force-close-handler                     # Force close handler — bid refund on AuctionForceClosed
 pnpm e2e:user-balance-recording-fallback         # Deposit reconciler workflow
 ```
 
@@ -322,9 +322,7 @@ Ask the user if they want to deploy a new subgraph version. This is a separate s
 ./scripts/deploy-subgraph.sh --skip-deploy         # codegen + build only, no deploy
 ```
 
-The deploy script copies ABIs from Foundry artifacts, runs `graph codegen` and `graph build`, then deploys to Subgraph Studio. After a successful deploy, it asks if you want to publish to The Graph Network — **publishing requires human interaction in a browser** (wallet signing on Arbitrum). The CLI opens the browser and returns immediately; the user must complete the publish flow in their browser.
-
-After the script completes, tell the user: if the deploy succeeded, click the publish button in the browser when prompted. Once published, offer to regenerate GraphQL types.
+The deploy script copies ABIs from Foundry artifacts, runs `graph codegen` and `graph build`, deploys to Subgraph Studio, and publishes to The Graph Network. After a successful deploy+publish, tell the user to verify the subgraph at https://thegraph.com/studio/subgraph/insider-streams-2/ and then offer to regenerate GraphQL types.
 
 ### 4. Regenerate GraphQL types
 
@@ -382,7 +380,7 @@ After deploying, follow the full procedure in **"After a Contract Deployment"** 
 - **Force-close-handler CRE workflow** is log-triggered on `AuctionForceClosed` events. When an auction is force-closed, it finds active private bids in Supabase for that auction and refunds them (sets `status="refunded"`, `refunded_at=now`). Uses 2 HTTP calls (Supabase GET + PATCH). No on-chain writes.
 - **User-balance-recording-fallback CRE workflow** runs on a 60-second cron, polls the Private Token API for transfers to/from the platform EOA, and records them as deposits or withdrawals in the Supabase `transfers` table
 - `resolveExternalEvent(eventId, AuctionResult[])` accepts per-auction correctness results — each `AuctionResult` has `{auctionId, predictionCorrect}`. Replaces the old blanket `int8 delta` approach. Auctions not in the results array are marked as resolved with 0 delta.
-- **Event watcher** (`scripts/event-watcher/`) is a long-running Node.js process that polls the chain every 15s for `AuctionForceClosed` and `SettlementRequested` events, and every 30s for expired auctions. It triggers the appropriate CRE workflows via `cre workflow simulate`. Deployed as a systemd service on the remote server. Persists last-processed block to `.watcher-state.json`.
+- **Event watcher** (`scripts/event-watcher/`) is a long-running Node.js process that subscribes to `AuctionForceClosed` and `SettlementRequested` events via WebSocket, and polls for expired auctions every 30s via HTTP. On startup, catches up missed blocks using `getLogs`. Triggers the appropriate CRE workflows via `cre workflow simulate`. Deployed as a systemd service on the remote server. Persists last-processed block to `.watcher-state.json`.
 - CRE CLI installed at `~/.cre/bin/cre` (add to PATH: `export PATH="$HOME/.cre/bin:$PATH"`)
 
 ## Reference Docs

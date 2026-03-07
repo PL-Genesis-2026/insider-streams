@@ -10,8 +10,8 @@
     "e2e:user-balance-recording-fallback": "tsx e2e_tests/user-balance-recording-fallback-e2e.ts",
     "e2e:secret-marketplace-auction-closer": "tsx e2e_tests/secret-marketplace-auction-closer-e2e.ts",
     "e2e:external-prediction-market-settler": "tsx e2e_tests/simple-market-e2e.ts",
-    "e2e:reputation": "tsx e2e_tests/reputation-resolver-e2e.ts",
-    "e2e:force-close": "tsx e2e_tests/force-close-handler-e2e.ts",
+    "e2e:reputation-resolver": "tsx e2e_tests/reputation-resolver-e2e.ts",
+    "e2e:force-close-handler": "tsx e2e_tests/force-close-handler-e2e.ts",
     "watch": "tsx event-watcher/index.ts",
     "codegen": "graphql-codegen --config codegen.ts"
   },
