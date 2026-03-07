@@ -115,12 +115,12 @@ function buildTimeline(auction: AuctionDetailData) {
     });
   }
 
-  if (auction.forceClosedAuction) {
+  if (auction.cancelledAuction) {
     timeline.push({
       type: "closed",
-      label: "Auction force closed",
-      detail: `Refunded amount: ${formatCurrency(auction.forceClosedAuction.refundedAmountUsdc)}`,
-      timestamp: auction.forceClosedAuction.timestamp,
+      label: "Auction cancelled",
+      detail: `Refunded amount: ${formatCurrency(auction.cancelledAuction.refundedAmountUsdc)}`,
+      timestamp: auction.cancelledAuction.timestamp,
     });
   }
 
@@ -128,7 +128,7 @@ function buildTimeline(auction: AuctionDetailData) {
     timeline.push({
       type: "settled",
       label: "Reputation updated",
-      detail: `Score ${update.newScore} (${formatSignedNumber(update.reputationDelta)})`,
+      detail: `Score ${update.newScore} (${formatSignedNumber(update.scoreChange)})`,
       timestamp: update.timestamp,
     });
   }
@@ -282,7 +282,7 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
   const statusVariant =
     auction.status === "Closed"
       ? "secondary"
-      : auction.status === "ForceClosed"
+      : auction.status === "Cancelled"
         ? "outline"
         : "accent";
   const timeline = buildTimeline(auction);

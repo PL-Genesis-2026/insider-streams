@@ -7,7 +7,7 @@
  *   3. Owner places on-chain bid
  *   4. Insert Supabase records (seller, secret, deposit transfer, private_bid)
  *   5. Verify bidder's locked_balance includes the bid
- *   6. Force-close the auction on-chain via forceCloseAuction(auctionId, 0)
+ *   6. Cancel the auction on-chain via cancelAuction(auctionId, 0)
  *   7. Run CRE force-close-handler with --evm-tx-hash + --evm-event-index
  *   8. Verify bid status=refunded, refunded_at set, bidder locked_balance decreased
  *
@@ -72,7 +72,7 @@ const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_KEY);
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const SELLER_NAME = "E2EForceCloseSeller";
+const SELLER_ID = "E2EForceCloseSeller";
 const BID_AMOUNT = 1_000_000n; // 1 USDC
 const AUCTION_DURATION = 120; // 2 minutes (we'll force-close before it ends)
 const EVENT_DURATION = BigInt(300); // 5 minutes
@@ -152,7 +152,7 @@ async function main() {
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
     functionName: "createAuction",
-    args: [SELLER_NAME, eventId, QUESTION, endTime],
+    args: [SELLER_ID, eventId, QUESTION, endTime],
   });
   const auctionReceipt = await waitForTx(
     publicClient,
@@ -189,7 +189,7 @@ async function main() {
   // ── Step 6: Insert Supabase records (seller, secret, deposit, private_bid) ─
   step("Setting up Supabase records...");
   await setupSupabaseAuctionBid(supabase, {
-    sellerName: SELLER_NAME,
+    sellerName: SELLER_ID,
     sellerAddress: ownerAccount.address,
     auctionId: auctionIdStr,
     secretData: "E2E test secret",
@@ -216,36 +216,36 @@ async function main() {
   );
 
   // ── Step 8: Force-close auction on-chain ───────────────────────────────────
-  step("Force-closing auction on-chain...");
-  const forceCloseHash = await ownerClient.writeContract({
+  step("Cancelling auction on-chain...");
+  const cancelHash = await ownerClient.writeContract({
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
-    functionName: "forceCloseAuction",
+    functionName: "cancelAuction",
     args: [auctionId, 0],
   });
-  const forceCloseReceipt = await waitForTx(
+  const cancelReceipt = await waitForTx(
     publicClient,
-    forceCloseHash,
-    "Auction force-closed",
+    cancelHash,
+    "Auction cancelled",
   );
 
-  // Find AuctionForceClosed event index among ALL logs in the receipt
-  const forceCloseLogs = parseEventLogs({
+  // Find AuctionCancelled event index among ALL logs in the receipt
+  const cancelLogs = parseEventLogs({
     abi: secretMarketplaceAbi,
-    logs: forceCloseReceipt.logs,
-    eventName: "AuctionForceClosed",
+    logs: cancelReceipt.logs,
+    eventName: "AuctionCancelled",
   });
   assert(
-    forceCloseLogs.length > 0,
-    "No AuctionForceClosed event found in receipt",
+    cancelLogs.length > 0,
+    "No AuctionCancelled event found in receipt",
   );
-  const eventIndex = forceCloseReceipt.logs.findIndex(
-    (l) => l.logIndex === forceCloseLogs[0].logIndex,
+  const eventIndex = cancelReceipt.logs.findIndex(
+    (l) => l.logIndex === cancelLogs[0].logIndex,
   );
-  assert(eventIndex >= 0, "Could not find AuctionForceClosed log index");
-  console.log(`  AuctionForceClosed event index: ${eventIndex}`);
+  assert(eventIndex >= 0, "Could not find AuctionCancelled log index");
+  console.log(`  AuctionCancelled event index: ${eventIndex}`);
 
-  // Verify auction is now force-closed on-chain
+  // Verify auction is now cancelled on-chain
   const closedAuction = await publicClient.readContract({
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
@@ -259,7 +259,7 @@ async function main() {
   runCRE({
     workflow: "force-close-handler",
     triggerIndex: 0,
-    evmTxHash: forceCloseHash,
+    evmTxHash: cancelHash,
     evmEventIndex: eventIndex,
     broadcast: false,
   });
@@ -300,7 +300,7 @@ async function main() {
   console.log(`  Auction ID:        ${auctionId}`);
   console.log(`  Event ID:          ${eventId}`);
   console.log(`  Bid Amount:        ${formatUnits(BID_AMOUNT, USDC_DECIMALS)} USDC`);
-  console.log(`  On-chain status:   ForceClosed`);
+  console.log(`  On-chain status:   Cancelled`);
   console.log(`  Supabase bid:      refunded`);
   console.log(`  Buyer locked:      ${formatUnits(buyerLockedBefore, USDC_DECIMALS)} -> ${formatUnits(buyerLockedAfter, USDC_DECIMALS)} USDC`);
 }

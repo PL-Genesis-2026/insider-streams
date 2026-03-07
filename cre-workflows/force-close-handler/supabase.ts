@@ -1,9 +1,9 @@
 // supabase.ts
-// Refunds active bids in Supabase when auctions are force-closed.
+// Refunds active bids in Supabase when auctions are cancelled.
 // Uses batched HTTP calls to stay within CRE's 5-call-per-execution limit:
-//   1. GET all active bids for the force-closed auction IDs (1 HTTP call)
+//   1. GET all active bids for the cancelled auction IDs (1 HTTP call)
 //   2. PATCH all matched bids to status=refunded (1 HTTP call)
-// Total: 2 HTTP calls regardless of how many auctions are force-closed.
+// Total: 2 HTTP calls regardless of how many auctions are cancelled.
 
 import {
   cre,
@@ -45,7 +45,7 @@ interface ActiveBid {
 // ── Batched refund ──────────────────────────────────────────────────────────
 
 /**
- * Refunds all active bids for the given force-closed auction IDs in 2 HTTP calls:
+ * Refunds all active bids for the given cancelled auction IDs in 2 HTTP calls:
  *   1. GET active bids for all auction IDs (batch query)
  *   2. PATCH all matched bids to status=refunded (batch update)
  *
@@ -60,7 +60,7 @@ export function refundActiveBids(
   const serviceRoleKey = runtime.getSecret({ id: "SUPABASE_SERVICE_ROLE_KEY" }).result();
   const httpClient = new cre.capabilities.HTTPClient();
 
-  // Step 1: GET all active bids for the force-closed auctions (1 HTTP call)
+  // Step 1: GET all active bids for the cancelled auctions (1 HTTP call)
   const auctionIdList = auctionIds.map((id) => `"${id}"`).join(",");
   const activeBids: ActiveBid[] = httpClient
     .sendRequest(
@@ -71,7 +71,7 @@ export function refundActiveBids(
     .result();
 
   if (activeBids.length === 0) {
-    runtime.log("No active bids found for force-closed auctions");
+    runtime.log("No active bids found for cancelled auctions");
     return 0;
   }
 

@@ -21,13 +21,12 @@ type AuctionCreated @entity(immutable: true) {
   transactionHash: Bytes!
 }
 
-type AuctionForceClosed @entity(immutable: true) {
+type AuctionCancelled @entity(immutable: true) {
   id: Bytes!
   auctionId: BigInt! # uint256
-  heldAmount: BigInt! # uint256
+  cancelledBidAmount: BigInt! # uint256
   sellerId: String! # string
   eventId: BigInt! # uint256
-  reputationDelta: Int! # int8
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!
@@ -98,11 +97,12 @@ type OwnershipTransferred @entity(immutable: true) {
   transactionHash: Bytes!
 }
 
-type ReputationUpdated @entity(immutable: true) {
+type SellerReputationScoreUpdated @entity(immutable: true) {
   id: Bytes!
   sellerId: String! # string
   auctionId: BigInt! # uint256
-  reputationDelta: Int! # int8
+  predictionOutcome: Int! # uint8 (PredictionOutcome enum)
+  scoreChange: Int! # int8
   newScore: BigInt! # int256
   blockNumber: BigInt!
   blockTimestamp: BigInt!
