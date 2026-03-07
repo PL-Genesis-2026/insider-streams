@@ -322,7 +322,7 @@ Ask the user if they want to deploy a new subgraph version. This is a separate s
 ./scripts/deploy-subgraph.sh --skip-deploy         # codegen + build only, no deploy
 ```
 
-The deploy script copies ABIs from Foundry artifacts, runs `graph codegen` and `graph build`, deploys to Subgraph Studio, and publishes to The Graph Network. After a successful deploy+publish, tell the user to verify the subgraph at https://thegraph.com/studio/subgraph/insider-streams-2/ and then offer to regenerate GraphQL types.
+The deploy script copies ABIs from Foundry artifacts, runs `graph codegen` and `graph build`, deploys to Subgraph Studio, and publishes to The Graph Network. After a successful deploy+publish, tell the user to publish the subgraph at https://thegraph.com/studio/subgraph/insider-streams-2/ and then offer to regenerate GraphQL types once they're done.
 
 ### 4. Regenerate GraphQL types
 
