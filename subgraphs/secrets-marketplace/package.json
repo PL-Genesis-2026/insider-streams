@@ -1,6 +1,6 @@
 {
   "name": "insider-streams",
-  "version": "0.0.16",
+  "version": "0.0.18",
   "license": "UNLICENSED",
   "scripts": {
     "codegen": "graph codegen",

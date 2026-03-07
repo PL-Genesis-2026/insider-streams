@@ -224,6 +224,8 @@ Run codegen:
 turbo run codegen
 ```
 
+After running codegen, always run `turbo run build` to verify all packages compile cleanly with the regenerated types.
+
 After adding or updating GraphQL queries in a specific package, run the local codegen command from that directory:
 
 ```bash
@@ -235,6 +237,14 @@ For the `cre-workflows/secret-marketplace-auction-closer/` package (outside pnpm
 ```bash
 cd cre-workflows/secret-marketplace-auction-closer && bun run codegen
 ```
+
+### Known issue: duplicate identifier in generated enums
+
+The Graph's subgraph schema generates `_orderBy` enums with entries for both direct fields (e.g., `sellerId`) and relationship traversals (e.g., `seller__id`). When an entity has both a field like `sellerId` and a relationship like `seller`, codegen produces duplicate enum keys (e.g., `SellerId` appears twice). This causes TypeScript compilation errors like `Duplicate identifier 'SellerId'`.
+
+**Fix:** All codegen configs use `enumsAsTypes: true` to generate string union types instead of TypeScript enums. This avoids the naming collision. This setting is configured in:
+- `scripts/codegen.ts`
+- `apps/insider-streams-frontend/codegen.ts` (both `graphql.ts` and `sdk.ts` outputs)
 
 ## After Major Contract Changes
 
@@ -322,19 +332,18 @@ Ask the user if they want to deploy a new subgraph version. This is a separate s
 ./scripts/deploy-subgraph.sh --skip-deploy         # codegen + build only, no deploy
 ```
 
-The deploy script copies ABIs from Foundry artifacts, runs `graph codegen` and `graph build`, deploys to Subgraph Studio, and publishes to The Graph Network. After a successful deploy+publish, tell the user to publish the subgraph at https://thegraph.com/studio/subgraph/insider-streams-2/ and then offer to regenerate GraphQL types once they're done.
+The deploy script copies ABIs from Foundry artifacts, runs `graph codegen` and `graph build`, and deploys to Subgraph Studio. After a successful deploy, tell the user to publish the subgraph at https://thegraph.com/studio/subgraph/insider-streams-2/ and then offer to regenerate GraphQL types once they confirm it's published.
 
-### 4. Regenerate GraphQL types
+### 4. Regenerate GraphQL types (after user publishes)
 
 After you receive confirmation from the user that the subgraph is published, regenerate typed GraphQL clients:
 
 ```bash
 turbo run codegen
+turbo run build
 ```
 
-This updates the generated GraphQL types in the frontend, scripts, and CRE workflow packages against the published subgraph schema.
-
-After running codegen, run `turbo run build` and report on any errors.
+This updates the generated GraphQL types in the frontend, scripts, and CRE workflow packages against the published subgraph schema. The build step verifies all packages compile cleanly with the regenerated types.
 
 ## Services
 

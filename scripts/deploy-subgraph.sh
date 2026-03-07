@@ -136,14 +136,11 @@ npm run build
 
 # ─── Deploy ─────────────────────────────────────────────────────────────────
 if [ "$SKIP_DEPLOY" = false ]; then
-  CURRENT_VERSION=$(node -p "require('./package.json').version")
+  npm version patch --no-git-tag-version > /dev/null
+  DEPLOY_VERSION=$(node -p "require('./package.json').version")
   echo ""
-  echo "▶ Deploying subgraph (version: v$CURRENT_VERSION)..."
-  if npm run deploy -- --version-label "v$CURRENT_VERSION"; then
-    npm version patch --no-git-tag-version > /dev/null
-    NEXT_VERSION=$(node -p "require('./package.json').version")
-    echo "  Bumped subgraph version: v$CURRENT_VERSION → v$NEXT_VERSION"
-
+  echo "▶ Deploying subgraph (version: v$DEPLOY_VERSION)..."
+  if npm run deploy -- --version-label "v$DEPLOY_VERSION"; then
     echo ""
     echo "  To publish to The Graph Network, run from subgraphs/secrets-marketplace/:"
     echo "    npx graph publish --protocol-network arbitrum-one"
