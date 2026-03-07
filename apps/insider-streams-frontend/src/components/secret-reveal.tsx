@@ -3,29 +3,19 @@
 import Image from "next/image";
 import { useCallback, useState } from "react";
 import { ExternalLink, Eye, EyeOff, Loader2, Lock } from "lucide-react";
-import { useAccount, useWalletClient } from "wagmi";
+import { useAccount } from "wagmi";
 import { useAppKit } from "@reown/appkit/react";
-import stringify from "fast-json-stable-stringify";
 import { EXAMPLE_PREDICTION_MARKET_NAME } from "@private-streams/common";
 import { Button } from "@/components/ui/button";
 import { env } from "@/env";
 import type { EventData } from "@/lib/supabase/secrets";
+import type { PrivateSecretRecord } from "@/lib/private-data/types";
+import { usePrivateData } from "@/lib/private-data/use-private-data";
 import { cn } from "@/lib/utils";
 
 type SecretRevealCardProps = {
   auctionId: string;
 };
-
-type RevealedSecret = {
-  secret_data: string;
-  event_data: EventData | null;
-};
-
-type RevealState =
-  | { status: "hidden" }
-  | { status: "loading" }
-  | { status: "revealed"; data: RevealedSecret }
-  | { status: "error"; message: string };
 
 function BlurredSkeleton() {
   return (
@@ -69,7 +59,7 @@ function MarketLink({ eventData }: { eventData: EventData }) {
   );
 }
 
-function RevealedContent({ data }: { data: RevealedSecret }) {
+function RevealedContent({ data }: { data: PrivateSecretRecord }) {
   return (
     <div>
       <div className="space-y-2">
@@ -89,82 +79,31 @@ function RevealedContent({ data }: { data: RevealedSecret }) {
 }
 
 export function SecretRevealCard({ auctionId }: SecretRevealCardProps) {
-  const [state, setState] = useState<RevealState>({ status: "hidden" });
+  const [hidden, setHidden] = useState(false);
   const { isConnected } = useAccount();
-  const { data: walletClient } = useWalletClient();
   const { open } = useAppKit();
+  const { getSecret, revealForAuctions, isLoading, error } = usePrivateData();
+
+  const secret = getSecret(auctionId);
+  const isRevealed = !!secret && !hidden;
 
   const handleConnect = useCallback(() => {
     void open({ view: "Connect" });
   }, [open]);
 
-  const handleReveal = useCallback(async () => {
-    if (!walletClient) return;
-
-    setState({ status: "loading" });
-
-    try {
-      const timestamp = Math.floor(Date.now() / 1000);
-      const payload = { auctionId, timestamp };
-      const message = stringify(payload);
-      const signature = await walletClient.signMessage({ message });
-
-      const res = await fetch("/api/secrets", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...payload, signature }),
-      });
-
-      if (res.status === 403) {
-        const json = await res.json();
-        setState({
-          status: "error",
-          message: json.error ?? "You are not authorized to view this secret",
-        });
-        return;
-      }
-
-      if (!res.ok) {
-        throw new Error(`Request failed (${res.status})`);
-      }
-
-      const json = await res.json();
-      const row = json.data;
-
-      if (!row) {
-        setState({ status: "error", message: "Secret not found" });
-        return;
-      }
-
-      setState({
-        status: "revealed",
-        data: {
-          secret_data: row.secret_data,
-          event_data: row.event_data,
-        },
-      });
-    } catch (err) {
-      const isRejection =
-        err instanceof Error &&
-        (err.name === "UserRejectedRequestError" ||
-          err.message.includes("rejected"));
-      setState({
-        status: "error",
-        message: isRejection
-          ? "Signature request was cancelled."
-          : "Failed to load secret. Please try again.",
-      });
-    }
-  }, [auctionId, walletClient]);
+  const handleReveal = useCallback(() => {
+    setHidden(false);
+    void revealForAuctions([auctionId]);
+  }, [auctionId, revealForAuctions]);
 
   const handleHide = useCallback(() => {
-    setState({ status: "hidden" });
+    setHidden(true);
   }, []);
 
-  if (state.status === "revealed") {
+  if (isRevealed) {
     return (
       <div>
-        <RevealedContent data={state.data} />
+        <RevealedContent data={secret} />
         <div className="mt-5 flex justify-center">
           <Button variant="ghost" size="sm" onClick={handleHide}>
             <EyeOff className="size-3.5" />
@@ -180,16 +119,14 @@ export function SecretRevealCard({ auctionId }: SecretRevealCardProps) {
       <div
         className={cn(
           "blur-[6px] transition-[filter] duration-300",
-          state.status === "loading" && "blur-[3px]",
+          isLoading && "blur-[3px]",
         )}
       >
         <BlurredSkeleton />
       </div>
 
       <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-        {state.status === "error" && (
-          <p className="text-xs text-destructive">{state.message}</p>
-        )}
+        {error && <p className="text-xs text-destructive">{error}</p>}
 
         {!isConnected ? (
           <Button variant="outline" size="sm" onClick={handleConnect}>
@@ -200,15 +137,15 @@ export function SecretRevealCard({ auctionId }: SecretRevealCardProps) {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => void handleReveal()}
-            disabled={state.status === "loading" || !walletClient}
+            onClick={handleReveal}
+            disabled={isLoading}
           >
-            {state.status === "loading" ? (
+            {isLoading ? (
               <Loader2 className="size-3.5 animate-spin" />
             ) : (
               <Eye className="size-3.5" />
             )}
-            {state.status === "loading" ? "Revealing..." : "Reveal secret"}
+            {isLoading ? "Revealing..." : "Reveal secret"}
           </Button>
         )}
       </div>
