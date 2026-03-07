@@ -75,8 +75,8 @@ const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_KEY);
 const SELLER_A = "E2EReputationSellerA";
 const SELLER_B = "E2EReputationSellerB";
 const BID_AMOUNT = 1_000_000n; // 1 USDC
-const AUCTION_DURATION = 60; // 60 seconds — needs headroom for setup steps + remote latency
-const EVENT_DURATION = BigInt(90); // 90 seconds — must outlast auctions
+const AUCTION_DURATION = 120; // 120 seconds — needs headroom for 2 auction creates + 2 bids + remote latency
+const EVENT_DURATION = BigInt(180); // 180 seconds — must outlast auctions
 const DEPOSIT_AMOUNT = BID_AMOUNT * 10n; // 10 USDC headroom
 const QUESTION = "Reputation resolver E2E test event";
 
@@ -168,8 +168,8 @@ async function main() {
 
   // ── Step 5: Create auction A (SellerA predicts "yes") ──────────────────────
   step(`Creating auction A — ${SELLER_A} predicts "yes" (${AUCTION_DURATION}s duration)...`);
-  const nowA = BigInt(Math.floor(Date.now() / 1000));
-  const endTimeA = nowA + BigInt(AUCTION_DURATION);
+  const latestBlockA = await publicClient.getBlock({ blockTag: "latest" });
+  const endTimeA = latestBlockA.timestamp + BigInt(AUCTION_DURATION);
 
   const createAuctionAHash = await ownerClient.writeContract({
     address: SECRET_MARKETPLACE,
@@ -189,8 +189,8 @@ async function main() {
 
   // ── Step 6: Create auction B (SellerB predicts "no") ───────────────────────
   step(`Creating auction B — ${SELLER_B} predicts "no" (${AUCTION_DURATION}s duration)...`);
-  const nowB = BigInt(Math.floor(Date.now() / 1000));
-  const endTimeB = nowB + BigInt(AUCTION_DURATION);
+  const latestBlockB = await publicClient.getBlock({ blockTag: "latest" });
+  const endTimeB = latestBlockB.timestamp + BigInt(AUCTION_DURATION);
 
   const createAuctionBHash = await ownerClient.writeContract({
     address: SECRET_MARKETPLACE,

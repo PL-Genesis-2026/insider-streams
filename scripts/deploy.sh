@@ -116,6 +116,10 @@ do_rollback() {
 # ─── Trap: offer rollback on unexpected exit ──────────────────────────────────
 cleanup() {
   local exit_code=$?
+  # Restart event watcher if we stopped it
+  if [ "${WATCHER_WAS_ACTIVE:-false}" = true ]; then
+    ssh "$REMOTE_HOST" "sudo systemctl start event-watcher.service" 2>/dev/null || true
+  fi
   if [ "$DEPLOY_STARTED" = true ] && [ $exit_code -ne 0 ]; then
     echo ""
     fail "Deploy interrupted (exit code $exit_code)"
@@ -338,6 +342,17 @@ else
   echo "▶ Phase 3: Running E2E verification..."
   E2E_FAILURES=0
 
+  # Stop event watcher to prevent interference with E2E tests
+  # (it closes expired auctions and triggers CRE workflows concurrently)
+  WATCHER_WAS_ACTIVE=false
+  WATCHER_STATUS=$(ssh "$REMOTE_HOST" "systemctl is-active event-watcher.service 2>/dev/null || echo inactive")
+  if [ "$WATCHER_STATUS" = "active" ]; then
+    WATCHER_WAS_ACTIVE=true
+    info "  Stopping event-watcher service for E2E tests..."
+    ssh "$REMOTE_HOST" "sudo systemctl stop event-watcher.service"
+    success "event-watcher stopped"
+  fi
+
   # 3a: secret-marketplace E2E (on-chain lifecycle)
   echo ""
   info "  Running secret-marketplace E2E..."
@@ -459,6 +474,13 @@ else
     fail "force-close-handler E2E failed"
     echo "$FORCE_CLOSE_OUTPUT" | tail -20
     E2E_FAILURES=$((E2E_FAILURES + 1))
+  fi
+
+  # Restart event watcher if it was running before
+  if [ "$WATCHER_WAS_ACTIVE" = true ]; then
+    info "  Restarting event-watcher service..."
+    ssh "$REMOTE_HOST" "sudo systemctl start event-watcher.service"
+    success "event-watcher restarted"
   fi
 
   # ─── E2E Results Summary ──────────────────────────────────────────────────

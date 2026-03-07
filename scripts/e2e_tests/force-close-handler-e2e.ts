@@ -145,8 +145,8 @@ async function main() {
 
   // ── Step 4: Create auction (5-min duration, force-close before expiry) ─────
   step(`Owner creating auction (${AUCTION_DURATION}s duration)...`);
-  const now = BigInt(Math.floor(Date.now() / 1000));
-  const endTime = now + BigInt(AUCTION_DURATION);
+  const latestBlock = await publicClient.getBlock({ blockTag: "latest" });
+  const endTime = latestBlock.timestamp + BigInt(AUCTION_DURATION);
 
   const createAuctionHash = await ownerClient.writeContract({
     address: SECRET_MARKETPLACE,

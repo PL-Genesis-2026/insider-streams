@@ -60,7 +60,7 @@ const { publicClient, ownerClient, ownerAccount } = createClients({
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const BID_AMOUNT = 1_000_000n; // 1 USDC
-const AUCTION_DURATION = 45; // seconds
+const AUCTION_DURATION = 90; // seconds
 const QUESTION = "The New York Yankees won the 2009 World Series.";
 const SELLER_ID = "Insider Alice";
 
@@ -143,8 +143,8 @@ async function main() {
   const eventId = eventArgs.eventId as bigint;
   console.log(`  Event ID: ${eventId}`);
 
-  const now = BigInt(Math.floor(Date.now() / 1000));
-  const endTime = now + BigInt(AUCTION_DURATION);
+  const latestBlock = await publicClient.getBlock({ blockTag: "latest" });
+  const endTime = latestBlock.timestamp + BigInt(AUCTION_DURATION);
   const createAuctionHash = await ownerClient.writeContract({
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
