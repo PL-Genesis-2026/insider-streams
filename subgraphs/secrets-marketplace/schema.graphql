@@ -70,9 +70,9 @@ type ExpectedWorkflowNameUpdated @entity(immutable: true) {
   transactionHash: Bytes!
 }
 
-type ExternalMarketResolved @entity(immutable: true) {
+type ExternalEventResolved @entity(immutable: true) {
   id: Bytes!
-  externalMarketId: BigInt! # uint256
+  externalEventId: BigInt! # uint256
   reputationDelta: Int! # int8
   auctionsAffected: BigInt! # uint256
   blockNumber: BigInt!
@@ -125,10 +125,10 @@ type SellerRegistered @entity(immutable: true) {
   transactionHash: Bytes!
 }
 
-type SimpleMarketUpdated @entity(immutable: true) {
+type MarketplaceUpdated @entity(immutable: true) {
   id: Bytes!
-  previousMarket: Bytes! # address
-  newMarket: Bytes! # address
+  previousMarketplace: Bytes! # address
+  newMarketplace: Bytes! # address
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!

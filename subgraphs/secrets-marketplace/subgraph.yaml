@@ -8,7 +8,7 @@ dataSources:
     name: SecretMarketplace
     network: sepolia
     source:
-      address: "0x81c9870dCd9B7e5E8b6EcF5d508c5f6BEE7DE058"
+      address: "0x8221Ef6351c2CA9Ae3Ae65266076f3E14279F52a"
       abi: SecretMarketplace
       startBlock: 10391293
 
@@ -24,13 +24,13 @@ dataSources:
         - ExpectedAuthorUpdated
         - ExpectedWorkflowIdUpdated
         - ExpectedWorkflowNameUpdated
-        - ExternalMarketResolved
+        - ExternalEventResolved
         - ForwarderAddressUpdated
         - OwnershipTransferred
         - ReputationUpdated
         - SecurityWarning
         - SellerRegistered
-        - SimpleMarketUpdated
+        - MarketplaceUpdated
       abis:
         - name: SecretMarketplace
           file: ./abis/SecretMarketplace.json
@@ -49,8 +49,8 @@ dataSources:
           handler: handleExpectedWorkflowIdUpdated
         - event: ExpectedWorkflowNameUpdated(indexed bytes10,indexed bytes10)
           handler: handleExpectedWorkflowNameUpdated
-        - event: ExternalMarketResolved(indexed uint256,int8,uint256)
-          handler: handleExternalMarketResolved
+        - event: ExternalEventResolved(indexed uint256,int8,uint256)
+          handler: handleExternalEventResolved
         - event: ForwarderAddressUpdated(indexed address,indexed address)
           handler: handleForwarderAddressUpdated
         - event: OwnershipTransferred(indexed address,indexed address)
@@ -61,6 +61,6 @@ dataSources:
           handler: handleSecurityWarning
         - event: SellerRegistered(string)
           handler: handleSellerRegistered
-        - event: SimpleMarketUpdated(indexed address,indexed address)
-          handler: handleSimpleMarketUpdated
+        - event: MarketplaceUpdated(indexed address,indexed address)
+          handler: handleMarketplaceUpdated
       file: ./src/secret-marketplace.ts

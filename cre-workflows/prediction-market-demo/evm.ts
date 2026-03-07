@@ -1,5 +1,5 @@
 // evm.ts
-// EVM on-chain settlement for prediction markets.
+// EVM on-chain settlement for prediction market events.
 // Uses CRE EVM Write capability to submit settlement reports.
 
 import {
@@ -17,16 +17,16 @@ import { GeminiResponseSchema, type Config, type LLMResult } from "./types";
  *********************************/
 
 /**
- * Settles a prediction market on-chain using CRE's EVM Write capability.
+ * Settles a prediction market event on-chain using CRE's EVM Write capability.
  * Validates the Gemini response, encodes the report data, signs it with ECDSA, and submits it to the contract.
- * 
+ *
  * @param runtime - CRE runtime instance with config and secrets
- * @param marketId - ID of the market to settle
+ * @param eventId - ID of the event to settle
  * @param outcomeJson - JSON string from Gemini containing the result and confidence
  * @param responseId - Unique identifier from the Gemini response
  * @returns Transaction hash of the settlement transaction
  */
-export function settleMarket(runtime: Runtime<Config>, marketId: bigint, outcomeJson: string, responseId: string): string {
+export function settleEvent(runtime: Runtime<Config>, eventId: bigint, outcomeJson: string, responseId: string): string {
 
   // Validate & parse the Gemini output (throws on invalid structure or out-of-range values)
   const parsed: LLMResult = GeminiResponseSchema.parse(JSON.parse(outcomeJson));
@@ -41,16 +41,16 @@ export function settleMarket(runtime: Runtime<Config>, marketId: bigint, outcome
   });
   if (!network) throw new Error(`Unknown chain name: ${evmCfg.chainSelectorName}`);
 
-  runtime.log(`Settling Market at contract: ${evmCfg.simpleMarketAddress}`);
+  runtime.log(`Settling event at contract: ${evmCfg.simpleMarketAddress}`);
 
   const evmClient = new cre.capabilities.EVMClient(network.chainSelector.selector);
 
   // Encode report payload for signing & submission
   const outcomeUint = mapOutcomeToUint(parsed.result);
-  const reportData = makeReportData(marketId, outcomeUint, parsed.confidence, responseId);
+  const reportData = makeReportData(eventId, outcomeUint, parsed.confidence, responseId);
 
   runtime.log(
-    `Writing report — marketId: ${marketId}, outcome: ${parsed.result} (${outcomeUint}), confidence: ${parsed.confidence}, responseId: ${responseId}`
+    `Writing report — eventId: ${eventId}, outcome: ${parsed.result} (${outcomeUint}), confidence: ${parsed.confidence}, responseId: ${responseId}`
   );
 
   // Sign the report using ECDSA over keccak256 (EVM-compatible signature)
@@ -63,7 +63,7 @@ export function settleMarket(runtime: Runtime<Config>, marketId: bigint, outcome
     })
     .result();
 
-  // Submit the signed report to the SimpleMarket contract via onReport()
+  // Submit the signed report to the ExamplePredictionMarket contract via onReport()
   const writeReportResult = evmClient
     .writeReport(runtime, {
       receiver: evmCfg.simpleMarketAddress,
@@ -103,17 +103,17 @@ const mapOutcomeToUint = (r: LLMResult["result"]): 1 | 2 | 3 => {
 };
 
 /**
- * ABI-encodes the settlement report data for the SimpleMarket contract.
- * 
- * @param marketId - ID of the market being settled
+ * ABI-encodes the settlement report data for the ExamplePredictionMarket contract.
+ *
+ * @param eventId - ID of the event being settled
  * @param outcomeUint - Numeric outcome (1=NO, 2=YES, 3=INCONCLUSIVE)
  * @param confidenceBp - Confidence score in basis points (0-10000)
  * @param responseId - Gemini response ID for audit trail
  * @returns ABI-encoded bytes for the report
  */
-const makeReportData = (marketId: bigint, outcomeUint: 1 | 2 | 3, confidenceBp: number, responseId: string) =>
-  encodeAbiParameters(parseAbiParameters("uint256 marketId, uint8 outcome, uint16 confidenceBp, string responseId"), [
-    marketId,
+const makeReportData = (eventId: bigint, outcomeUint: 1 | 2 | 3, confidenceBp: number, responseId: string) =>
+  encodeAbiParameters(parseAbiParameters("uint256 eventId, uint8 outcome, uint16 confidenceBp, string responseId"), [
+    eventId,
     outcomeUint,
     confidenceBp,
     responseId,

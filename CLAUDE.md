@@ -106,7 +106,7 @@ pnpm generate:supabase-types   # Regenerate types from live database (requires D
 
 | Role   | Address                                      | Purpose                                                 |
 | ------ | -------------------------------------------- | ------------------------------------------------------- |
-| Owner  | `0x6B789D957B87c12F30b48E9bFc58678c2f76f1c5` | Deploys contracts, creates markets, requests settlement |
+| Owner  | `0x6B789D957B87c12F30b48E9bFc58678c2f76f1c5` | Deploys contracts, creates events, requests settlement |
 | Tester | `0x55D234274608a69a3E84c8Bc5Cd07F8A5f0f69Ce` | Makes predictions, claims winnings                      |
 
 Private keys are in `.env` files (never committed).
@@ -264,7 +264,8 @@ After deploying, follow the full procedure in **"After a Contract Deployment"** 
 ## Architecture Notes
 
 - `ExamplePredictionMarket.sol` accepts **any ERC-20** token (constructor arg) — we use MockUSDC, not Circle USDC
-- Markets close after **3 minutes** from creation
+- `newEvent(question, duration)` creates prediction events with a caller-specified duration (no hardcoded default)
+- `forceSettle(eventId, outcome, confidenceBps, evidenceURI)` allows settling events without waiting for closure (debug/testing only; reverts if already settled)
 - CRE workflow listens for `SettlementRequested` events, calls Gemini AI with Google Search grounding, submits signed report on-chain
 - Settlement data is also written to Firestore for the frontend
 - **Auction-closer CRE workflow** runs on a 30-second cron, reads `getOpenAuctions()` and `getAuction(id)` to find expired auctions, then submits a signed report with `ACTION_CLOSE_AUCTION` (0x00) to close them

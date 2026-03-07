@@ -5,8 +5,9 @@ query RecentAuctions {
   auctionCreateds(first: 5, orderBy: blockTimestamp, orderDirection: desc) {
     id
     auctionId
-    seller
-    reservePrice
+    sellerId
+    eventId
+    eventTitle
     endTime
     blockTimestamp
     transactionHash
@@ -14,8 +15,8 @@ query RecentAuctions {
   bidPlaceds(first: 5, orderBy: blockTimestamp, orderDirection: desc) {
     id
     auctionId
-    bidder
     bidAmount
+    previousBid
     blockTimestamp
   }
 }

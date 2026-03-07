@@ -12,9 +12,8 @@ import { type Config, secretMarketplaceAbi } from "./types";
 export interface ExpiredAuction {
   auctionId: bigint;
   seller: string;
-  highestBidder: string;
-  highestBid: bigint;
-  externalMarketId: bigint;
+  currentBid: bigint;
+  eventId: bigint;
 }
 
 /**
@@ -92,12 +91,12 @@ export function findExpiredAuctions(
       data: bytesToHex(auctionResult.data),
     }) as {
       seller: string;
-      externalMarketId: bigint;
-      reservePrice: bigint;
       endTime: bigint;
-      highestBidder: string;
-      highestBid: bigint;
+      currentBid: bigint;
+      eventId: bigint;
+      eventTitle: string;
       status: number;
+      reputationResolved: boolean;
     };
 
     const endTime = Number(auction.endTime);
@@ -108,9 +107,8 @@ export function findExpiredAuctions(
       expired.push({
         auctionId,
         seller: auction.seller,
-        highestBidder: auction.highestBidder,
-        highestBid: auction.highestBid,
-        externalMarketId: auction.externalMarketId,
+        currentBid: auction.currentBid,
+        eventId: auction.eventId,
       });
     } else {
       runtime.log(

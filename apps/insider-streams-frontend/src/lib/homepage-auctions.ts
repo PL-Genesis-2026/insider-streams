@@ -1,5 +1,5 @@
 import { MOCK_USDC_DECIMALS } from "@private-streams/common";
-import { formatUnits, getAddress } from "viem";
+import { formatUnits } from "viem";
 import type { AuctionCardData } from "@/components/auction-card";
 import { graphqlClient } from "@/lib/graphql";
 import { getSdk } from "../__generated__/sdk";
@@ -60,17 +60,14 @@ export async function getHomepageAuctions({
 
     return {
       auctionId: String(a.auctionId),
-      sellerAddress: getAddress(String(a.seller)),
-      externalMarketId: String(a.externalMarketId),
+      sellerAddress: String(a.sellerId),
+      eventId: String(a.eventId),
       status: "Open",
       currentBidUsdc: latestBid
         ? Number(
             formatUnits(BigInt(String(latestBid.bidAmount)), MOCK_USDC_DECIMALS),
           )
         : undefined,
-      reserveUsdc: Number(
-        formatUnits(BigInt(String(a.reservePrice)), MOCK_USDC_DECIMALS),
-      ),
       endTime: new Date(Number(String(a.endTime)) * 1000).toISOString(),
     };
   });
@@ -80,20 +77,12 @@ export async function getHomepageAuctions({
 
     return {
       auctionId: String(a.auctionId),
-      sellerAddress: getAddress(String(a.seller)),
-      externalMarketId: String(a.externalMarketId),
+      sellerAddress: String(a.sellerId),
+      eventId: String(a.eventId),
       status: "Closed",
       currentBidUsdc: Number(
         formatUnits(BigInt(String(a.winningBid)), MOCK_USDC_DECIMALS),
       ),
-      reserveUsdc: reference
-        ? Number(
-            formatUnits(
-              BigInt(String(reference.reservePrice)),
-              MOCK_USDC_DECIMALS,
-            ),
-          )
-        : undefined,
       endTime: reference
         ? new Date(Number(String(reference.endTime)) * 1000).toISOString()
         : undefined,
