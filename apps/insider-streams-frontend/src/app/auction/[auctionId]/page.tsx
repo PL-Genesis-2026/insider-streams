@@ -12,7 +12,10 @@ import {
   Trophy,
   User,
 } from "lucide-react";
-import { SECRET_MARKETPLACE_ADDRESS } from "@private-streams/common";
+import {
+  SECRET_MARKETPLACE_ADDRESS,
+  EXAMPLE_PREDICTION_MARKET_NAME,
+} from "@private-streams/common";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -69,14 +72,6 @@ function formatSignedNumber(value: number) {
   return value > 0 ? `+${value}` : String(value);
 }
 
-function formatOutcome(value: "yes" | "no" | undefined) {
-  if (!value) {
-    return undefined;
-  }
-
-  return value === "yes" ? "Yes" : "No";
-}
-
 function shortHash(hash: string) {
   if (hash.length <= 14) {
     return hash;
@@ -130,15 +125,6 @@ function buildTimeline(auction: AuctionDetailData) {
       label: "Reputation updated",
       detail: `Score ${update.newScore} (${formatSignedNumber(update.scoreChange)})`,
       timestamp: update.timestamp,
-    });
-  }
-
-  if (auction.secretUpdatedAt) {
-    timeline.push({
-      type: "settled",
-      label: "Secret record updated",
-      detail: "Supabase secret record updated",
-      timestamp: auction.secretUpdatedAt,
     });
   }
 
@@ -292,12 +278,9 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
             <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.24em] text-accent">
               <span>Auction #{auction.auctionId}</span>
               <span className="text-muted-foreground/40">/</span>
-              <span>{auction.marketplace ?? `Market #${auction.marketId}`}</span>
+              <span>{EXAMPLE_PREDICTION_MARKET_NAME}</span>
             </div>
             <Badge variant={statusVariant}>{auction.status}</Badge>
-            {formatOutcome(auction.outcome) ? (
-              <Badge variant="outline">{formatOutcome(auction.outcome)}</Badge>
-            ) : null}
             {auction.endTime ? (
               <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
                 <Clock className="size-3.5" />
@@ -367,10 +350,7 @@ export default async function AuctionDetailPage({ params }: AuctionDetailPagePro
                 <Label>Secret record</Label>
               </CardHeader>
               <CardContent>
-                <SecretRevealCard
-                  auctionId={auction.auctionId}
-                  hasSecret={auction.hasSecret}
-                />
+                <SecretRevealCard auctionId={auction.auctionId} />
               </CardContent>
             </Card>
           </div>

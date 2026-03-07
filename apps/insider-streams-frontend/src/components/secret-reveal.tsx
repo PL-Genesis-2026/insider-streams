@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useCallback, useState } from "react";
 import { ExternalLink, Eye, EyeOff, Loader2, Lock } from "lucide-react";
+import { EXAMPLE_PREDICTION_MARKET_NAME } from "@private-streams/common";
 import { Button } from "@/components/ui/button";
 import { env } from "@/env";
 import type { EventData } from "@/lib/supabase/secrets";
@@ -10,7 +11,6 @@ import { cn } from "@/lib/utils";
 
 type SecretRevealCardProps = {
   auctionId: string;
-  hasSecret: boolean;
 };
 
 type RevealedSecret = {
@@ -60,7 +60,7 @@ function MarketLink({ eventData }: { eventData: EventData }) {
     >
       <Image
         src="/ExternalPredictionMarketLogo.svg"
-        alt={eventData.marketplace}
+        alt={EXAMPLE_PREDICTION_MARKET_NAME}
         width={16}
         height={20}
         className="shrink-0"
@@ -95,7 +95,6 @@ function RevealedContent({ data }: { data: RevealedSecret }) {
 
 export function SecretRevealCard({
   auctionId,
-  hasSecret,
 }: SecretRevealCardProps) {
   const [state, setState] = useState<RevealState>({ status: "hidden" });
 
@@ -137,17 +136,6 @@ export function SecretRevealCard({
   const handleHide = useCallback(() => {
     setState({ status: "hidden" });
   }, []);
-
-  if (!hasSecret) {
-    return (
-      <div className="flex items-center gap-3 rounded-lg bg-muted/30 px-4 py-3">
-        <Lock className="size-4 text-muted-foreground/50" />
-        <p className="text-sm text-muted-foreground">
-          No secret has been submitted for this auction yet.
-        </p>
-      </div>
-    );
-  }
 
   if (state.status === "revealed") {
     return (

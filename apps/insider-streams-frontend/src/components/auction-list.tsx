@@ -1,13 +1,12 @@
 "use client";
 
 import { useQuery } from "@apollo/client/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { CONFIDENTIAL_USDC_DECIMALS } from "@private-streams/common";
 import { formatUnits } from "viem";
 import { HomepageAuctionsDocument } from "@/__generated__/graphql";
 import type { AuctionCardData } from "@/components/auction-card";
 import { AuctionCard } from "@/components/auction-card";
-import type { EventData } from "@/lib/supabase/secrets";
 import { Badge } from "@/components/ui/badge";
 import {
   Pagination,
@@ -26,12 +25,9 @@ type AuctionListProps = {
   className?: string;
 };
 
-type SecretMap = Map<string, { event_data: EventData | null }>;
-
 export function AuctionList({ className }: AuctionListProps) {
   const [page, setPage] = useState(0);
   const [showClosedAuctions, setShowClosedAuctions] = useState(false);
-  const [secrets, setSecrets] = useState<SecretMap>(new Map());
 
   // Pass the entire `where` object as a variable — The Graph's _not_in
   // filter rejects null/empty arrays, so we omit it entirely when showing all.
@@ -50,32 +46,8 @@ export function AuctionList({ className }: AuctionListProps) {
 
   const auctions = data?.auctions ?? [];
 
-  // Stable key so we only re-fetch secrets when the auction list actually changes
-  const auctionIdKey = useMemo(
-    () => auctions.map((a) => String(a.auctionId)).join(","),
-    [auctions],
-  );
-
-  // Fetch Supabase secrets when auction data changes
-  useEffect(() => {
-    if (!auctionIdKey) return;
-
-    const auctionIds = auctionIdKey.split(",");
-
-    fetch(`/api/secrets?ids=${encodeURIComponent(auctionIdKey)}`)
-      .then((res) => res.json())
-      .then((json) => {
-        const rows = json.data ?? [];
-        setSecrets(new Map(rows.map((r: { auction_id: string; event_data: EventData | null }) => [r.auction_id, r])));
-      })
-      .catch((err) => {
-        console.error("Failed to load secrets for auctions", err);
-      });
-  }, [auctionIdKey]);
-
   const cards: AuctionCardData[] = useMemo(() => {
     return auctions.map((a): AuctionCardData => {
-      const eventData = secrets.get(String(a.auctionId))?.event_data;
       const currentBidBigInt = BigInt(String(a.currentBid));
 
       return {
@@ -89,9 +61,7 @@ export function AuctionList({ className }: AuctionListProps) {
             : undefined,
         bidCount: a.bidCount,
         endTime: new Date(Number(String(a.endTime)) * 1000).toISOString(),
-        marketplace: eventData?.marketplace,
-        title: eventData?.event ?? a.eventTitle,
-        outcome: eventData?.outcome,
+        title: a.eventTitle,
         sellerReputationScore: Number(a.seller.reputationScore),
         sellerTotalAuctions: a.seller.totalAuctionCount,
         sellerCorrectPredictions:
@@ -100,7 +70,7 @@ export function AuctionList({ className }: AuctionListProps) {
           a.seller.auctionsWithWrongPredictionsCount,
       };
     });
-  }, [auctions, secrets]);
+  }, [auctions]);
 
   const handlePrevious = useCallback(
     (e: React.MouseEvent) => {
