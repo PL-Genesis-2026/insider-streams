@@ -104,7 +104,7 @@ function mapForceClosedAuction(
   record: ForceClosedAuctionRecord,
 ): AuctionDetailForceClose {
   return {
-    refundedAmountUsdc: bigintToUsdc(scalarToBigInt(record.refundAmount)),
+    refundedAmountUsdc: bigintToUsdc(scalarToBigInt(record.heldAmount)),
     reputationDelta: record.reputationDelta,
     timestamp: scalarToIso(record.blockTimestamp),
   };
@@ -114,7 +114,7 @@ function mapReputationUpdate(
   record: ReputationUpdatedRecord,
 ): AuctionDetailReputationUpdate {
   return {
-    reputationDelta: record.delta,
+    reputationDelta: record.reputationDelta,
     newScore: Number(scalarToBigInt(record.newScore)),
     timestamp: scalarToIso(record.blockTimestamp),
   };
@@ -155,9 +155,9 @@ function resolveSellerAddress(
     | undefined,
 ): string | undefined {
   const raw =
-    createdAuction?.seller ??
-    closedAuction?.seller ??
-    forceClosedAuction?.seller;
+    createdAuction?.sellerId ??
+    closedAuction?.sellerId ??
+    forceClosedAuction?.sellerId;
   return raw !== undefined ? String(raw) : undefined;
 }
 
@@ -173,9 +173,9 @@ function resolveMarketId(
     | undefined,
 ): string | undefined {
   const raw =
-    createdAuction?.externalMarketId ??
-    closedAuction?.externalMarketId ??
-    forceClosedAuction?.externalMarketId;
+    createdAuction?.eventId ??
+    closedAuction?.eventId ??
+    forceClosedAuction?.eventId;
   return raw !== undefined ? String(raw) : undefined;
 }
 
