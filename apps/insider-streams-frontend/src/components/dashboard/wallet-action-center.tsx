@@ -839,12 +839,7 @@ export function WalletActionCenter({
 
                       <Button
                         className="w-full sm:w-auto"
-                        disabled={
-                          !parsedAmount ||
-                          step === "approving" ||
-                          step === "depositing" ||
-                          step === "waiting_for_credit"
-                        }
+                        disabled={!parsedAmount || step !== "idle"}
                         onClick={() => {
                           void handleFund();
                         }}

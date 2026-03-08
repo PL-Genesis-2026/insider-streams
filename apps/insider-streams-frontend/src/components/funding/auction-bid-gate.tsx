@@ -196,14 +196,24 @@ export function AuctionBidGate({
 
         {fundingSnapshot.status === "reconciling_transfer" ? (
           <div className="space-y-3">
-            <Button asChild className="w-full">
+            <Button
+              type="button"
+              className="w-full"
+              onClick={() => {
+                void fundingSnapshot.refresh();
+              }}
+            >
+              Refresh transfer status
+              <RefreshCw className="size-4" />
+            </Button>
+            <Button asChild variant="outline" className="w-full">
               <Link href="/dashboard#wallet">
-                Resume withdrawal
-                <RefreshCw className="size-4" />
+                Manage wallet
+                <ArrowRight className="size-4" />
               </Link>
             </Button>
             <p className="text-xs leading-6 text-muted-foreground/70">
-              A wallet transfer is still in progress. Finish it from the dashboard wallet section before placing another bid.
+              A wallet transfer is still settling. Wait for it to complete before placing another bid.
             </p>
           </div>
         ) : null}
