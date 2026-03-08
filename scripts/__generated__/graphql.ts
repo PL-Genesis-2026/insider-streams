@@ -3061,12 +3061,27 @@ export type _SubgraphErrorPolicy_ =
   /** If the subgraph has indexing errors, data will be omitted. The default. */
   | 'deny';
 
+export type ExistingEventsQueryVariables = Exact<{
+  limit: Scalars['Int']['input'];
+}>;
+
+
+export type ExistingEventsQuery = { __typename?: 'Query', eventCreateds: Array<{ __typename?: 'EventCreated', eventId: any, question: string }> };
+
 export type RecentAuctionsQueryVariables = Exact<{ [key: string]: never; }>;
 
 
 export type RecentAuctionsQuery = { __typename?: 'Query', auctionCreateds: Array<{ __typename?: 'AuctionCreated', id: any, auctionId: any, sellerId: string, eventId: any, eventTitle: string, endTime: any, blockTimestamp: any, transactionHash: any }>, bidPlaceds: Array<{ __typename?: 'BidPlaced', id: any, auctionId: any, bidAmount: any, previousBid: any, blockTimestamp: any }> };
 
 
+export const ExistingEventsDocument = gql`
+    query ExistingEvents($limit: Int!) {
+  eventCreateds(first: $limit, orderBy: blockTimestamp, orderDirection: desc) {
+    eventId
+    question
+  }
+}
+    `;
 export const RecentAuctionsDocument = gql`
     query RecentAuctions {
   auctionCreateds(first: 5, orderBy: blockTimestamp, orderDirection: desc) {
@@ -3096,6 +3111,9 @@ const defaultWrapper: SdkFunctionWrapper = (action, _operationName, _operationTy
 
 export function getSdk(client: GraphQLClient, withWrapper: SdkFunctionWrapper = defaultWrapper) {
   return {
+    ExistingEvents(variables: ExistingEventsQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<ExistingEventsQuery> {
+      return withWrapper((wrappedRequestHeaders) => client.request<ExistingEventsQuery>({ document: ExistingEventsDocument, variables, requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders }, signal }), 'ExistingEvents', 'query', variables);
+    },
     RecentAuctions(variables?: RecentAuctionsQueryVariables, requestHeaders?: GraphQLClientRequestHeaders, signal?: RequestInit['signal']): Promise<RecentAuctionsQuery> {
       return withWrapper((wrappedRequestHeaders) => client.request<RecentAuctionsQuery>({ document: RecentAuctionsDocument, variables, requestHeaders: { ...requestHeaders, ...wrappedRequestHeaders }, signal }), 'RecentAuctions', 'query', variables);
     }

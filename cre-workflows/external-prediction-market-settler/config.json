@@ -6,5 +6,9 @@
       "chainSelectorName": "ethereum-testnet-sepolia",
       "gasLimit": "1000000"
     }
-  ]
+  ],
+  "ntfyEnabled": true,
+  "ntfyHost": "http://195.201.8.147:8090",
+  "ntfyTopic": "external-prediction-market-settler",
+  "ntfyUser": "vps"
 }

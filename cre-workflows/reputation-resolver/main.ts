@@ -3,6 +3,7 @@ import { configSchema, CRON_SCHEDULE, type Config, OUTCOME_YES, OUTCOME_NO, OUTC
 import { findSettledUnresolvedEvents } from "./monitor";
 import { fetchSecretsForAuctions, type SecretWithPrediction } from "./supabase";
 import { submitResolveReport, type AuctionResultTuple } from "./resolve";
+import { sendNotification } from "./notify";
 
 /**
  * Handler — checks for settled but unresolved events, fetches secrets from
@@ -83,10 +84,12 @@ const onTrigger = (runtime: Runtime<Config>): string => {
 
     const summary = resultMessages.join("; ");
     runtime.log(summary);
+    sendNotification(runtime, `Reputation Resolved: ${settledEvents.length} event(s)`, summary);
     return summary;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     runtime.log(`onTrigger error: ${msg}`);
+    sendNotification(runtime, "Reputation Resolution FAILED", msg);
     throw err;
   }
 };
