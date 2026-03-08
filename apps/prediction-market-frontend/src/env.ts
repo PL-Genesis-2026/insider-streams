@@ -7,11 +7,7 @@ export const env = createEnv({
       .string()
       .regex(/^0x[0-9a-fA-F]{64}$/)
       .optional(),
-    RPC_URL: z
-      .string()
-      .url()
-      .optional()
-      .default("https://ethereum-sepolia-rpc.publicnode.com"),
+    RPC_URL: z.string().url().optional().default("https://eth-sepolia.g.alchemy.com/v2/59LCREaM5uGpTVXZgR8A7z6IiULWjwG6"),
   },
   client: {
     NEXT_PUBLIC_PROJECT_ID: z.string().min(1).optional(),
