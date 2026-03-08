@@ -8,6 +8,7 @@ export type FundingStatus =
   | "wallet_required"
   | "wrong_network"
   | "funding_unavailable"
+  | "private_data_hidden"
   | "not_funded_yet"
   | "reconciling_transfer"
   | "funded"

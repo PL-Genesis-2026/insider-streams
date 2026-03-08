@@ -40,8 +40,9 @@ export type PrivateDataContextValue = {
   getVisibleAuctionIds: () => string[];
 };
 
-export const PrivateDataContext =
-  createContext<PrivateDataContextValue | null>(null);
+export const PrivateDataContext = createContext<PrivateDataContextValue | null>(
+  null,
+);
 
 // ---------------------------------------------------------------------------
 // React Query cache keys & stale times
@@ -84,6 +85,7 @@ export function PrivateDataProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
 
   const visibleAuctionsRef = useRef<Map<string, string[]>>(new Map());
+  const sessionAddressRef = useRef<string | null>(null);
 
   const [isRevealed, setIsRevealed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -114,12 +116,9 @@ export function PrivateDataProvider({ children }: { children: ReactNode }) {
 
   // ---- Visible auction registration ----------------------------------
 
-  const registerVisibleAuctions = useCallback(
-    (key: string, ids: string[]) => {
-      visibleAuctionsRef.current.set(key, ids);
-    },
-    [],
-  );
+  const registerVisibleAuctions = useCallback((key: string, ids: string[]) => {
+    visibleAuctionsRef.current.set(key, ids);
+  }, []);
 
   const unregisterVisibleAuctions = useCallback((key: string) => {
     visibleAuctionsRef.current.delete(key);
@@ -175,10 +174,7 @@ export function PrivateDataProvider({ children }: { children: ReactNode }) {
 
         // 4. Merge results into React Query cache
         if (sellerResult.status === "fulfilled") {
-          queryClient.setQueryData(
-            sellerKey(address),
-            sellerResult.value,
-          );
+          queryClient.setQueryData(sellerKey(address), sellerResult.value);
         }
 
         if (bidsResult.status === "fulfilled") {
@@ -231,18 +227,30 @@ export function PrivateDataProvider({ children }: { children: ReactNode }) {
     [isConnected, address, getSignedSession, queryClient],
   );
 
-  // ---- Wallet disconnect cleanup --------------------------------------
+  // ---- Wallet disconnect + account switch cleanup ----------------------
 
   useEffect(() => {
     if (!isConnected) {
-      // Clear all private-data queries
       queryClient.removeQueries({ queryKey: ["private-seller"] });
       queryClient.removeQueries({ queryKey: ["private-bids"] });
       queryClient.removeQueries({ queryKey: ["private-secrets"] });
       setIsRevealed(false);
       setError(null);
+      sessionAddressRef.current = null;
+      return;
     }
-  }, [isConnected, queryClient]);
+    if (address) {
+      if (sessionAddressRef.current !== null && sessionAddressRef.current !== address) {
+        // Account switched within same wallet
+        queryClient.removeQueries({ queryKey: ["private-seller"] });
+        queryClient.removeQueries({ queryKey: ["private-bids"] });
+        queryClient.removeQueries({ queryKey: ["private-secrets"] });
+        setIsRevealed(false);
+        setError(null);
+      }
+      sessionAddressRef.current = address;
+    }
+  }, [isConnected, address, queryClient]);
 
   // ---- Context value ---------------------------------------------------
 
