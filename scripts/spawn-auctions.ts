@@ -21,7 +21,8 @@ const BASE_URL =
   process.env.BASE_URL ??
   "http://localhost:3000";
 
-const DURATION = "30m" as const;
+const DURATIONS = ["5m", "15m", "30m", "1h"] as const;
+type Duration = (typeof DURATIONS)[number];
 
 const SECRET_POOL = [
   "YES",
@@ -62,8 +63,8 @@ async function ntfy(title: string, message: string, tags?: string[]) {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function pickRandom<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
+function pickRandom<T>(arr: readonly T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)]!;
 }
 
 function normalizePrivateKey(value: string): Hex {
@@ -130,6 +131,7 @@ async function createAuction(
   pk: Hex,
   eventId: string,
   secretPayload: string,
+  duration: Duration,
 ): Promise<{ auctionId?: string; ok: boolean; status: number; body: unknown }> {
   const account = privateKeyToAccount(pk);
   const walletClient = createWalletClient({
@@ -147,7 +149,7 @@ async function createAuction(
     message: {
       eventId,
       privateLeg: "yes",
-      duration: DURATION,
+      duration,
       timestamp: BigInt(ts),
     },
   });
@@ -156,7 +158,7 @@ async function createAuction(
     eventId,
     privateLeg: "yes",
     secretPayload,
-    duration: DURATION,
+    duration,
     timestamp: ts,
     signature,
   };
@@ -231,15 +233,16 @@ async function runCycle(client: GraphQLClient, accounts: Hex[]): Promise<void> {
 
   for (const event of candidates) {
     const secretPayload = pickRandom(SECRET_POOL);
+    const duration = pickRandom(DURATIONS);
 
     console.log(
       `[spawn-auctions] trying event ${event.eventId} — "${event.question}"`,
     );
     console.log(`[spawn-auctions] signer: ${account.address}`);
-    console.log(`[spawn-auctions] secret: "${secretPayload}"`);
+    console.log(`[spawn-auctions] secret: "${secretPayload}", duration: ${duration}`);
 
     try {
-      const result = await createAuction(pk, event.eventId, secretPayload);
+      const result = await createAuction(pk, event.eventId, secretPayload, duration);
 
       if (result.ok) {
         const msg = `Auction ${result.auctionId ?? "?"} created for event ${event.eventId}`;
