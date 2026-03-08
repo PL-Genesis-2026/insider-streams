@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   CONFIDENTIAL_USDC_DECIMALS,
@@ -187,6 +187,7 @@ export function BuyerDashboard() {
     isPending: isCheckingPrivateBalances,
     mutateAsync: loadPrivateBalances,
     error: privateBalancesError,
+    reset: resetPrivateBalances,
   } = usePrivateBalancesMutation(walletSession.address);
 
   const [hideLost, setHideLost] = useState(true);
@@ -194,6 +195,7 @@ export function BuyerDashboard() {
   const [activeBidAuctionId, setActiveBidAuctionId] = useState<string | null>(
     null,
   );
+  const lastWalletAddressRef = useRef<string | undefined>(walletSession.address);
 
   const dashboardQuery = useQuery({
     queryKey: ["buyer-dashboard", walletSession.address],
@@ -211,6 +213,15 @@ export function BuyerDashboard() {
   });
 
   useEffect(() => {
+    if (lastWalletAddressRef.current === walletSession.address) {
+      return;
+    }
+
+    lastWalletAddressRef.current = walletSession.address;
+    resetPrivateBalances();
+  }, [resetPrivateBalances, walletSession.address]);
+
+  useEffect(() => {
     if (
       !isRevealed ||
       !walletSession.address ||
@@ -221,7 +232,7 @@ export function BuyerDashboard() {
       return;
     }
 
-    void loadPrivateBalances();
+    void loadPrivateBalances({});
   }, [
     isCheckingPrivateBalances,
     isRevealed,
@@ -313,13 +324,12 @@ export function BuyerDashboard() {
     void Promise.all([
       dashboardQuery.refetch(),
       fundingSnapshot.refresh(),
-      privateBalanceLookup === undefined ? loadPrivateBalances() : Promise.resolve(),
+      loadPrivateBalances({ forceFresh: true }),
     ]);
   }, [
     dashboardQuery,
     fundingSnapshot,
     loadPrivateBalances,
-    privateBalanceLookup,
   ]);
 
   const activeAuction = useMemo(

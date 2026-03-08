@@ -62,15 +62,24 @@ const privateBalanceResultCache = new Map<
   { result: PrivateBalancesResult; timestamp: number }
 >();
 
+type ReadPrivateBalancesOptions = {
+  forceFresh?: boolean;
+};
+
 async function readPrivateBalances(
   address: Address,
   signTypedData: PrivateTokenSigner,
+  options?: ReadPrivateBalancesOptions,
 ): Promise<PrivateBalancesResult> {
   const cacheKey = address.toLowerCase();
   const cached = privateBalanceResultCache.get(cacheKey);
   const now = Math.floor(Date.now() / 1000);
 
-  if (cached && now - cached.timestamp < PRIVATE_BALANCE_CACHE_TTL_SECONDS) {
+  if (
+    !options?.forceFresh &&
+    cached &&
+    now - cached.timestamp < PRIVATE_BALANCE_CACHE_TTL_SECONDS
+  ) {
     return cached.result;
   }
 
@@ -116,12 +125,12 @@ export function usePrivateBalancesMutation(address?: Address) {
   const signTypedData = usePrivateTokenSigner();
 
   return useMutation({
-    mutationFn: async () => {
+    mutationFn: async (options?: ReadPrivateBalancesOptions) => {
       if (!address) {
         throw new Error("Fetching private balances requires a connected wallet.");
       }
 
-      return readPrivateBalances(address, signTypedData);
+      return readPrivateBalances(address, signTypedData, options);
     },
   });
 }

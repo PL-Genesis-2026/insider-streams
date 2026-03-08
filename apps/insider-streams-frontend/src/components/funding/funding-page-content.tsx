@@ -196,7 +196,7 @@ export function FundingPageContent() {
 
   useEffect(() => {
     if (alreadyFunded && !availableBalance && !privateBalanceLookup) {
-      void loadPrivateBalances();
+      void loadPrivateBalances({});
     }
   }, [alreadyFunded, availableBalance, privateBalanceLookup, loadPrivateBalances]);
 
@@ -253,7 +253,7 @@ export function FundingPageContent() {
     setError(null);
     setBalanceCheckEmpty(false);
     try {
-      const result = await loadPrivateBalances();
+      const result = await loadPrivateBalances({});
       const usdcBalance = findUsdcBalance(
         result.status === "ready" ? result.balances : [],
       );
