@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { FundingReconcileResponse, FundingServerSnapshot } from "./types";
+import type { SignedWalletSession } from "@/lib/wallet/use-signed-wallet-session";
 
 type JsonValue =
   | string
@@ -79,15 +80,16 @@ async function getErrorMessage(response: Response) {
 }
 
 export async function fetchFundingSnapshot(
-  address: string,
+  session: SignedWalletSession,
 ): Promise<FundingServerSnapshot> {
-  const response = await fetch(
-    `/api/funding/snapshot?address=${encodeURIComponent(address)}`,
-    {
-      method: "GET",
-      cache: "no-store",
+  const response = await fetch("/api/funding/snapshot", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
     },
-  );
+    cache: "no-store",
+    body: JSON.stringify(session),
+  });
 
   if (!response.ok) {
     throw new Error(await getErrorMessage(response));
@@ -98,14 +100,14 @@ export async function fetchFundingSnapshot(
 }
 
 export async function reconcileFunding(
-  address: string,
+  session: SignedWalletSession,
 ): Promise<FundingReconcileResponse> {
   const response = await fetch("/api/funding/reconcile", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ address }),
+    body: JSON.stringify(session),
   });
 
   if (!response.ok) {

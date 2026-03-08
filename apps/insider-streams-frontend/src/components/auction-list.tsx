@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@apollo/client/react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { CONFIDENTIAL_USDC_DECIMALS } from "@private-streams/common";
 import { formatUnits } from "viem";
 import { HomepageAuctionsDocument } from "@/__generated__/graphql";
@@ -15,6 +15,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import { usePrivateData } from "@/lib/private-data/use-private-data";
 
 const AUCTIONS_PAGE_SIZE = 30;
 const AUCTION_POLL_INTERVAL_MS = 10_000;
@@ -30,6 +31,8 @@ type AuctionFilterMode = "auto" | "open" | "all";
 export function AuctionList({ className }: AuctionListProps) {
   const [page, setPage] = useState(0);
   const [filterMode, setFilterMode] = useState<AuctionFilterMode>("auto");
+  const { seller, getBid, registerVisibleAuctions, unregisterVisibleAuctions } =
+    usePrivateData();
 
   const openAuctionsQuery = useQuery(HomepageAuctionsDocument, {
     variables: {
@@ -60,8 +63,13 @@ export function AuctionList({ className }: AuctionListProps) {
 
   const displayingClosedAuctions =
     filterMode === "all" || shouldAutoShowClosedAuctions;
-  const activeQuery = displayingClosedAuctions ? allAuctionsQuery : openAuctionsQuery;
-  const auctions = useMemo(() => activeQuery.data?.auctions ?? [], [activeQuery.data]);
+  const activeQuery = displayingClosedAuctions
+    ? allAuctionsQuery
+    : openAuctionsQuery;
+  const auctions = useMemo(
+    () => activeQuery.data?.auctions ?? [],
+    [activeQuery.data],
+  );
   const { loading, error } = activeQuery;
 
   const cards: AuctionCardData[] = useMemo(() => {
@@ -82,13 +90,17 @@ export function AuctionList({ className }: AuctionListProps) {
         title: a.eventTitle,
         sellerReputationScore: Number(a.seller.reputationScore),
         sellerTotalAuctions: a.seller.totalAuctionCount,
-        sellerCorrectPredictions:
-          a.seller.auctionsWithCorrectPredictionsCount,
-        sellerWrongPredictions:
-          a.seller.auctionsWithWrongPredictionsCount,
+        sellerCorrectPredictions: a.seller.auctionsWithCorrectPredictionsCount,
+        sellerWrongPredictions: a.seller.auctionsWithWrongPredictionsCount,
       };
     });
   }, [auctions]);
+
+  useEffect(() => {
+    const auctionIds = cards.map((c) => c.auctionId);
+    registerVisibleAuctions("homepage", auctionIds);
+    return () => unregisterVisibleAuctions("homepage");
+  }, [cards, registerVisibleAuctions, unregisterVisibleAuctions]);
 
   const handlePrevious = useCallback(
     (e: React.MouseEvent) => {
@@ -173,6 +185,12 @@ export function AuctionList({ className }: AuctionListProps) {
               key={auction.auctionId}
               auction={auction}
               href={`/auction/${auction.auctionId}`}
+              privateBid={getBid(auction.auctionId)}
+              isOwnAuction={
+                !!seller?.id &&
+                seller.id.toLowerCase() ===
+                  auction.sellerAddress.toLowerCase()
+              }
             />
           ))}
         </div>
@@ -193,9 +211,7 @@ export function AuctionList({ className }: AuctionListProps) {
                 onClick={handlePrevious}
                 aria-disabled={page === 0}
                 className={
-                  page === 0
-                    ? "pointer-events-none opacity-50"
-                    : undefined
+                  page === 0 ? "pointer-events-none opacity-50" : undefined
                 }
               />
             </PaginationItem>
