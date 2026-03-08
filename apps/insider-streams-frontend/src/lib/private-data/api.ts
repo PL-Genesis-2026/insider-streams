@@ -30,6 +30,10 @@ export async function fetchMyBids(
   timestamp: number,
   auctionIds: string[],
 ): Promise<Record<string, PrivateBidRecord>> {
+  if (auctionIds.length === 0) {
+    return {};
+  }
+
   const res = await fetch("/api/private-data/bids", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -54,6 +58,10 @@ export async function fetchMySecrets(
   timestamp: number,
   auctionIds: string[],
 ): Promise<Record<string, PrivateSecretState>> {
+  if (auctionIds.length === 0) {
+    return {};
+  }
+
   const res = await fetch("/api/private-data/secrets", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

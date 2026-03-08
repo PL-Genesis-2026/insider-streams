@@ -56,14 +56,39 @@ export type PrivateBalancesResult =
       balances: [];
     };
 
+const PRIVATE_BALANCE_CACHE_TTL_SECONDS = 25;
+const privateBalanceResultCache = new Map<
+  string,
+  { result: PrivateBalancesResult; timestamp: number }
+>();
+
+type ReadPrivateBalancesOptions = {
+  forceFresh?: boolean;
+};
+
 async function readPrivateBalances(
   address: Address,
   signTypedData: PrivateTokenSigner,
+  options?: ReadPrivateBalancesOptions,
 ): Promise<PrivateBalancesResult> {
+  const cacheKey = address.toLowerCase();
+  const cached = privateBalanceResultCache.get(cacheKey);
+  const now = Math.floor(Date.now() / 1000);
+
+  if (
+    !options?.forceFresh &&
+    cached &&
+    now - cached.timestamp < PRIVATE_BALANCE_CACHE_TTL_SECONDS
+  ) {
+    return cached.result;
+  }
+
+  let result: PrivateBalancesResult;
+
   try {
     const response = await getBalances(address, signTypedData);
 
-    return {
+    result = {
       status: "ready",
       balances: response.balances,
     };
@@ -72,32 +97,40 @@ async function readPrivateBalances(
       throw error;
     }
 
-    return {
+    result = {
       status: "not_funded_yet",
       balances: [],
     };
   }
+
+  privateBalanceResultCache.set(cacheKey, { result, timestamp: now });
+  return result;
 }
 
 function usePrivateTokenSigner(): PrivateTokenSigner {
   const { signTypedDataAsync } = useSignTypedData();
 
-  return (payload) =>
-    payload.primaryType === "Retrieve Balances"
-      ? signTypedDataAsync(payload)
-      : signTypedDataAsync(payload);
+  return (payload) => {
+    if (payload.primaryType === "Retrieve Balances") {
+      return signTypedDataAsync(payload);
+    }
+
+    return signTypedDataAsync(
+      payload as Parameters<typeof signTypedDataAsync>[0],
+    );
+  };
 }
 
 export function usePrivateBalancesMutation(address?: Address) {
   const signTypedData = usePrivateTokenSigner();
 
   return useMutation({
-    mutationFn: async () => {
+    mutationFn: async (options?: ReadPrivateBalancesOptions) => {
       if (!address) {
         throw new Error("Fetching private balances requires a connected wallet.");
       }
 
-      return readPrivateBalances(address, signTypedData);
+      return readPrivateBalances(address, signTypedData, options);
     },
   });
 }
