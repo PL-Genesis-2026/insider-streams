@@ -34,7 +34,6 @@ import {
   step,
   createClients,
   waitForTx,
-  waitForTimestamp,
   ensureUsdcBalance,
   ensureUsdcApproval,
   parseFirstEventLog,
@@ -60,7 +59,6 @@ const { publicClient, ownerClient, ownerAccount } = createClients({
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const BID_AMOUNT = 1_000_000n; // 1 USDC
-const AUCTION_DURATION = 90; // seconds
 const QUESTION = "The New York Yankees won the 2009 World Series.";
 const SELLER_ID = "Insider Alice";
 
@@ -144,7 +142,7 @@ async function main() {
   console.log(`  Event ID: ${eventId}`);
 
   const latestBlock = await publicClient.getBlock({ blockTag: "latest" });
-  const endTime = latestBlock.timestamp + BigInt(AUCTION_DURATION);
+  const endTime = latestBlock.timestamp + BigInt(3600); // 1 hour — will be force-expired immediately
   const createAuctionHash = await ownerClient.writeContract({
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
@@ -170,16 +168,15 @@ async function main() {
   });
   await waitForTx(publicClient, bidHash, "[EVENT: BidPlaced]");
 
-  // ── Step 4: Wait for auction to end ──────────────────────────────────────
-  step("Waiting for auction to end...");
-  const auctionData = await publicClient.readContract({
+  // ── Step 4: Admin expire + close auction ────────────────────────────────────
+  step("Admin expiring auction immediately...");
+  const expireHash = await ownerClient.writeContract({
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
-    functionName: "getAuction",
+    functionName: "adminExpireAuction",
     args: [auctionId],
   });
-  const onChainEndTime = auctionData.endTime;
-  await waitForTimestamp(publicClient, onChainEndTime, "Auction expiry");
+  await waitForTx(publicClient, expireHash, "Auction admin-expired");
 
   // ── Step 5: Close auction ────────────────────────────────────────────────
   step("Admin closes auction...");
