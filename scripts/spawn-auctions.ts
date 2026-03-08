@@ -21,10 +21,6 @@ const BASE_URL =
   process.env.BASE_URL ??
   "http://localhost:3000";
 
-const INTERVAL_MS = process.env.INTERVAL_MS
-  ? parseInt(process.env.INTERVAL_MS, 10)
-  : 5 * 60 * 1000;
-
 const DURATION = "6h" as const;
 
 const SECRET_POOL = [
@@ -35,6 +31,32 @@ const SECRET_POOL = [
   "Prediction: YES",
   "Prediction: NO",
 ];
+
+// ---------------------------------------------------------------------------
+// ntfy (optional)
+// ---------------------------------------------------------------------------
+
+const ENABLE_NTFY = process.env.ENABLE_NTFY === "true";
+const NTFY_HOST = process.env.NTFY_HOST ?? "http://localhost:8090";
+const NTFY_TOPIC = process.env.NTFY_TOPIC ?? "auction-creator-script";
+const NTFY_USER = process.env.NTFY_USER ?? "UNKNOWN";
+
+async function ntfy(title: string, message: string, tags?: string[]) {
+  if (!ENABLE_NTFY) return;
+  try {
+    await fetch(`${NTFY_HOST}/${NTFY_TOPIC}`, {
+      method: "POST",
+      headers: {
+        Title: title,
+        ...(tags?.length ? { Tags: tags.join(",") } : {}),
+      },
+      body: `[${NTFY_USER}] ${message}`,
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch (err) {
+    console.error(`  [ntfy] Failed to send notification: ${err}`);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -220,9 +242,9 @@ async function runCycle(client: GraphQLClient, accounts: Hex[]): Promise<void> {
       const result = await createAuction(pk, event.eventId, secretPayload);
 
       if (result.ok) {
-        console.log(
-          `[spawn-auctions] auction created — id: ${result.auctionId ?? "(unknown)"}`,
-        );
+        const msg = `Auction ${result.auctionId ?? "?"} created for event ${event.eventId}`;
+        console.log(`[spawn-auctions] ${msg}`);
+        await ntfy("Auction Created", msg, ["tada"]);
         return;
       }
 
@@ -240,13 +262,14 @@ async function runCycle(client: GraphQLClient, accounts: Hex[]): Promise<void> {
         continue;
       }
 
-      console.error(
-        `[spawn-auctions] create-auction failed (HTTP ${result.status}):`,
-        result.body,
-      );
+      const errMsg = `create-auction failed (HTTP ${result.status}): ${JSON.stringify(result.body)}`;
+      console.error(`[spawn-auctions] ${errMsg}`);
+      await ntfy("Auction Spawn FAILED", errMsg, ["x"]);
       return;
     } catch (err) {
-      console.error("[spawn-auctions] create-auction threw:", err);
+      const errMsg = `create-auction threw: ${err}`;
+      console.error(`[spawn-auctions] ${errMsg}`);
+      await ntfy("Auction Spawn FAILED", errMsg, ["x"]);
       return;
     }
   }
@@ -268,20 +291,13 @@ if (accounts.length === 0) {
 
 console.log(`[spawn-auctions] loaded ${accounts.length} test account(s)`);
 console.log(`[spawn-auctions] base URL: ${BASE_URL}`);
-console.log(`[spawn-auctions] interval: ${INTERVAL_MS / 1000}s`);
 console.log(`[spawn-auctions] subgraph: ${SUBGRAPH_URL}`);
 
 const client = new GraphQLClient(SUBGRAPH_URL);
 
-// Run immediately, then on interval
-runCycle(client, accounts);
-const timer = setInterval(() => runCycle(client, accounts), INTERVAL_MS);
-
-function shutdown(): void {
-  console.log("\n[spawn-auctions] shutting down");
-  clearInterval(timer);
-  process.exit(0);
-}
-
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
+runCycle(client, accounts)
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error("[spawn-auctions] fatal:", err);
+    process.exit(1);
+  });
