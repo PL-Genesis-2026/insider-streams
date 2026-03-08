@@ -374,12 +374,13 @@ export default function EventDetailPage({ params }: { params: Params }) {
 
           <div className="space-y-6">
             {isOpen && <BuySharesPanel eventId={eventId} />}
-            {settlement && settlement.outcome !== 3 && (
+            {settlement &&
+              (settlement.outcome === 1 || settlement.outcome === 2) && (
               <RedeemSharesPanel
                 eventId={eventId}
                 outcome={settlement.outcome}
               />
-            )}
+              )}
           </div>
         </div>
       )}
