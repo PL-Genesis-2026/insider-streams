@@ -82,7 +82,7 @@ export function SecretRevealCard({ auctionId }: SecretRevealCardProps) {
   const [hidden, setHidden] = useState(false);
   const { isConnected } = useAccount();
   const { open } = useAppKit();
-  const { getSecret, revealForAuctions, isLoading, error } = usePrivateData();
+  const { getSecret, revealForAuctions, isLoading, error, isRevealed: isSessionRevealed } = usePrivateData();
 
   const secret = getSecret(auctionId);
   const isRevealed = !!secret && !hidden;
@@ -111,6 +111,15 @@ export function SecretRevealCard({ auctionId }: SecretRevealCardProps) {
           </Button>
         </div>
       </div>
+    );
+  }
+
+  // User has already authenticated but no secret exists for this auction
+  if (isSessionRevealed && !secret && !isLoading) {
+    return (
+      <p className="text-sm leading-7 text-muted-foreground">
+        No secret record is available for this auction.
+      </p>
     );
   }
 
