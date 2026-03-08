@@ -376,6 +376,12 @@ export async function finalizeFundingWithdrawal(
     throw new Error("Withdrawal amount does not match the recorded transfer.");
   }
 
+  if (transferRow.status !== "transferring") {
+    throw new Error(
+      `Withdrawal transfer is in "${transferRow.status}" status and cannot be finalized.`,
+    );
+  }
+
   const completedAt = new Date().toISOString();
   const rawData =
     transferRow.raw_data &&
@@ -401,7 +407,8 @@ export async function finalizeFundingWithdrawal(
       },
     })
     .eq("transaction_id", input.transactionId)
-    .eq("user_address", normalizedAddress);
+    .eq("user_address", normalizedAddress)
+    .eq("status", "transferring");
 
   if (updateError) {
     throw new Error(
