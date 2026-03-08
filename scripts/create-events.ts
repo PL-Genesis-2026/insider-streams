@@ -15,7 +15,8 @@
  *
  * Optional:
  *   ENABLE_NTFY=true          — send notifications via ntfy
- *   NTFY_HOST                 — ntfy server URL (default: http://192.168.1.10:8081)
+ *   NTFY_URL                  — ntfy server URL (default: http://localhost:8090)
+ *   NTFY_TOPIC                — ntfy topic (default: event-creator)
  *   NTFY_USER                 — user tag in notifications (default: unknown)
  *
  * Usage: pnpm create-events
@@ -90,28 +91,28 @@ const VENICE_API_KEY = envRequired("VENICE_API_KEY");
 // ─── ntfy (optional) ─────────────────────────────────────────────────────────
 
 const ENABLE_NTFY = process.env.ENABLE_NTFY === "true";
-const NTFY_HOST = process.env.NTFY_HOST || "http://192.168.1.10:8081";
-const NTFY_TOPIC = "event-creator";
+const NTFY_URL = process.env.NTFY_URL ?? "http://localhost:8090";
+const NTFY_TOPIC = process.env.NTFY_TOPIC ?? "event-creator";
 const NTFY_USER = process.env.NTFY_USER || "unknown";
 
 async function ntfy(
   title: string,
   message: string,
-  priority: "min" | "low" | "default" | "high" | "urgent" = "default",
+  tags?: string[],
 ) {
   if (!ENABLE_NTFY) return;
   try {
-    await fetch(`${NTFY_HOST}/${NTFY_TOPIC}`, {
+    await fetch(`${NTFY_URL}/${NTFY_TOPIC}`, {
       method: "POST",
       headers: {
         Title: title,
-        Priority: priority,
-        Tags: priority === "urgent" ? "rotating_light" : "chart_with_upwards_trend",
+        ...(tags?.length ? { Tags: tags.join(",") } : {}),
       },
       body: `[${NTFY_USER}] ${message}`,
+      signal: AbortSignal.timeout(5000),
     });
   } catch (err) {
-    console.error(`  ntfy failed: ${err instanceof Error ? err.message : err}`);
+    console.error(`  [ntfy] Failed to send notification: ${err}`);
   }
 }
 
@@ -384,7 +385,7 @@ async function main() {
 
   if (createdEvents.length === 0) {
     console.error("\nNo events were created. Exiting.");
-    await ntfy("Event Creator Failed", "No events were created — all newEvent calls failed.", "urgent");
+    await ntfy("Event Creator Failed", "No events were created — all newEvent calls failed.", ["rotating_light"]);
     process.exit(1);
   }
 
@@ -457,6 +458,7 @@ async function main() {
   await ntfy(
     `Created ${createdEvents.length} events`,
     summary,
+    ["chart_with_upwards_trend"],
   );
 }
 
@@ -467,7 +469,7 @@ main()
     await ntfy(
       "Event Creator Crashed",
       err instanceof Error ? err.message : String(err),
-      "urgent",
+      ["rotating_light"],
     );
     process.exit(1);
   });
