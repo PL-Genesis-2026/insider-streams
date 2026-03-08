@@ -94,11 +94,32 @@ forge script script/secret-marketplace/CancelAuction.s.sol --rpc-url $RPC_URL --
 
 ## Local Testing Helpers
 
-Two scripts make it easy to populate the marketplace with test data:
+Four scripts populate the marketplace with test data. The easiest way to run them is the orchestrator:
+
+### Demo orchestrator (`pnpm run-demo`) — recommended
+
+Runs all three population scripts together:
+
+1. **Seed** — runs `create-events` once at startup to create prediction market events
+2. **Daemon** — starts `spawn-auctions` and `place-bids` as long-running background processes
+3. **Refresh** — re-runs `create-events` every 30 minutes to add fresh events
+
+```bash
+cd scripts && pnpm run-demo
+```
+
+Prerequisites: frontend dev server running + all env vars set (see individual scripts below). Press Ctrl+C to stop all processes cleanly.
+
+Optional env overrides:
+- `CREATE_EVENTS_INTERVAL_MS` — how often to refresh events (default: `1800000` / 30 min)
+- `INTERVAL_MS` — spawn-auctions / place-bids cycle interval (default: `300000` / 5 min)
+- `BASE_URL` — frontend origin (default: `http://localhost:3000`)
+
+---
 
 ### Create prediction market events (`pnpm create-events`)
 
-Fetches existing events from the subgraph (for deduplication), asks Venice AI to generate new prediction market questions, creates them on-chain, and places random bets from test accounts.
+One-shot script: fetches existing events from the subgraph (for deduplication), asks Venice AI to generate new prediction market questions, creates them on-chain, and places random bets from test accounts.
 
 ```bash
 cd scripts && pnpm create-events
@@ -126,6 +147,25 @@ Optional:
 - `INTERVAL_MS` — cycle interval in ms (default: `300000` / 5 min)
 
 The frontend dev server must be running (`turbo run dev --filter=insider-streams-frontend`) since auctions are created via the `/api/create-auction` API route.
+
+### Place bids (`pnpm place-bids`) — debug only
+
+Long-running daemon that places one bid per cycle on open auctions using rotating test accounts. Queries Supabase `private_bids` and `sellers` tables directly to find the current highest bidder and seller — data that is normally secret.
+
+Auto-funds test accounts: if an account's available Supabase balance drops below 100 USDC, a synthetic deposit is inserted directly into the `transfers` table (no on-chain activity). Debug only.
+
+```bash
+cd scripts && pnpm place-bids
+```
+
+Required env vars in `scripts/.env`:
+- `TEST_ACCOUNT_1..25` — private keys for signing bids
+- `SUPABASE_URL` — Supabase project URL
+- `SUPABASE_SERVICE_ROLE_KEY` — service role key (bypasses RLS)
+
+Optional:
+- `BASE_URL` — frontend origin (default: `http://localhost:3000`)
+- `INTERVAL_MS` — cycle interval in ms (default: `300000` / 5 min)
 
 ## Regenerate Contract Types
 
