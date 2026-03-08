@@ -29,9 +29,10 @@ import { notify } from "./notify.js";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
-const HTTP_RPC_URL = process.env.RPC_URL ?? "https://ethereum-sepolia-rpc.publicnode.com";
+const HTTP_RPC_URL = process.env.RPC_URL ?? "https://eth-sepolia.g.alchemy.com/v2/59LCREaM5uGpTVXZgR8A7z6IiULWjwG6";
 const WS_RPC_URL = HTTP_RPC_URL.replace("https://", "wss://").replace("http://", "ws://");
 const EXPIRY_POLL_INTERVAL_MS = 30_000; // 30s for auction expiry checks
+const GET_LOGS_MAX_RANGE = 10n; // Alchemy free tier caps eth_getLogs at 10 blocks
 
 // ─── Logging ─────────────────────────────────────────────────────────────────
 
@@ -39,6 +40,8 @@ export function log(watcher: string, msg: string): void {
   const ts = new Date().toISOString();
   console.log(`[${ts}] [${watcher}] ${msg}`);
 }
+
+export { GET_LOGS_MAX_RANGE };
 
 // ─── Main ────────────────────────────────────────────────────────────────────
 
@@ -65,10 +68,16 @@ async function catchUp(): Promise<void> {
   if (state) {
     const fromBlock = BigInt(state.lastProcessedBlock) + 1n;
     if (fromBlock <= latestBlock) {
-      log("main", `Catching up from block ${fromBlock} to ${latestBlock}...`);
-      await catchUpAuctionCancelled(httpClient, fromBlock, latestBlock);
-      await catchUpSettlementRequested(httpClient, fromBlock, latestBlock);
-      await catchUpSettlementResponse(httpClient, fromBlock, latestBlock);
+      const totalBlocks = latestBlock - fromBlock + 1n;
+      const chunks = Number((totalBlocks + GET_LOGS_MAX_RANGE - 1n) / GET_LOGS_MAX_RANGE);
+      log("main", `Catching up from block ${fromBlock} to ${latestBlock} (${totalBlocks} blocks, ${chunks} chunk(s))...`);
+
+      for (let start = fromBlock; start <= latestBlock; start += GET_LOGS_MAX_RANGE) {
+        const end = start + GET_LOGS_MAX_RANGE - 1n > latestBlock ? latestBlock : start + GET_LOGS_MAX_RANGE - 1n;
+        await catchUpAuctionCancelled(httpClient, start, end);
+        await catchUpSettlementRequested(httpClient, start, end);
+        await catchUpSettlementResponse(httpClient, start, end);
+      }
     } else {
       log("main", `Already up to date at block ${state.lastProcessedBlock}`);
     }
