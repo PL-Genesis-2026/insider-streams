@@ -190,7 +190,10 @@ export default function EventDetailPage({ params }: { params: Params }) {
           {/* Settlement pending indicator */}
           {settlementRequest && !settlement && (
             <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4 text-sm text-yellow-300">
-              Settlement requested — waiting for CRE workflow to resolve...
+              <div>Settlement requested — waiting for CRE workflow to resolve...</div>
+              <div className="mt-1 font-mono text-xs text-yellow-400/70">
+                Tx: {settlementRequest.transactionHash}
+              </div>
             </div>
           )}
 
