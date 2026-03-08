@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@apollo/client/react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { CONFIDENTIAL_USDC_DECIMALS } from "@private-streams/common";
 import { formatUnits } from "viem";
 import { HomepageAuctionsDocument } from "@/__generated__/graphql";
@@ -15,6 +15,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import { usePrivateData } from "@/lib/private-data/use-private-data";
 
 const AUCTIONS_PAGE_SIZE = 30;
 const AUCTION_POLL_INTERVAL_MS = 10_000;
@@ -26,16 +27,29 @@ type AuctionListProps = {
 };
 
 type AuctionFilterMode = "auto" | "open" | "all";
+type AuctionSortMode = "created" | "bid";
+
+const SORT_OPTIONS: { mode: AuctionSortMode; label: string }[] = [
+  { mode: "created", label: "Recently created" },
+  { mode: "bid", label: "Recently bid on" },
+];
 
 export function AuctionList({ className }: AuctionListProps) {
   const [page, setPage] = useState(0);
   const [filterMode, setFilterMode] = useState<AuctionFilterMode>("auto");
+  const [sortMode, setSortMode] = useState<AuctionSortMode>("created");
+  const { seller, getBid, registerVisibleAuctions, unregisterVisibleAuctions } =
+    usePrivateData();
+
+  const orderBy = sortMode === "bid" ? "currentBid" : "blockTimestamp";
 
   const openAuctionsQuery = useQuery(HomepageAuctionsDocument, {
     variables: {
       limit: AUCTIONS_PAGE_SIZE,
       skip: page * AUCTIONS_PAGE_SIZE,
       where: { status_not_in: EXCLUDE_CLOSED },
+      orderBy,
+      orderDirection: "desc",
     },
     pollInterval: AUCTION_POLL_INTERVAL_MS,
     skip: filterMode === "all",
@@ -53,6 +67,8 @@ export function AuctionList({ className }: AuctionListProps) {
       limit: AUCTIONS_PAGE_SIZE,
       skip: page * AUCTIONS_PAGE_SIZE,
       where: {},
+      orderBy,
+      orderDirection: "desc",
     },
     pollInterval: AUCTION_POLL_INTERVAL_MS,
     skip: !(filterMode === "all" || shouldAutoShowClosedAuctions),
@@ -60,9 +76,16 @@ export function AuctionList({ className }: AuctionListProps) {
 
   const displayingClosedAuctions =
     filterMode === "all" || shouldAutoShowClosedAuctions;
-  const activeQuery = displayingClosedAuctions ? allAuctionsQuery : openAuctionsQuery;
-  const auctions = useMemo(() => activeQuery.data?.auctions ?? [], [activeQuery.data]);
+  const activeQuery = displayingClosedAuctions
+    ? allAuctionsQuery
+    : openAuctionsQuery;
+  const auctions = useMemo(
+    () => activeQuery.data?.auctions ?? [],
+    [activeQuery.data],
+  );
   const { loading, error } = activeQuery;
+
+  const normalizedSellerId = seller?.id?.toLowerCase();
 
   const cards: AuctionCardData[] = useMemo(() => {
     return auctions.map((a): AuctionCardData => {
@@ -82,13 +105,33 @@ export function AuctionList({ className }: AuctionListProps) {
         title: a.eventTitle,
         sellerReputationScore: Number(a.seller.reputationScore),
         sellerTotalAuctions: a.seller.totalAuctionCount,
-        sellerCorrectPredictions:
-          a.seller.auctionsWithCorrectPredictionsCount,
-        sellerWrongPredictions:
-          a.seller.auctionsWithWrongPredictionsCount,
+        sellerCorrectPredictions: a.seller.auctionsWithCorrectPredictionsCount,
+        sellerWrongPredictions: a.seller.auctionsWithWrongPredictionsCount,
       };
     });
   }, [auctions]);
+
+  const { otherCards, ownCards } = useMemo(() => {
+    if (!normalizedSellerId) {
+      return { otherCards: cards, ownCards: [] };
+    }
+    const other: AuctionCardData[] = [];
+    const own: AuctionCardData[] = [];
+    for (const c of cards) {
+      if (c.sellerAddress.toLowerCase() === normalizedSellerId) {
+        own.push(c);
+      } else {
+        other.push(c);
+      }
+    }
+    return { otherCards: other, ownCards: own };
+  }, [cards, normalizedSellerId]);
+
+  useEffect(() => {
+    const auctionIds = cards.map((c) => c.auctionId);
+    registerVisibleAuctions("homepage", auctionIds);
+    return () => unregisterVisibleAuctions("homepage");
+  }, [cards, registerVisibleAuctions, unregisterVisibleAuctions]);
 
   const handlePrevious = useCallback(
     (e: React.MouseEvent) => {
@@ -145,6 +188,23 @@ export function AuctionList({ className }: AuctionListProps) {
           </h2>
         </div>
         <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 rounded-md border border-border/50 bg-muted/30 p-0.5">
+            {SORT_OPTIONS.map(({ mode, label }) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => { setSortMode(mode); setPage(0); }}
+                className={`rounded px-2.5 py-1 text-xs font-medium uppercase tracking-[0.18em] transition-colors ${
+                  sortMode === mode
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="h-4 w-px bg-border/50" />
           <button
             type="button"
             onClick={handleFilterToggle}
@@ -166,15 +226,39 @@ export function AuctionList({ className }: AuctionListProps) {
         </div>
       ) : null}
 
-      {cards.length > 0 ? (
-        <div className="grid gap-5">
-          {cards.map((auction) => (
-            <AuctionCard
-              key={auction.auctionId}
-              auction={auction}
-              href={`/auction/${auction.auctionId}`}
-            />
-          ))}
+      {(otherCards.length > 0 || ownCards.length > 0) ? (
+        <div className="flex flex-col gap-10">
+          {otherCards.length > 0 ? (
+            <div className="grid gap-5">
+              {otherCards.map((auction) => (
+                <AuctionCard
+                  key={auction.auctionId}
+                  auction={auction}
+                  href={`/auction/${auction.auctionId}`}
+                  privateBid={getBid(auction.auctionId)}
+                  isOwnAuction={false}
+                />
+              ))}
+            </div>
+          ) : null}
+          {ownCards.length > 0 ? (
+            <div>
+              <p className="mb-4 text-xs font-medium uppercase tracking-[0.28em] text-muted-foreground">
+                Your auctions
+              </p>
+              <div className="grid gap-5">
+                {ownCards.map((auction) => (
+                  <AuctionCard
+                    key={auction.auctionId}
+                    auction={auction}
+                    href={`/auction/${auction.auctionId}`}
+                    privateBid={getBid(auction.auctionId)}
+                    isOwnAuction
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : (
         <div className="rounded-[calc(var(--radius)+6px)] border border-border bg-muted/30 p-6 text-sm leading-7 text-muted-foreground">
@@ -193,9 +277,7 @@ export function AuctionList({ className }: AuctionListProps) {
                 onClick={handlePrevious}
                 aria-disabled={page === 0}
                 className={
-                  page === 0
-                    ? "pointer-events-none opacity-50"
-                    : undefined
+                  page === 0 ? "pointer-events-none opacity-50" : undefined
                 }
               />
             </PaginationItem>

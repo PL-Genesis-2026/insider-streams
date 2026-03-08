@@ -29,20 +29,57 @@ export default function EventDetailPage({ params }: { params: Params }) {
   const [settleError, setSettleError] = useState<string | null>(null);
   const [settleTxHash, setSettleTxHash] = useState<string | null>(null);
 
-  const isOpen =
+  const [adminClosing, setAdminClosing] = useState(false);
+  const [adminCloseError, setAdminCloseError] = useState<string | null>(null);
+  const [adminCloseTxHash, setAdminCloseTxHash] = useState<string | null>(null);
+  const [adminJustClosed, setAdminJustClosed] = useState(false);
+
+  const eventStillOpen =
+    Number(event?.eventClose) > 0 &&
+    Date.now() < Number(event?.eventClose) * 1000;
+
+  const isOpen = event && !settlement && eventStillOpen && !adminJustClosed;
+
+  const canAdminClose =
     event &&
     !settlement &&
-    Number(event.eventClose) > 0 &&
-    Date.now() <= Number(event.eventClose) * 1000;
+    !settlementRequest &&
+    !adminJustClosed &&
+    eventStillOpen;
 
   const canSettle =
     event &&
     !settlement &&
     !settlementRequest &&
     Number(event.eventClose) > 0 &&
-    Date.now() > Number(event.eventClose) * 1000;
+    (adminJustClosed || Date.now() > Number(event.eventClose) * 1000);
 
   const isSettled = !!settlement;
+
+  const handleAdminClose = useCallback(async () => {
+    setAdminClosing(true);
+    setAdminCloseError(null);
+    setAdminCloseTxHash(null);
+    try {
+      const res = await fetch("/api/admin-close-event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ eventId }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setAdminCloseError(json.error ?? "Request failed");
+      } else {
+        setAdminCloseTxHash(json.hash);
+        setAdminJustClosed(true);
+        refetch();
+      }
+    } catch {
+      setAdminCloseError("Network error");
+    } finally {
+      setAdminClosing(false);
+    }
+  }, [eventId, refetch]);
 
   const handleSettle = useCallback(async () => {
     setSettling(true);
@@ -103,6 +140,58 @@ export default function EventDetailPage({ params }: { params: Params }) {
           <div className="space-y-6">
             <EventCard event={event} settlement={settlement} />
 
+            {canAdminClose && (
+              <div className="rounded-[calc(var(--radius)+6px)] border border-orange-500/25 bg-orange-500/5 p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-medium text-orange-300">
+                      Debug: Admin Close Event
+                    </div>
+                    <div className="mt-0.5 text-xs text-orange-400/70">
+                      Sets eventClose to now so settlement can proceed
+                      immediately.
+                    </div>
+                  </div>
+                  <Button
+                    onClick={() => void handleAdminClose()}
+                    disabled={adminClosing}
+                    variant="outline"
+                    size="sm"
+                    className="border-orange-500/30 text-orange-300 hover:border-orange-500/50 hover:bg-orange-500/10"
+                  >
+                    {adminClosing ? (
+                      <>
+                        <Loader2 className="size-3.5 animate-spin" />
+                        Closing...
+                      </>
+                    ) : (
+                      "Admin Close"
+                    )}
+                  </Button>
+                </div>
+                {adminCloseError && (
+                  <div className="mt-2 text-xs text-destructive">
+                    {adminCloseError}
+                  </div>
+                )}
+                {adminCloseTxHash && (
+                  <div className="mt-2 text-xs text-emerald-400">
+                    Event closed!{" "}
+                    <a
+                      href={`https://sepolia.etherscan.io/tx/${adminCloseTxHash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 font-mono underline underline-offset-4"
+                    >
+                      {adminCloseTxHash.slice(0, 10)}...
+                      {adminCloseTxHash.slice(-6)}
+                      <ExternalLink className="size-3" />
+                    </a>
+                  </div>
+                )}
+              </div>
+            )}
+
             {canSettle && (
               <div className="rounded-[calc(var(--radius)+6px)] border border-accent/25 bg-accent/5 p-4">
                 <div className="flex items-center justify-between">
@@ -148,8 +237,13 @@ export default function EventDetailPage({ params }: { params: Params }) {
             )}
 
             {settlementRequest && !settlement && (
-              <div className="rounded-[calc(var(--radius)+6px)] border border-yellow-500/25 bg-yellow-500/5 p-4 text-sm text-yellow-300">
-                Settlement requested — waiting for CRE workflow to resolve...
+              <div className="rounded-[calc(var(--radius)+6px)] border border-yellow-500/25 bg-yellow-500/5 p-4">
+                <div className="text-sm text-yellow-300">
+                  Settlement requested — waiting for CRE workflow to resolve...
+                </div>
+                <div className="mt-1 font-mono text-xs text-yellow-400/70">
+                  Tx: {settlementRequest.transactionHash}
+                </div>
               </div>
             )}
 
@@ -207,7 +301,8 @@ export default function EventDetailPage({ params }: { params: Params }) {
                   <div className="flex justify-between gap-4">
                     <dt className="text-muted-foreground">Yes Token</dt>
                     <dd className="truncate font-mono text-xs text-foreground">
-                      {event.yesToken.slice(0, 10)}...{event.yesToken.slice(-6)}
+                      {event.yesToken.slice(0, 10)}...
+                      {event.yesToken.slice(-6)}
                     </dd>
                   </div>
                 )}
@@ -215,7 +310,8 @@ export default function EventDetailPage({ params }: { params: Params }) {
                   <div className="flex justify-between gap-4">
                     <dt className="text-muted-foreground">No Token</dt>
                     <dd className="truncate font-mono text-xs text-foreground">
-                      {event.noToken.slice(0, 10)}...{event.noToken.slice(-6)}
+                      {event.noToken.slice(0, 10)}...
+                      {event.noToken.slice(-6)}
                     </dd>
                   </div>
                 )}
@@ -279,16 +375,13 @@ export default function EventDetailPage({ params }: { params: Params }) {
           </div>
 
           <div className="space-y-6">
-            {isOpen && (
-              <BuySharesPanel eventId={eventId} />
+            {isOpen && <BuySharesPanel eventId={eventId} />}
+            {isSettled && settlement.outcome !== 3 && (
+              <RedeemSharesPanel
+                eventId={eventId}
+                outcome={settlement.outcome}
+              />
             )}
-            {isSettled &&
-              settlement.outcome !== 3 && (
-                <RedeemSharesPanel
-                  eventId={eventId}
-                  outcome={settlement.outcome}
-                />
-              )}
           </div>
         </div>
       )}

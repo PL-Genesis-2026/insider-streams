@@ -183,6 +183,14 @@ type Auction @entity(immutable: false) {
   blockTimestamp: BigInt!
   transactionHash: Bytes!
 }
+type EventAdminClosed @entity(immutable: true) {
+  id: Bytes!
+  eventId: BigInt! # uint256
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
 type EventCreated @entity(immutable: true) {
   id: Bytes!
   eventId: BigInt! # uint256

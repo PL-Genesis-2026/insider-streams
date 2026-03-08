@@ -1,0 +1,23 @@
+# ==========================================================================
+# CRE WORKFLOW SETTINGS FILE — auction-cancelled-handler
+# ==========================================================================
+# Listens for AuctionCancelled events from SecretMarketplace and refunds
+# active bids in Supabase.
+
+# ==========================================================================
+local-simulation:
+  user-workflow:
+    workflow-name: "auction-cancelled-handler"
+  workflow-artifacts:
+    workflow-path: "./main.ts"
+    config-path: "./config.json"
+    secrets-path: "../secrets.yaml"
+
+# ==========================================================================
+staging:
+  user-workflow:
+    workflow-name: "auction-cancelled-handler"
+  workflow-artifacts:
+    workflow-path: "./main.ts"
+    config-path: "./config.json"
+    secrets-path: "../secrets.yaml"

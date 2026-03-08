@@ -11,7 +11,7 @@ export const walletProjectId = env.NEXT_PUBLIC_PROJECT_ID;
 export const walletNetworks = [requiredChain] as const;
 const APPKIT_INSTANCE_KEY = "__insider_streams_appkit__";
 
-const wagmiAdapter = new WagmiAdapter({
+export const wagmiAdapter = new WagmiAdapter({
   projectId: walletProjectId,
   networks: [...walletNetworks],
   ssr: true,
@@ -57,6 +57,10 @@ export function ensureAppKit() {
   globalAppKit[APPKIT_INSTANCE_KEY] = createdAppKit;
 
   return createdAppKit;
+}
+
+export function openAppKitConnectModal() {
+  return ensureAppKit().open({ view: "Connect" });
 }
 
 export const walletConfig = wagmiAdapter.wagmiConfig;

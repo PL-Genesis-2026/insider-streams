@@ -1,23 +1,20 @@
 import { NextResponse } from "next/server";
-import { isAddress } from "viem";
 import {
   getFundingServerSnapshot,
 } from "@/lib/funding/server";
 import type { FundingSnapshotResponse } from "@/lib/funding/types";
+import { verifyPrivateDataRequest } from "@/lib/signed-request";
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const address = searchParams.get("address");
+export async function POST(request: Request) {
+  const body = await request.json().catch(() => null);
+  const verified = await verifyPrivateDataRequest<Record<string, never>>(body);
 
-  if (!address || !isAddress(address)) {
-    return NextResponse.json(
-      { error: "A valid wallet address is required." },
-      { status: 400 },
-    );
+  if (!verified.ok) {
+    return verified.response;
   }
 
   try {
-    const data = await getFundingServerSnapshot(address);
+    const data = await getFundingServerSnapshot(verified.payload.userAddress);
 
     return NextResponse.json<FundingSnapshotResponse>({ data });
   } catch (error) {

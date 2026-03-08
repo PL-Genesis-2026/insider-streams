@@ -1,5 +1,11 @@
 import { z } from "zod";
-import type { FundingReconcileResponse, FundingServerSnapshot } from "./types";
+import type {
+  FundingFinalizeWithdrawalResponse,
+  FundingReconcileResponse,
+  FundingServerSnapshot,
+  FundingWithdrawResponse,
+} from "./types";
+import type { SignedWalletSession } from "@/lib/wallet/use-signed-wallet-session";
 
 type JsonValue =
   | string
@@ -60,6 +66,17 @@ const fundingReconcileResponseSchema = z.object({
   scannedCount: z.number(),
 });
 
+const fundingWithdrawResponseSchema = z.object({
+  data: fundingServerSnapshotSchema,
+  transactionId: z.string(),
+});
+
+const fundingFinalizeWithdrawalResponseSchema = z.object({
+  data: fundingServerSnapshotSchema,
+  transactionId: z.string(),
+  withdrawalId: z.string(),
+});
+
 const apiErrorSchema = z.object({
   error: z.string(),
   error_details: z.string().optional(),
@@ -79,15 +96,16 @@ async function getErrorMessage(response: Response) {
 }
 
 export async function fetchFundingSnapshot(
-  address: string,
+  session: SignedWalletSession,
 ): Promise<FundingServerSnapshot> {
-  const response = await fetch(
-    `/api/funding/snapshot?address=${encodeURIComponent(address)}`,
-    {
-      method: "GET",
-      cache: "no-store",
+  const response = await fetch("/api/funding/snapshot", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
     },
-  );
+    cache: "no-store",
+    body: JSON.stringify(session),
+  });
 
   if (!response.ok) {
     throw new Error(await getErrorMessage(response));
@@ -98,14 +116,14 @@ export async function fetchFundingSnapshot(
 }
 
 export async function reconcileFunding(
-  address: string,
+  session: SignedWalletSession,
 ): Promise<FundingReconcileResponse> {
   const response = await fetch("/api/funding/reconcile", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ address }),
+    body: JSON.stringify(session),
   });
 
   if (!response.ok) {
@@ -113,4 +131,48 @@ export async function reconcileFunding(
   }
 
   return fundingReconcileResponseSchema.parse(await response.json());
+}
+
+export async function requestFundingWithdrawal(payload: {
+  amount: string;
+  timestamp: number;
+  signature: string;
+}): Promise<FundingWithdrawResponse> {
+  const response = await fetch("/api/funding/withdraw", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response));
+  }
+
+  return fundingWithdrawResponseSchema.parse(await response.json());
+}
+
+export async function finalizeFundingWithdrawal(payload: {
+  amount: string;
+  transactionId: string;
+  withdrawalId: string;
+  ticket: string;
+  deadline: number;
+  timestamp: number;
+  signature: string;
+}): Promise<FundingFinalizeWithdrawalResponse> {
+  const response = await fetch("/api/funding/withdraw/finalize", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response));
+  }
+
+  return fundingFinalizeWithdrawalResponseSchema.parse(await response.json());
 }

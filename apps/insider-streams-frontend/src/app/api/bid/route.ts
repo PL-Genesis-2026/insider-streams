@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { type Address } from "viem";
-import { executeBid, SECRET_MARKETPLACE_ADDRESS } from "@private-streams/common";
+import { executeBid } from "@private-streams/common";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
 import { getPublicClient, getAdminWalletClient } from "@/lib/viem";
 import { verifySignedRequest } from "@/lib/signed-request";
+import { SECRET_MARKETPLACE_ADDRESS } from "@/lib/contract-addresses";
 
 const bidFieldsSchema = z.object({
   auctionId: z.string().min(1, "auctionId is required"),
@@ -45,12 +45,31 @@ export async function POST(request: Request) {
   }
 
   // 3. Execute bid via shared core logic
+  // #region agent log
+  fetch("http://127.0.0.1:7859/ingest/ba8f260b-7c31-4bbf-85d3-412660c8b25b", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "25cc9c" },
+    body: JSON.stringify({
+      sessionId: "25cc9c",
+      location: "api/bid/route.ts:46",
+      message: "Bid API received",
+      data: {
+        auctionId: parsed.data.auctionId,
+        auctionIdType: typeof parsed.data.auctionId,
+        amount: parsed.data.amount,
+        bidderAddr: verified.payload.userAddress,
+      },
+      timestamp: Date.now(),
+      hypothesisId: "A",
+    }),
+  }).catch(() => {});
+  // #endregion
   const result = await executeBid(
     {
       supabase: getSupabaseServiceClient(),
       publicClient: getPublicClient(),
       walletClient: getAdminWalletClient(),
-      marketplaceAddress: SECRET_MARKETPLACE_ADDRESS as Address,
+      marketplaceAddress: SECRET_MARKETPLACE_ADDRESS,
     },
     {
       bidderAddr: verified.payload.userAddress,
