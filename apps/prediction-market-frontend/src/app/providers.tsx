@@ -9,10 +9,12 @@ import {
 } from "@apollo/client-integration-nextjs";
 import { useState } from "react";
 import { cookieToInitialState, WagmiProvider } from "wagmi";
-import { ensureAppKit, walletConfig } from "@/lib/wallet/config";
+import { ensureAppKit, walletConfig, walletEnabled } from "@/lib/wallet/config";
 import { SUBGRAPH_URL, SUBGRAPH_REQUEST_HEADERS } from "@/lib/subgraph-config";
 
-ensureAppKit();
+if (walletEnabled) {
+  ensureAppKit();
+}
 
 function makeClient() {
   return new ApolloClient({
@@ -29,15 +31,23 @@ export function Providers({
   cookies: string | null;
 }) {
   const [queryClient] = useState(() => new QueryClient());
-  const initialState = cookieToInitialState(walletConfig, cookies ?? undefined);
 
   return (
     <ApolloNextAppProvider makeClient={makeClient}>
-      <WagmiProvider config={walletConfig} initialState={initialState}>
+      {!walletConfig ? (
         <QueryClientProvider client={queryClient}>
           {children}
         </QueryClientProvider>
-      </WagmiProvider>
+      ) : (
+        <WagmiProvider
+          config={walletConfig}
+          initialState={cookieToInitialState(walletConfig, cookies ?? undefined)}
+        >
+          <QueryClientProvider client={queryClient}>
+            {children}
+          </QueryClientProvider>
+        </WagmiProvider>
+      )}
     </ApolloNextAppProvider>
   );
 }

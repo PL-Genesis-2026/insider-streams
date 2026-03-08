@@ -1,16 +1,21 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { useWriteContract } from "wagmi";
+import { usePublicClient, useWriteContract } from "wagmi";
 import {
   examplePredictionMarketAbi,
   confidentialUsdcAbi,
   EXAMPLE_PREDICTION_MARKET_ADDRESS,
-  CONFIDENTIAL_USDC_ADDRESS,
   CONFIDENTIAL_USDC_DECIMALS,
 } from "@private-streams/common";
 import { parseUnits, type Address } from "viem";
-import { Loader2, TrendingUp, TrendingDown, ExternalLink } from "lucide-react";
+import {
+  ArrowRight,
+  Loader2,
+  TrendingUp,
+  TrendingDown,
+  ExternalLink,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useWalletSession } from "@/lib/wallet/use-wallet-session";
@@ -18,6 +23,7 @@ import { ConnectWalletButton } from "@/components/wallet/connect-wallet-button";
 import { SwitchNetworkButton } from "@/components/wallet/switch-network-button";
 import { cn } from "@/lib/utils";
 import { env } from "@/env";
+import { walletEnabled } from "@/lib/wallet/config";
 
 type BuySharesPanelProps = {
   eventId: string;
@@ -29,13 +35,30 @@ type PurchaseState =
   | { step: "idle" }
   | { step: "approving" }
   | { step: "buying" }
-  | { step: "confirming" }
   | { step: "success"; txHash: string; outcome: Outcome; amount: string }
   | { step: "error"; message: string };
 
 const OUTCOME_CONTRACT_VALUES = { yes: 2, no: 1 } as const;
 
 export function BuySharesPanel({ eventId }: BuySharesPanelProps) {
+  if (!walletEnabled) {
+    return (
+      <div className="rounded-[calc(var(--radius)+6px)] border border-border/70 bg-card p-5">
+        <h2 className="mb-2 font-serif text-xl font-medium tracking-[-0.03em] text-card-foreground">
+          Trading unavailable
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Wallet trading is disabled in this deployment until
+          `NEXT_PUBLIC_PROJECT_ID` is configured.
+        </p>
+      </div>
+    );
+  }
+
+  return <BuySharesPanelWithWallet eventId={eventId} />;
+}
+
+function BuySharesPanelWithWallet({ eventId }: BuySharesPanelProps) {
   const walletSession = useWalletSession();
   const [selectedOutcome, setSelectedOutcome] = useState<Outcome | null>(null);
   const [amount, setAmount] = useState("");
@@ -43,6 +66,7 @@ export function BuySharesPanel({ eventId }: BuySharesPanelProps) {
     step: "idle",
   });
 
+  const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
 
   const parsedAmount = (() => {
@@ -64,24 +88,54 @@ export function BuySharesPanel({ eventId }: BuySharesPanelProps) {
 
   const handleBuy = useCallback(async () => {
     if (!canBuy || !parsedAmount || !selectedOutcome) return;
+    if (!publicClient) {
+      setPurchaseState({
+        step: "error",
+        message: "Public client unavailable. Reconnect your wallet and try again.",
+      });
+      return;
+    }
+    if (!walletSession.address) {
+      setPurchaseState({
+        step: "error",
+        message: "Wallet address unavailable. Reconnect your wallet and try again.",
+      });
+      return;
+    }
 
     const contractAddress =
       EXAMPLE_PREDICTION_MARKET_ADDRESS as Address;
-    const usdcAddress = CONFIDENTIAL_USDC_ADDRESS as Address;
+    const account = walletSession.address;
 
     try {
+      const usdcAddress = await publicClient.readContract({
+        address: contractAddress,
+        abi: examplePredictionMarketAbi,
+        functionName: "paymentToken",
+      });
+
       setPurchaseState({ step: "approving" });
 
-      await writeContractAsync({
+      const approveGas = await publicClient.estimateContractGas({
+        account,
         address: usdcAddress,
         abi: confidentialUsdcAbi,
         functionName: "approve",
         args: [contractAddress, parsedAmount],
       });
+      const approveHash = await writeContractAsync({
+        address: usdcAddress,
+        abi: confidentialUsdcAbi,
+        functionName: "approve",
+        args: [contractAddress, parsedAmount],
+        gas: approveGas,
+      });
+      await publicClient.waitForTransactionReceipt({ hash: approveHash });
 
       setPurchaseState({ step: "buying" });
 
-      const txHash = await writeContractAsync({
+      const buyGas = await publicClient.estimateContractGas({
+        account,
         address: contractAddress,
         abi: examplePredictionMarketAbi,
         functionName: "buyShares",
@@ -91,6 +145,18 @@ export function BuySharesPanel({ eventId }: BuySharesPanelProps) {
           parsedAmount,
         ],
       });
+      const txHash = await writeContractAsync({
+        address: contractAddress,
+        abi: examplePredictionMarketAbi,
+        functionName: "buyShares",
+        args: [
+          BigInt(eventId),
+          OUTCOME_CONTRACT_VALUES[selectedOutcome],
+          parsedAmount,
+        ],
+        gas: buyGas,
+      });
+      await publicClient.waitForTransactionReceipt({ hash: txHash });
 
       setPurchaseState({
         step: "success",
@@ -106,7 +172,9 @@ export function BuySharesPanel({ eventId }: BuySharesPanelProps) {
   }, [
     canBuy,
     parsedAmount,
+    publicClient,
     selectedOutcome,
+    walletSession.address,
     writeContractAsync,
     eventId,
     amount,
@@ -117,7 +185,12 @@ export function BuySharesPanel({ eventId }: BuySharesPanelProps) {
 
   if (purchaseState.step === "success") {
     const insiderStreamsUrl = env.NEXT_PUBLIC_INSIDER_STREAMS_URL;
-    const createAuctionUrl = `${insiderStreamsUrl}/create?eventId=${eventId}`;
+    const createAuctionUrl = insiderStreamsUrl
+      ? `${insiderStreamsUrl}/create?${new URLSearchParams({
+          eventId,
+          privateLeg: purchaseState.outcome,
+        }).toString()}`
+      : null;
 
     return (
       <div className="space-y-4">
@@ -155,32 +228,40 @@ export function BuySharesPanel({ eventId }: BuySharesPanelProps) {
         </div>
 
         <div className="rounded-[calc(var(--radius)+6px)] border border-accent/25 bg-accent/5 p-5">
-          <h3 className="mb-1 font-serif text-lg font-medium tracking-[-0.03em] text-accent">
-            Monetize your conviction
+          <h3 className="mb-3 font-serif text-xl font-medium tracking-[-0.04em] text-accent">
+            Sell your signal
           </h3>
           <p className="mb-4 text-sm text-muted-foreground">
-            You just backed your position with real capital. Now sell your signal
-            as an insider stream — auction your thesis to other traders and
-            squeeze more value from your edge.
+            Turn your <span className="font-medium text-foreground">{purchaseState.outcome.toUpperCase()}</span> position into a private auction.
           </p>
-          <div className="flex flex-wrap gap-3">
-            <Button asChild variant="accent">
+          {createAuctionUrl ? (
+            <Button
+              asChild
+              variant="accent"
+              className="mb-3 h-11 w-full"
+            >
               <a href={createAuctionUrl} target="_blank" rel="noopener noreferrer">
-                Sell your signal
-                <ExternalLink className="size-3.5" />
+                Create auction
+                <ArrowRight className="ml-2 size-4" />
               </a>
             </Button>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setPurchaseState({ step: "idle" });
-                setSelectedOutcome(null);
-                setAmount("");
-              }}
-            >
-              Trade again
-            </Button>
-          </div>
+          ) : (
+            <div className="mb-3 rounded-md border border-border/60 bg-background/40 px-3 py-2 text-xs text-muted-foreground">
+              Auction handoff is unavailable in this deployment because
+              `NEXT_PUBLIC_INSIDER_STREAMS_URL` is not configured.
+            </div>
+          )}
+          <button
+            type="button"
+            className="text-xs text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground"
+            onClick={() => {
+              setPurchaseState({ step: "idle" });
+              setSelectedOutcome(null);
+              setAmount("");
+            }}
+          >
+            Trade again
+          </button>
         </div>
       </div>
     );
@@ -188,8 +269,7 @@ export function BuySharesPanel({ eventId }: BuySharesPanelProps) {
 
   const isProcessing =
     purchaseState.step === "approving" ||
-    purchaseState.step === "buying" ||
-    purchaseState.step === "confirming";
+    purchaseState.step === "buying";
 
   return (
     <div className="rounded-[calc(var(--radius)+6px)] border bg-card p-5">
@@ -286,11 +366,6 @@ export function BuySharesPanel({ eventId }: BuySharesPanelProps) {
                 <Loader2 className="size-4 animate-spin" />
                 Buying shares...
               </>
-            ) : purchaseState.step === "confirming" ? (
-              <>
-                <Loader2 className="size-4 animate-spin" />
-                Confirming...
-              </>
             ) : selectedOutcome ? (
               `Buy ${selectedOutcome.toUpperCase()} shares`
             ) : (
@@ -300,7 +375,8 @@ export function BuySharesPanel({ eventId }: BuySharesPanelProps) {
         )}
 
         <p className="text-center text-xs text-muted-foreground">
-          Requires ConfidentialUSDC on Sepolia. 1 USDC = 1 share at par.
+          Requires ConfidentialUSDC on Sepolia. Winning shares redeem 1:1 for
+          USDC after settlement.
         </p>
       </div>
     </div>

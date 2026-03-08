@@ -1,9 +1,6 @@
 import type { CodegenConfig } from "@graphql-codegen/cli";
 
-const STUDIO_URL =
-  "https://api.studio.thegraph.com/query/1743303/insider-streams/version/latest";
-
-const schema = [STUDIO_URL];
+const schema = ["./graphql.schema.json"];
 
 const sharedConfig = {
   scalars: {
@@ -28,9 +25,6 @@ const config: CodegenConfig = {
         enumsAsTypes: true,
       },
       plugins: ["typescript", "typescript-operations", "typed-document-node"],
-    },
-    "./graphql.schema.json": {
-      plugins: ["introspection"],
     },
   },
 };

@@ -7,21 +7,25 @@ import { cookieStorage, createStorage, http } from "wagmi";
 import { env } from "@/env";
 
 export const requiredChain = sepolia;
-export const walletProjectId = env.NEXT_PUBLIC_PROJECT_ID;
+const configuredWalletProjectId = env.NEXT_PUBLIC_PROJECT_ID;
+export const walletProjectId = configuredWalletProjectId ?? null;
+export const walletEnabled = configuredWalletProjectId !== undefined;
 export const walletNetworks = [requiredChain] as const;
 const APPKIT_INSTANCE_KEY = "__prediction_market_appkit__";
 
-const wagmiAdapter = new WagmiAdapter({
-  projectId: walletProjectId,
-  networks: [...walletNetworks],
-  ssr: true,
-  storage: createStorage({
-    storage: cookieStorage,
-  }),
-  transports: {
-    [requiredChain.id]: http("https://ethereum-sepolia-rpc.publicnode.com"),
-  },
-});
+const wagmiAdapter = configuredWalletProjectId
+  ? new WagmiAdapter({
+      projectId: configuredWalletProjectId,
+      networks: [...walletNetworks],
+      ssr: true,
+      storage: createStorage({
+        storage: cookieStorage,
+      }),
+      transports: {
+        [requiredChain.id]: http("https://ethereum-sepolia-rpc.publicnode.com"),
+      },
+    })
+  : null;
 
 type GlobalAppKit = typeof globalThis & {
   __prediction_market_appkit__?: ReturnType<typeof createAppKit>;
@@ -30,6 +34,10 @@ type GlobalAppKit = typeof globalThis & {
 const globalAppKit = globalThis as GlobalAppKit;
 
 export function ensureAppKit() {
+  if (!wagmiAdapter || !configuredWalletProjectId) {
+    return null;
+  }
+
   const existingAppKit = globalAppKit[APPKIT_INSTANCE_KEY];
 
   if (existingAppKit) {
@@ -38,7 +46,7 @@ export function ensureAppKit() {
 
   const createdAppKit = createAppKit({
     adapters: [wagmiAdapter],
-    projectId: walletProjectId,
+    projectId: configuredWalletProjectId,
     networks: [...walletNetworks],
     defaultNetwork: requiredChain,
     features: {
@@ -59,4 +67,4 @@ export function ensureAppKit() {
   return createdAppKit;
 }
 
-export const walletConfig = wagmiAdapter.wagmiConfig;
+export const walletConfig = wagmiAdapter?.wagmiConfig ?? null;

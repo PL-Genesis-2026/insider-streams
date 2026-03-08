@@ -5,11 +5,23 @@ import { LogOut, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useWalletSession } from "@/lib/wallet/use-wallet-session";
 import { formatAddress } from "@/lib/wallet/format-address";
-import { ensureAppKit } from "@/lib/wallet/config";
+import { ensureAppKit, walletEnabled } from "@/lib/wallet/config";
 import { ConnectWalletButton } from "./connect-wallet-button";
 import { SwitchNetworkButton } from "./switch-network-button";
 
 export function WalletAccountControl() {
+  if (!walletEnabled) {
+    return (
+      <span className="text-[0.7rem] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+        Wallet unavailable
+      </span>
+    );
+  }
+
+  return <WalletAccountControlWithSession />;
+}
+
+function WalletAccountControlWithSession() {
   const walletSession = useWalletSession();
   const { disconnect } = useDisconnect();
 
@@ -28,6 +40,9 @@ export function WalletAccountControl() {
         size="sm"
         onClick={() => {
           const appKit = ensureAppKit();
+          if (!appKit) {
+            return;
+          }
           void appKit.open({ view: "Account" });
         }}
       >

@@ -3,7 +3,7 @@
 import { Wallet } from "lucide-react";
 import type { ComponentProps } from "react";
 import { Button } from "@/components/ui/button";
-import { ensureAppKit } from "@/lib/wallet/config";
+import { ensureAppKit, walletEnabled } from "@/lib/wallet/config";
 import { cn } from "@/lib/utils";
 
 type ConnectWalletButtonProps = {
@@ -17,6 +17,10 @@ export function ConnectWalletButton({
   size = "default",
   variant = "default",
 }: ConnectWalletButtonProps) {
+  if (!walletEnabled) {
+    return null;
+  }
+
   return (
     <div className={cn("space-y-2", className)}>
       <Button
@@ -25,6 +29,9 @@ export function ConnectWalletButton({
         variant={variant}
         onClick={() => {
           const appKit = ensureAppKit();
+          if (!appKit) {
+            return;
+          }
           void appKit.open({ view: "Connect" });
         }}
       >
