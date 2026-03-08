@@ -9,7 +9,7 @@
     }
   ],
   "ntfyEnabled": true,
-  "ntfyHost": "http://195.201.8.147:8090",
-  "ntfyTopic": "reputation-resolver",
+  "ntfyHost": "https://api.insider-streams.com",
+  "ntfyTopic": "external-marketplace-settlement-resolved-handler",
   "ntfyUser": "vps"
 }

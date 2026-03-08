@@ -8,7 +8,7 @@
     }
   ],
   "ntfyEnabled": true,
-  "ntfyHost": "http://195.201.8.147:8090",
+  "ntfyHost": "https://api.insider-streams.com",
   "ntfyTopic": "secret-marketplace-auction-closer",
   "ntfyUser": "vps"
 }
