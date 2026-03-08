@@ -92,6 +92,41 @@ forge script script/secret-marketplace/CancelAuction.s.sol --rpc-url $RPC_URL --
 
 `PREDICTION_OUTCOME`: 0=NoPrediction, 1=PredictionCorrect, 2=PredictionWrong. The `force-close-handler` CRE workflow handles bid refunds when auctions are force-closed.
 
+## Local Testing Helpers
+
+Two scripts make it easy to populate the marketplace with test data:
+
+### Create prediction market events (`pnpm create-events`)
+
+Fetches existing events from the subgraph (for deduplication), asks Venice AI to generate new prediction market questions, creates them on-chain, and places random bets from test accounts.
+
+```bash
+cd scripts && pnpm create-events
+```
+
+Required env vars in `scripts/.env`:
+- `OWNER_PK` — creates events, mints CUSDC
+- `TEST_ACCOUNT_1..25` — private keys for bet-placing accounts
+- `RPC_URL` — Eth Sepolia RPC
+- `VENICE_API_KEY` — Venice AI API key
+
+### Spawn auctions (`pnpm spawn-auctions`)
+
+Long-running daemon that creates one auction per cycle (default: every 5 minutes) against open prediction market events. Picks a random test account and a random canned secret payload each cycle. Skips events that are no longer open and tries the next candidate automatically.
+
+```bash
+cd scripts && pnpm spawn-auctions
+```
+
+Required env vars in `scripts/.env`:
+- `TEST_ACCOUNT_1..25` — private keys for signing auction creation
+
+Optional:
+- `BASE_URL` — frontend origin (default: `http://localhost:3000`)
+- `INTERVAL_MS` — cycle interval in ms (default: `300000` / 5 min)
+
+The frontend dev server must be running (`turbo run dev --filter=insider-streams-frontend`) since auctions are created via the `/api/create-auction` API route.
+
 ## Regenerate Contract Types
 
 After modifying contracts, regenerate TypeScript types, subgraph ABIs, and frontend ABIs:
