@@ -21,7 +21,7 @@ const BASE_URL =
   process.env.BASE_URL ??
   "http://localhost:3000";
 
-const DURATION = "6h" as const;
+const DURATION = "30m" as const;
 
 const SECRET_POOL = [
   "YES",
