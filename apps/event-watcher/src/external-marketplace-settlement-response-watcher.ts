@@ -55,10 +55,15 @@ async function handleEvent(
       broadcast: true,
     });
     log("settlement-response", `CRE completed for event ${eventId}`);
-    await notify("SettlementResponse - CRE done", `Event ${eventId} reputation resolution broadcast\nBlock ${blockNumber}\ntx ${txHash.slice(0, 16)}...`, ["white_check_mark"]);
+    await notify(
+      "SettlementResponse - CRE done",
+      `Event ${eventId} settled — triggering reputation resolution\nBlock ${blockNumber}\nCRE: external-marketplace-settlement-resolved-handler (broadcast)\nCRE topic: https://api.insider-streams.com/external-marketplace-settlement-resolved-handler-cre\ntx: ${txHash}`,
+      ["white_check_mark"],
+      `https://sepolia.etherscan.io/tx/${txHash}`,
+    );
   } catch (err) {
     log("settlement-response", `CRE FAILED for event ${eventId}: ${err}`);
-    await notify("SettlementResponse - CRE FAILED", `Event ${eventId}\n${err}`, ["x"]);
+    await notify("SettlementResponse - CRE FAILED", `Event ${eventId}\nCRE: external-marketplace-settlement-resolved-handler\n${err}`, ["x"]);
   }
 
   processed.add(key);

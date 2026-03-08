@@ -8,7 +8,7 @@
     }
   ],
   "ntfyEnabled": true,
-  "ntfyHost": "http://195.201.8.147:8090",
-  "ntfyTopic": "external-prediction-market-settler",
+  "ntfyHost": "https://api.insider-streams.com",
+  "ntfyTopic": "external-prediction-market-settler-cre",
   "ntfyUser": "vps"
 }
