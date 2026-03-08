@@ -168,6 +168,23 @@ async function createAuction(
 // Main cycle
 // ---------------------------------------------------------------------------
 
+// Codes returned by the API when the event itself is the problem (not a bug).
+// On these, we skip the event and try the next one rather than giving up.
+const SKIPPABLE_CODES = new Set([
+  "EVENT_NOT_FOUND",
+  "EVENT_NOT_OPEN",
+  "EVENT_EXPIRED",
+]);
+
+function shuffle<T>(arr: T[]): T[] {
+  const out = [...arr];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j]!, out[i]!];
+  }
+  return out;
+}
+
 async function runCycle(client: GraphQLClient, accounts: Hex[]): Promise<void> {
   const label = new Date().toISOString();
   console.log(`[spawn-auctions] ${label} — starting cycle`);
@@ -185,32 +202,56 @@ async function runCycle(client: GraphQLClient, accounts: Hex[]): Promise<void> {
     return;
   }
 
-  const event = pickRandom(openEvents);
+  // Shuffle so each cycle tries events in a different order.
+  const candidates = shuffle(openEvents);
   const pk = pickRandom(accounts);
   const account = privateKeyToAccount(pk);
-  const secretPayload = pickRandom(SECRET_POOL);
 
-  console.log(
-    `[spawn-auctions] picked event ${event.eventId} — "${event.question}"`,
-  );
-  console.log(`[spawn-auctions] signer: ${account.address}`);
-  console.log(`[spawn-auctions] secret: "${secretPayload}"`);
+  for (const event of candidates) {
+    const secretPayload = pickRandom(SECRET_POOL);
 
-  try {
-    const result = await createAuction(pk, event.eventId, secretPayload);
-    if (result.ok) {
-      console.log(
-        `[spawn-auctions] auction created — id: ${result.auctionId ?? "(unknown)"}`,
-      );
-    } else {
+    console.log(
+      `[spawn-auctions] trying event ${event.eventId} — "${event.question}"`,
+    );
+    console.log(`[spawn-auctions] signer: ${account.address}`);
+    console.log(`[spawn-auctions] secret: "${secretPayload}"`);
+
+    try {
+      const result = await createAuction(pk, event.eventId, secretPayload);
+
+      if (result.ok) {
+        console.log(
+          `[spawn-auctions] auction created — id: ${result.auctionId ?? "(unknown)"}`,
+        );
+        return;
+      }
+
+      const code =
+        result.body != null &&
+        typeof result.body === "object" &&
+        "code" in result.body
+          ? String((result.body as Record<string, unknown>).code)
+          : undefined;
+
+      if (result.status === 400 && code && SKIPPABLE_CODES.has(code)) {
+        console.log(
+          `[spawn-auctions] event ${event.eventId} not eligible (${code}), trying next`,
+        );
+        continue;
+      }
+
       console.error(
         `[spawn-auctions] create-auction failed (HTTP ${result.status}):`,
         result.body,
       );
+      return;
+    } catch (err) {
+      console.error("[spawn-auctions] create-auction threw:", err);
+      return;
     }
-  } catch (err) {
-    console.error("[spawn-auctions] create-auction threw:", err);
   }
+
+  console.log("[spawn-auctions] all candidate events were skipped, nothing created this cycle");
 }
 
 // ---------------------------------------------------------------------------
