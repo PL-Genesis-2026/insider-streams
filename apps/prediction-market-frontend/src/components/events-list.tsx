@@ -8,9 +8,32 @@ import {
 } from "@/__generated__/graphql";
 import { EventCard } from "@/components/event-card";
 
-type SettlementResponseItem = PredictionEventsQuery["settlementResponses"][number];
+type EventCreatedItem = PredictionEventsQuery["eventCreateds"][number];
+type SettlementResponseItem =
+  PredictionEventsQuery["settlementResponses"][number];
 
 const PAGE_SIZE = 50;
+
+function sortEvents(
+  events: readonly EventCreatedItem[],
+  settlements: Map<string, SettlementResponseItem>,
+): EventCreatedItem[] {
+  const now = Date.now();
+
+  function bucket(e: EventCreatedItem): number {
+    const settled = settlements.has(String(e.eventId));
+    if (!settled && Number(e.eventClose) * 1000 > now) return 0;
+    if (!settled) return 1;
+    return 2;
+  }
+
+  return [...events].sort((a, b) => {
+    const ba = bucket(a);
+    const bb = bucket(b);
+    if (ba !== bb) return ba - bb;
+    return Number(b.blockTimestamp) - Number(a.blockTimestamp);
+  });
+}
 
 export function EventsList() {
   const { data, loading, error } = useQuery(PredictionEventsDocument, {
@@ -26,12 +49,15 @@ export function EventsList() {
     return map;
   }, [data?.settlementResponses]);
 
+  const events = data?.eventCreateds ?? [];
+  const sortedEvents = sortEvents(events, settlementMap);
+
   if (error) {
     return (
-      <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">
-        Failed to load events. The ExamplePredictionMarket subgraph may not be
-        deployed yet. Check that <code>NEXT_PUBLIC_SUBGRAPH_URL</code> points to
-        the correct subgraph endpoint.
+      <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        Failed to load events. Check that{" "}
+        <code className="font-mono text-xs">NEXT_PUBLIC_SUBGRAPH_URL</code>{" "}
+        points to the correct subgraph endpoint.
       </div>
     );
   }
@@ -42,18 +68,16 @@ export function EventsList() {
         {Array.from({ length: 3 }).map((_, i) => (
           <div
             key={i}
-            className="h-28 animate-pulse rounded-lg border border-gray-700 bg-gray-800"
+            className="h-28 animate-pulse rounded-[calc(var(--radius)+6px)] border bg-card"
           />
         ))}
       </div>
     );
   }
 
-  const events = data?.eventCreateds ?? [];
-
-  if (events.length === 0) {
+  if (sortedEvents.length === 0) {
     return (
-      <div className="rounded-lg border border-gray-700 bg-gray-800 p-6 text-center text-sm text-gray-400">
+      <div className="rounded-[calc(var(--radius)+6px)] border bg-card p-6 text-center text-sm text-muted-foreground">
         No events found.
       </div>
     );
@@ -61,7 +85,7 @@ export function EventsList() {
 
   return (
     <div className="space-y-4">
-      {events.map((event) => (
+      {sortedEvents.map((event) => (
         <EventCard
           key={event.id}
           event={event}

@@ -4,44 +4,17 @@ import {
   createWalletClient,
   http,
   type Hex,
+  type Address,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
+import {
+  examplePredictionMarketAbi,
+  EXAMPLE_PREDICTION_MARKET_ADDRESS,
+} from "@private-streams/common";
 import { env } from "@/env";
 
-const abi = [
-  {
-    type: "function",
-    name: "requestSettlement",
-    inputs: [{ name: "eventId", type: "uint256" }],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "events",
-    inputs: [{ name: "", type: "uint256" }],
-    outputs: [
-      { name: "question", type: "string" },
-      { name: "creator", type: "address" },
-      { name: "eventOpen", type: "uint256" },
-      { name: "eventClose", type: "uint256" },
-      { name: "status", type: "uint8" },
-      { name: "outcome", type: "uint8" },
-      { name: "settledAt", type: "uint256" },
-      { name: "evidenceURI", type: "string" },
-      { name: "confidenceBps", type: "uint16" },
-      { name: "yesToken", type: "address" },
-      { name: "noToken", type: "address" },
-      { name: "yesReserve", type: "uint256" },
-      { name: "noReserve", type: "uint256" },
-      { name: "liquidityWithdrawn", type: "bool" },
-    ],
-    stateMutability: "view",
-  },
-] as const;
-
-const CONTRACT_ADDRESS = "0xFfe58E05eFc5888a0f5F5155c72f3Ca2341fEDc7";
+const CONTRACT_ADDRESS = EXAMPLE_PREDICTION_MARKET_ADDRESS as Address;
 
 export async function POST(request: Request) {
   try {
@@ -69,25 +42,29 @@ export async function POST(request: Request) {
 
     const eventData = await publicClient.readContract({
       address: CONTRACT_ADDRESS,
-      abi,
-      functionName: "events",
+      abi: examplePredictionMarketAbi,
+      functionName: "getEvent",
       args: [BigInt(eventId)],
     });
 
-    const status = eventData[4]; // status field (index 4 in struct)
-    const eventClose = eventData[3]; // eventClose field (index 3 in struct)
+    const statusLabels = [
+      "Open",
+      "SettlementRequested",
+      "Settled",
+      "NeedsManual",
+    ];
 
-    // Status.Open = 0
-    if (status !== 0) {
-      const statusLabels = ["Open", "SettlementRequested", "Settled", "NeedsManual"];
+    if (eventData.status !== 0) {
       return NextResponse.json(
-        { error: `Event status is ${statusLabels[status] ?? status}, must be Open` },
+        {
+          error: `Event status is ${statusLabels[eventData.status] ?? eventData.status}, must be Open`,
+        },
         { status: 400 },
       );
     }
 
     const now = BigInt(Math.floor(Date.now() / 1000));
-    if (eventClose > now) {
+    if (eventData.eventClose > now) {
       return NextResponse.json(
         { error: "Event has not closed yet" },
         { status: 400 },
@@ -103,7 +80,7 @@ export async function POST(request: Request) {
 
     const hash = await walletClient.writeContract({
       address: CONTRACT_ADDRESS,
-      abi,
+      abi: examplePredictionMarketAbi,
       functionName: "requestSettlement",
       args: [BigInt(eventId)],
     });
