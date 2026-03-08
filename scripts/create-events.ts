@@ -25,7 +25,6 @@
 import "dotenv/config";
 
 import {
-  CONFIDENTIAL_USDC_ADDRESS,
   EXAMPLE_PREDICTION_MARKET_ADDRESS,
   confidentialUsdcAbi,
   examplePredictionMarketAbi,
@@ -151,6 +150,15 @@ const venice = new OpenAI({
 
 const subgraphSdk = getSdk(new GraphQLClient(SUBGRAPH_URL));
 
+// Read the actual payment token from the deployed contract so we always
+// mint/approve the right token regardless of what's in common's consts.
+const paymentTokenAddress = await publicClient.readContract({
+  address: EXAMPLE_PREDICTION_MARKET_ADDRESS as Address,
+  abi: examplePredictionMarketAbi,
+  functionName: "paymentToken",
+}) as Address;
+console.log(`  Payment token: ${paymentTokenAddress}`);
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 async function waitForTx(hash: Hex, label: string) {
@@ -165,7 +173,7 @@ async function waitForTx(hash: Hex, label: string) {
 
 async function ensureBalance(target: Address) {
   const balance = (await publicClient.readContract({
-    address: CONFIDENTIAL_USDC_ADDRESS,
+    address: paymentTokenAddress,
     abi: confidentialUsdcAbi,
     functionName: "balanceOf",
     args: [target],
@@ -173,7 +181,7 @@ async function ensureBalance(target: Address) {
 
   if (balance < MIN_BALANCE) {
     const h = await ownerClient.writeContract({
-      address: CONFIDENTIAL_USDC_ADDRESS,
+      address: paymentTokenAddress,
       abi: confidentialUsdcAbi,
       functionName: "mint",
       args: [target, MINT_AMOUNT],
@@ -192,7 +200,7 @@ async function ensureApproval(
   owner: Address,
 ) {
   const allowance = (await publicClient.readContract({
-    address: CONFIDENTIAL_USDC_ADDRESS,
+    address: paymentTokenAddress,
     abi: confidentialUsdcAbi,
     functionName: "allowance",
     args: [owner, EXAMPLE_PREDICTION_MARKET_ADDRESS],
@@ -200,7 +208,7 @@ async function ensureApproval(
 
   if (allowance < MIN_ALLOWANCE) {
     const h = await walletClient.writeContract({
-      address: CONFIDENTIAL_USDC_ADDRESS,
+      address: paymentTokenAddress,
       abi: confidentialUsdcAbi,
       functionName: "approve",
       args: [EXAMPLE_PREDICTION_MARKET_ADDRESS, APPROVAL_AMOUNT],
@@ -331,7 +339,7 @@ async function main() {
   );
   console.log(`  Owner:     ${ownerAccount.address}`);
   console.log(`  Market:    ${EXAMPLE_PREDICTION_MARKET_ADDRESS}`);
-  console.log(`  CUSDC:     ${CONFIDENTIAL_USDC_ADDRESS}`);
+  console.log(`  CUSDC:     ${paymentTokenAddress}`);
   console.log(`  Accounts:  ${testAccounts.length} test accounts loaded`);
 
   // ── Step 1: Fetch existing events ─────────────────────────────────────────
