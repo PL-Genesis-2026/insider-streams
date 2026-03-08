@@ -5,7 +5,7 @@ import {
   PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
   VAULT_ADDRESS,
 } from "@private-streams/common";
-import { erc20Abi, type Address, zeroAddress } from "viem";
+import { erc20Abi, type Address, type Hex, zeroAddress } from "viem";
 import {
   usePublicClient,
   useReadContract,
@@ -19,6 +19,7 @@ import {
   getBalances,
   isPrivateAccountNotFoundError,
   privateTransfer,
+  withdraw,
   type PrivateTokenSigner,
 } from "./browser-client";
 
@@ -33,6 +34,15 @@ type PrivateTransferFundingResult = {
   reconcileErrorMessage?: string;
 };
 
+type PrivateWithdrawFundingVariables = {
+  amount: string;
+};
+
+type RedeemWithdrawalTicketVariables = {
+  amount: string;
+  ticket: Hex;
+};
+
 const vaultAbi = [
   {
     type: "function",
@@ -41,6 +51,17 @@ const vaultAbi = [
     inputs: [
       { name: "token", type: "address" },
       { name: "amount", type: "uint256" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "withdrawWithTicket",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "token", type: "address" },
+      { name: "amount", type: "uint256" },
+      { name: "ticket", type: "bytes" },
     ],
     outputs: [],
   },
@@ -192,6 +213,60 @@ export function usePrivateTransferFundingMutation(address?: Address) {
       return {
         transactionId: transferResponse.transaction_id,
       };
+    },
+  });
+}
+
+export function usePrivateWithdrawMutation(address?: Address) {
+  const signTypedData = usePrivateTokenSigner();
+
+  return useMutation({
+    mutationFn: async (variables: PrivateWithdrawFundingVariables) => {
+      if (!address) {
+        throw new Error("Withdrawing private funds requires a connected wallet.");
+      }
+
+      try {
+        return await withdraw(address, signTypedData, {
+          token: PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
+          amount: variables.amount,
+        });
+      } catch (error) {
+        if (isPrivateAccountNotFoundError(error)) {
+          throw new Error(
+            "The private withdrawal could not find a funded account for this wallet yet. Try again in a moment.",
+          );
+        }
+
+        throw error;
+      }
+    },
+  });
+}
+
+export function useRedeemWithdrawalTicketMutation() {
+  const publicClient = usePublicClient();
+  const { writeContractAsync } = useWriteContract();
+
+  return useMutation({
+    mutationFn: async (variables: RedeemWithdrawalTicketVariables) => {
+      if (!publicClient) {
+        throw new Error("Wallet client unavailable. Try reconnecting your wallet.");
+      }
+
+      const hash = await writeContractAsync({
+        address: VAULT_ADDRESS,
+        abi: vaultAbi,
+        functionName: "withdrawWithTicket",
+        args: [
+          PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
+          BigInt(variables.amount),
+          variables.ticket,
+        ],
+      });
+
+      await publicClient.waitForTransactionReceipt({ hash });
+      return { hash };
     },
   });
 }

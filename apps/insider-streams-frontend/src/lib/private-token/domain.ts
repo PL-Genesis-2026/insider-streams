@@ -7,6 +7,7 @@ export const PRIVATE_TOKEN_API_BASE_URL =
 
 const RETRIEVE_BALANCES_PRIMARY_TYPE = "Retrieve Balances" as const;
 const PRIVATE_TRANSFER_PRIMARY_TYPE = "Private Token Transfer" as const;
+const WITHDRAW_PRIMARY_TYPE = "Withdraw Tokens" as const;
 
 const retrieveBalancesTypes = {
   [RETRIEVE_BALANCES_PRIMARY_TYPE]: [
@@ -22,6 +23,15 @@ const privateTransferTypes = {
     { name: "token", type: "address" },
     { name: "amount", type: "uint256" },
     { name: "flags", type: "string[]" },
+    { name: "timestamp", type: "uint256" },
+  ],
+} as const;
+
+const withdrawTypes = {
+  [WITHDRAW_PRIMARY_TYPE]: [
+    { name: "account", type: "address" },
+    { name: "token", type: "address" },
+    { name: "amount", type: "uint256" },
     { name: "timestamp", type: "uint256" },
   ],
 } as const;
@@ -47,6 +57,13 @@ type PrivateTransferMessage = {
   timestamp: bigint;
 };
 
+type WithdrawMessage = {
+  account: Address;
+  token: Address;
+  amount: bigint;
+  timestamp: bigint;
+};
+
 export type PrivateTokenSignaturePayload =
   | {
       domain: typeof privateTokenApiDomain;
@@ -59,6 +76,12 @@ export type PrivateTokenSignaturePayload =
       types: typeof privateTransferTypes;
       primaryType: typeof PRIVATE_TRANSFER_PRIMARY_TYPE;
       message: PrivateTransferMessage;
+    }
+  | {
+      domain: typeof privateTokenApiDomain;
+      types: typeof withdrawTypes;
+      primaryType: typeof WITHDRAW_PRIMARY_TYPE;
+      message: WithdrawMessage;
     };
 
 function getUnixTimestampSeconds() {
@@ -118,6 +141,36 @@ export function createPrivateTransferRequest(input: {
         token,
         amount: BigInt(input.amount),
         flags,
+        timestamp: BigInt(timestamp),
+      },
+    } satisfies PrivateTokenSignaturePayload,
+  };
+}
+
+export function createWithdrawRequest(input: {
+  account: Address;
+  token: Address;
+  amount: string;
+}) {
+  const account = getAddress(input.account);
+  const token = getAddress(input.token);
+  const timestamp = getUnixTimestampSeconds();
+
+  return {
+    body: {
+      account,
+      token,
+      amount: input.amount,
+      timestamp,
+    },
+    signaturePayload: {
+      domain: privateTokenApiDomain,
+      types: withdrawTypes,
+      primaryType: WITHDRAW_PRIMARY_TYPE,
+      message: {
+        account,
+        token,
+        amount: BigInt(input.amount),
         timestamp: BigInt(timestamp),
       },
     } satisfies PrivateTokenSignaturePayload,
