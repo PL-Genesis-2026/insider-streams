@@ -12,12 +12,10 @@ import {
   User,
 } from "lucide-react";
 
-import {
-  EXAMPLE_PREDICTION_MARKET_NAME,
-} from "@private-streams/common";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { PredictionMarketLink } from "@/components/prediction-market-link";
 import { Separator } from "@/components/ui/separator";
 import { SecretRevealCard } from "@/components/secret-reveal";
 import { AuctionDetailPrivate } from "@/components/auction-detail-private";
@@ -224,9 +222,11 @@ export default async function AuctionDetailPage({
             <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.24em] text-accent">
               <span>Auction #{auction.auctionId}</span>
               <span className="text-muted-foreground/40">/</span>
-              <span>
-                {`${EXAMPLE_PREDICTION_MARKET_NAME} / Market #${auction.marketId}`}
-              </span>
+              <PredictionMarketLink
+                marketId={auction.marketId}
+                variant="inline"
+                className="text-xs font-medium font-sans leading-none tracking-[0.24em] text-accent"
+              />
             </div>
             <Badge variant={statusVariant}>{auction.status}</Badge>
             {auction.endTime ? (
@@ -367,9 +367,11 @@ export default async function AuctionDetailPage({
                     <span className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground/60">
                       Market ID
                     </span>
-                    <p className="font-mono text-sm text-foreground">
-                      {auction.marketId}
-                    </p>
+                    <PredictionMarketLink
+                      marketId={auction.marketId}
+                      variant="inline"
+                      className="text-sm font-mono font-normal tracking-normal"
+                    />
                   </div>
                 </div>
 
@@ -396,21 +398,28 @@ export default async function AuctionDetailPage({
 
                 <Separator />
 
-                <Button
-                  asChild
-                  variant="outline"
-                  size="sm"
-                  className="w-full gap-1.5"
-                >
-                  <a
-                    href={`https://sepolia.etherscan.io/address/${SECRET_MARKETPLACE_ADDRESS}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                <div className="flex flex-col gap-2">
+                  <PredictionMarketLink
+                    marketId={auction.marketId}
+                    eventTitle={auction.title}
+                    variant="card"
+                  />
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="w-full gap-1.5"
                   >
-                    <ExternalLink className="size-3" />
-                    View on Etherscan
-                  </a>
-                </Button>
+                    <a
+                      href={`https://sepolia.etherscan.io/address/${SECRET_MARKETPLACE_ADDRESS}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ExternalLink className="size-3" />
+                      View on Etherscan
+                    </a>
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </aside>
