@@ -5,9 +5,9 @@
 | Service | Port | Command |
 |---|---|---|
 | insider-streams-frontend (Next.js) | 3000 | `pnpm dev:insider-streams` |
-| prediction-market-frontend (Next.js) | 3001* | `pnpm dev:prediction-market` |
+| prediction-market-frontend (Next.js) | 3100 | `pnpm dev:prediction-market` |
 
-*prediction-market-frontend auto-selects the next available port (3001) when insider-streams is already running on 3000.
+*prediction-market-frontend is pinned to port 3100 so it does not collide with insider-streams on 3000.
 
 ### Key commands
 
