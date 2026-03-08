@@ -9,9 +9,10 @@
  * to populate the app with test activity.
  *
  * Auto-funding: accounts with no balance or balance below LOW_BALANCE_THRESHOLD
- * are automatically topped up by inserting a synthetic deposit directly into the
- * Supabase `transfers` table (service role, bypasses RLS). No on-chain txs needed.
- * This is intentionally fake — debug only.
+ * are automatically topped up via the Chainlink Private Token REST API
+ * (real private CUSDC transfers from the funder account). The balance is
+ * reflected in Supabase once the user-balance-recording-fallback CRE workflow
+ * picks up the transfer (runs on a ~60 s cron).
  *
  * Flow (each cycle):
  *   1. Top up any test accounts below the low-balance threshold.
@@ -26,8 +27,10 @@
  *
  * Env vars required (scripts/.env):
  *   TEST_ACCOUNT_1..25        — private keys for bidding accounts
+ *   FUNDER_PK                 — private key of the account that funds bidders
+ *                               (must have private CUSDC balance; falls back to OWNER_PK)
  *   SUPABASE_URL              — Supabase project URL
- *   SUPABASE_SERVICE_ROLE_KEY — Supabase service role key (bypasses RLS)
+ *   SUPABASE_SERVICE_ROLE_KEY — Supabase service role key (bypasses RLS, for reading private bid/seller data)
  *
  * Optional:
  *   BASE_URL     — frontend origin (default: http://localhost:3000)
@@ -41,6 +44,8 @@ import { privateKeyToAccount } from "viem/accounts";
 import { createWalletClient, http, type Hex } from "viem";
 import { sepolia } from "viem/chains";
 import type { Database } from "@private-streams/common";
+import { PRIVATE_CONFIDENTIAL_USDC_ADDRESS } from "@private-streams/common";
+import { PrivateTokenApiClient } from "@private-streams/chainlink-private-token-api-client";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -61,10 +66,9 @@ const INTERVAL_MS = process.env.INTERVAL_MS
 const MIN_BID_INCREMENT = 10_000_000n;  // 10 USDC (6 decimals)
 const MAX_BID_INCREMENT = 50_000_000n;  // 50 USDC
 
-// Auto-funding thresholds (synthetic Supabase deposits, debug only)
+// Auto-funding thresholds (real private CUSDC transfers via Chainlink REST API)
 const LOW_BALANCE_THRESHOLD = 100_000_000n;   // 100 USDC — top up below this
 const TOP_UP_AMOUNT = 10_000_000_000n;         // 10,000 USDC per top-up
-const PRIVATE_CUSDC_ADDRESS = "0x38eda3f7b7649ce3f8534c59a40132be347e750a";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -193,27 +197,27 @@ async function getAvailableBalance(
 }
 
 /**
- * Insert a synthetic deposit into Supabase so the account has bidding balance.
- * ⚠️ Debug only — no real tokens are moved. Uses service role to bypass RLS.
+ * Transfer private CUSDC from the funder account to a bidding account via the
+ * Chainlink Private Token REST API. The transfer is real — no DB writes.
+ * The balance will appear in Supabase once the user-balance-recording-fallback
+ * CRE workflow reconciles it (runs on a ~60 s cron).
  */
 async function topUpAccount(
-  supabase: SupabaseClient,
+  funderClient: PrivateTokenApiClient,
   address: string,
 ): Promise<void> {
-  const txId = `place-bids-topup-${address}-${Date.now()}`;
-  const { error } = await supabase.from("transfers").insert({
-    transaction_id: txId,
-    user_address: address,
-    token_address: PRIVATE_CUSDC_ADDRESS,
-    amount: TOP_UP_AMOUNT.toString(),
-    status: "confirmed",
-    credited_at: new Date().toISOString(),
-  });
-  if (error) {
-    console.error(`[place-bids] top-up failed for ${address}: ${error.message}`);
-  } else {
+  try {
+    const result = await funderClient.privateTransfer({
+      recipient: address,
+      token: PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
+      amount: TOP_UP_AMOUNT.toString(),
+    });
     console.log(
-      `[place-bids] topped up ${address} (+${TOP_UP_AMOUNT / 1_000_000n} USDC synthetic deposit)`,
+      `[place-bids] topped up ${address} (+${TOP_UP_AMOUNT / 1_000_000n} USDC private transfer, tx: ${result.transaction_id})`,
+    );
+  } catch (err) {
+    console.error(
+      `[place-bids] top-up failed for ${address}: ${err instanceof Error ? err.message : err}`,
     );
   }
 }
@@ -224,12 +228,13 @@ async function topUpAccount(
  */
 async function topUpLowAccounts(
   supabase: SupabaseClient,
+  funderClient: PrivateTokenApiClient,
   accounts: { pk: Hex; address: string }[],
 ): Promise<void> {
   for (const account of accounts) {
     const balance = await getAvailableBalance(supabase, account.address);
     if (balance < LOW_BALANCE_THRESHOLD) {
-      await topUpAccount(supabase, account.address);
+      await topUpAccount(funderClient, account.address);
     }
   }
 }
@@ -297,13 +302,14 @@ const SKIPPABLE_CODES = new Set([
 async function runCycle(
   graphqlClient: GraphQLClient,
   supabase: SupabaseClient,
+  funderClient: PrivateTokenApiClient,
   accounts: { pk: Hex; address: string }[],
 ): Promise<void> {
   const label = new Date().toISOString();
   console.log(`[place-bids] ${label} — starting cycle`);
 
   // ── Top up any accounts running low before doing anything else ───────────
-  await topUpLowAccounts(supabase, accounts);
+  await topUpLowAccounts(supabase, funderClient, accounts);
 
   let openAuctions: { auctionId: string; sellerId: string }[];
   try {
@@ -425,6 +431,14 @@ if (!supabaseUrl || !supabaseKey) {
   process.exit(1);
 }
 
+const funderPk = process.env.FUNDER_PK ?? process.env.OWNER_PK;
+if (!funderPk) {
+  console.error(
+    "[place-bids] FUNDER_PK (or OWNER_PK) is required — the funder account must hold private CUSDC",
+  );
+  process.exit(1);
+}
+
 const accounts = getTestAccounts();
 if (accounts.length === 0) {
   console.error(
@@ -433,7 +447,10 @@ if (accounts.length === 0) {
   process.exit(1);
 }
 
+const funderClient = new PrivateTokenApiClient(funderPk);
+
 console.log(`[place-bids] loaded ${accounts.length} test account(s)`);
+console.log(`[place-bids] funder: ${funderClient.account}`);
 console.log(`[place-bids] base URL: ${BASE_URL}`);
 console.log(`[place-bids] interval: ${INTERVAL_MS / 1000}s`);
 console.log(`[place-bids] subgraph: ${SUBGRAPH_URL}`);
@@ -442,9 +459,9 @@ console.warn(`[place-bids] ⚠️  DEBUG MODE: querying private bid/seller data 
 const supabase = createClient<Database>(supabaseUrl, supabaseKey);
 const graphqlClient = new GraphQLClient(SUBGRAPH_URL);
 
-runCycle(graphqlClient, supabase, accounts);
+runCycle(graphqlClient, supabase, funderClient, accounts);
 const timer = setInterval(
-  () => runCycle(graphqlClient, supabase, accounts),
+  () => runCycle(graphqlClient, supabase, funderClient, accounts),
   INTERVAL_MS,
 );
 
