@@ -1,15 +1,35 @@
 "use client";
 
-import { use, useState, useCallback } from "react";
+import { use, useState, useCallback, useMemo } from "react";
 import { useQuery } from "@apollo/client/react";
 import { EventDetailDocument } from "@/__generated__/graphql";
 import Link from "next/link";
-import { ArrowLeft, ExternalLink, Loader2 } from "lucide-react";
-import { EventCard } from "@/components/event-card";
+import {
+  ArrowLeft,
+  ExternalLink,
+  Loader2,
+  Clock,
+  Users,
+  BarChart3,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+} from "lucide-react";
 import { BuySharesPanel } from "@/components/buy-shares-panel";
 import { RedeemSharesPanel } from "@/components/redeem-shares-panel";
+import { ActivityFeed } from "@/components/activity-feed";
+import { Countdown } from "@/components/countdown";
+import { DualProgress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  computeEventVolume,
+  formatUsdc,
+  formatDateTime,
+  shortenAddress,
+  getEventStatus,
+  outcomeLabel,
+} from "@/lib/market-utils";
 
 type Params = Promise<{ eventId: string }>;
 
@@ -25,6 +45,20 @@ export default function EventDetailPage({ params }: { params: Params }) {
   const settlement = data?.settlementResponses?.[0];
   const settlementRequest = data?.settlementRequesteds?.[0];
 
+  const purchases = useMemo(
+    () => data?.sharesPurchaseds ?? [],
+    [data?.sharesPurchaseds],
+  );
+  const redemptions = useMemo(
+    () => data?.sharesRedeemeds ?? [],
+    [data?.sharesRedeemeds],
+  );
+
+  const volume = useMemo(
+    () => computeEventVolume(eventId, purchases),
+    [eventId, purchases],
+  );
+
   const [settling, setSettling] = useState(false);
   const [settleError, setSettleError] = useState<string | null>(null);
   const [settleTxHash, setSettleTxHash] = useState<string | null>(null);
@@ -38,6 +72,7 @@ export default function EventDetailPage({ params }: { params: Params }) {
     Number(event?.eventClose) > 0 &&
     Date.now() < Number(event?.eventClose) * 1000;
 
+  const status = event ? getEventStatus(event, settlement) : null;
   const isOpen = event && !settlement && eventStillOpen && !adminJustClosed;
 
   const canAdminClose =
@@ -64,13 +99,13 @@ export default function EventDetailPage({ params }: { params: Params }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ eventId }),
       });
-      const json = await res.json();
+      const json: Record<string, unknown> = await res.json();
       if (!res.ok) {
-        setAdminCloseError(json.error ?? "Request failed");
+        setAdminCloseError(String(json.error ?? "Request failed"));
       } else {
-        setAdminCloseTxHash(json.hash);
+        setAdminCloseTxHash(String(json.hash));
         setAdminJustClosed(true);
-        refetch();
+        void refetch();
       }
     } catch {
       setAdminCloseError("Network error");
@@ -89,12 +124,12 @@ export default function EventDetailPage({ params }: { params: Params }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ eventId }),
       });
-      const json = await res.json();
+      const json: Record<string, unknown> = await res.json();
       if (!res.ok) {
-        setSettleError(json.error ?? "Request failed");
+        setSettleError(String(json.error ?? "Request failed"));
       } else {
-        setSettleTxHash(json.hash);
-        refetch();
+        setSettleTxHash(String(json.hash));
+        void refetch();
       }
     } catch {
       setSettleError("Network error");
@@ -104,18 +139,14 @@ export default function EventDetailPage({ params }: { params: Params }) {
   }, [eventId, refetch]);
 
   return (
-    <main className="mx-auto min-h-screen max-w-5xl px-6 py-12 md:px-10">
+    <main className="mx-auto min-h-screen max-w-6xl px-6 py-8 md:px-10">
       <Link
         href="/"
         className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
         <ArrowLeft className="size-3.5" />
-        Back to events
+        Markets
       </Link>
-
-      <h1 className="mb-8 font-serif text-[2.8rem] font-medium leading-[0.94] tracking-[-0.04em] text-foreground">
-        Event #{eventId}
-      </h1>
 
       {error && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
@@ -124,266 +155,409 @@ export default function EventDetailPage({ params }: { params: Params }) {
       )}
 
       {loading && !data && (
-        <div className="h-32 animate-pulse rounded-[calc(var(--radius)+6px)] border bg-card" />
+        <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
+          <div className="space-y-4">
+            <div className="h-48 animate-pulse rounded-[calc(var(--radius)+4px)] border bg-card" />
+            <div className="h-64 animate-pulse rounded-[calc(var(--radius)+4px)] border bg-card" />
+          </div>
+          <div className="h-80 animate-pulse rounded-[calc(var(--radius)+4px)] border bg-card" />
+        </div>
       )}
 
       {!loading && !event && !error && (
-        <div className="rounded-[calc(var(--radius)+6px)] border bg-card p-6 text-center text-sm text-muted-foreground">
+        <div className="rounded-[calc(var(--radius)+4px)] border bg-card p-8 text-center text-sm text-muted-foreground">
           Event not found.
         </div>
       )}
 
       {event && (
         <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
-          <div className="space-y-6">
-            <EventCard event={event} settlement={settlement} />
-
-            {canAdminClose && (
-              <div className="rounded-[calc(var(--radius)+6px)] border border-orange-500/25 bg-orange-500/5 p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-medium text-orange-300">
-                      Debug: Admin Close Event
-                    </div>
-                    <div className="mt-0.5 text-xs text-orange-400/70">
-                      Sets eventClose to now so settlement can proceed
-                      immediately.
-                    </div>
-                  </div>
-                  <Button
-                    onClick={() => void handleAdminClose()}
-                    disabled={adminClosing}
-                    variant="outline"
-                    size="sm"
-                    className="border-orange-500/30 text-orange-300 hover:border-orange-500/50 hover:bg-orange-500/10"
-                  >
-                    {adminClosing ? (
-                      <>
-                        <Loader2 className="size-3.5 animate-spin" />
-                        Closing...
-                      </>
-                    ) : (
-                      "Admin Close"
-                    )}
-                  </Button>
+          <div className="space-y-5">
+            <div className="rounded-[calc(var(--radius)+4px)] border bg-card p-6">
+              <div className="mb-4 flex items-start justify-between gap-4">
+                <h1 className="font-serif text-[1.6rem] font-medium leading-[1.1] tracking-[-0.03em] text-foreground md:text-[2rem]">
+                  {event.question}
+                </h1>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  {settlement && (
+                    <OutcomePill outcome={settlement.outcome} />
+                  )}
+                  <StatusPill status={status} />
                 </div>
-                {adminCloseError && (
-                  <div className="mt-2 text-xs text-destructive">
-                    {adminCloseError}
-                  </div>
-                )}
-                {adminCloseTxHash && (
-                  <div className="mt-2 text-xs text-emerald-400">
-                    Event closed!{" "}
-                    <a
-                      href={`https://sepolia.etherscan.io/tx/${adminCloseTxHash}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 font-mono underline underline-offset-4"
-                    >
-                      {adminCloseTxHash.slice(0, 10)}...
-                      {adminCloseTxHash.slice(-6)}
-                      <ExternalLink className="size-3" />
-                    </a>
-                  </div>
+              </div>
+
+              <div className="mb-5">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-sm font-semibold text-emerald-400">
+                    Yes {volume.yesPercent.toFixed(1)}%
+                  </span>
+                  <span className="text-sm font-semibold text-rose-400">
+                    {volume.noPercent.toFixed(1)}% No
+                  </span>
+                </div>
+                <DualProgress yesPercent={volume.yesPercent} className="h-3 rounded-lg" />
+              </div>
+
+              <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
+                <span className="inline-flex items-center gap-1.5">
+                  <BarChart3 className="size-3.5" />
+                  <span className="font-medium text-foreground">
+                    ${formatUsdc(volume.totalUsdc)}
+                  </span>
+                  volume
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <Users className="size-3.5" />
+                  <span className="font-medium text-foreground">
+                    {volume.traderCount}
+                  </span>
+                  traders
+                </span>
+                {status === "open" && Number(event.eventClose) > 0 && (
+                  <span className="inline-flex items-center gap-1.5 text-accent">
+                    <Clock className="size-3.5" />
+                    <Countdown targetUnix={Number(event.eventClose)} className="font-medium" />
+                    remaining
+                  </span>
                 )}
               </div>
+            </div>
+
+            {canAdminClose && (
+              <AdminClosePanel
+                onClose={() => void handleAdminClose()}
+                closing={adminClosing}
+                error={adminCloseError}
+                txHash={adminCloseTxHash}
+              />
             )}
 
             {canSettle && (
-              <div className="rounded-[calc(var(--radius)+6px)] border border-accent/25 bg-accent/5 p-4">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm text-muted-foreground">
-                    This event has closed and can be settled.
-                  </div>
-                  <Button
-                    onClick={() => void handleSettle()}
-                    disabled={settling}
-                    variant="accent"
-                    size="sm"
-                  >
-                    {settling ? (
-                      <>
-                        <Loader2 className="size-3.5 animate-spin" />
-                        Requesting...
-                      </>
-                    ) : (
-                      "Settle now"
-                    )}
-                  </Button>
-                </div>
-                {settleError && (
-                  <div className="mt-2 text-xs text-destructive">
-                    {settleError}
-                  </div>
-                )}
-                {settleTxHash && (
-                  <div className="mt-2 text-xs text-emerald-400">
-                    Settlement requested!{" "}
-                    <a
-                      href={`https://sepolia.etherscan.io/tx/${settleTxHash}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 underline underline-offset-4"
-                    >
-                      {settleTxHash.slice(0, 10)}...{settleTxHash.slice(-6)}
-                      <ExternalLink className="size-3" />
-                    </a>
-                  </div>
-                )}
-              </div>
+              <SettlePanel
+                onSettle={() => void handleSettle()}
+                settling={settling}
+                error={settleError}
+                txHash={settleTxHash}
+              />
             )}
 
             {settlementRequest && !settlement && (
-              <div className="rounded-[calc(var(--radius)+6px)] border border-yellow-500/25 bg-yellow-500/5 p-4">
-                <div className="text-sm text-yellow-300">
-                  Settlement requested — waiting for CRE workflow to resolve...
-                </div>
-                <div className="mt-1 font-mono text-xs text-yellow-400/70">
-                  Tx: {settlementRequest.transactionHash}
+              <div className="flex items-center gap-3 rounded-[calc(var(--radius)+4px)] border border-yellow-500/20 bg-yellow-500/5 px-5 py-4">
+                <AlertTriangle className="size-4 shrink-0 text-yellow-400" />
+                <div>
+                  <div className="text-sm font-medium text-yellow-300">
+                    Settlement in progress
+                  </div>
+                  <div className="mt-0.5 text-xs text-yellow-400/70">
+                    CRE workflow is verifying the outcome via Gemini AI.
+                  </div>
                 </div>
               </div>
             )}
 
-            <div className="rounded-[calc(var(--radius)+6px)] border bg-card p-5">
+            <div className="rounded-[calc(var(--radius)+4px)] border bg-card p-6">
               <h2 className="mb-4 text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                Details
+                Market Details
               </h2>
               <dl className="space-y-3 text-sm">
-                <div className="flex justify-between gap-4">
-                  <dt className="text-muted-foreground">Creator</dt>
-                  <dd className="truncate font-mono text-xs text-foreground">
-                    {event.creator}
-                  </dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-muted-foreground">Event Open</dt>
-                  <dd className="text-foreground">
-                    {new Date(
-                      Number(event.eventOpen) * 1000,
-                    ).toLocaleString()}
-                  </dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-muted-foreground">Event Close</dt>
-                  <dd className="text-foreground">
-                    {Number(event.eventClose) > 0
-                      ? new Date(
-                          Number(event.eventClose) * 1000,
-                        ).toLocaleString()
-                      : "N/A"}
-                  </dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-muted-foreground">Duration</dt>
-                  <dd className="text-foreground">
-                    {Math.round(Number(event.duration) / 60)} min
-                  </dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-muted-foreground">Creation Tx</dt>
-                  <dd className="truncate font-mono text-xs text-foreground">
+                <DetailRow label="Market ID" value={`#${event.eventId}`} />
+                <DetailRow
+                  label="Creator"
+                  value={
                     <a
-                      href={`https://sepolia.etherscan.io/tx/${event.transactionHash}`}
+                      href={`https://sepolia.etherscan.io/address/${event.creator}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-accent underline underline-offset-4 hover:text-accent/80"
+                      className="inline-flex items-center gap-1 font-mono text-xs text-accent underline-offset-4 hover:underline"
                     >
-                      {event.transactionHash.slice(0, 10)}...
-                      {event.transactionHash.slice(-6)}
-                      <ExternalLink className="size-3" />
+                      {shortenAddress(event.creator)}
+                      <ExternalLink className="size-2.5" />
                     </a>
-                  </dd>
-                </div>
+                  }
+                />
+                <DetailRow label="Opened" value={formatDateTime(event.eventOpen)} />
+                <DetailRow
+                  label="Closes"
+                  value={
+                    Number(event.eventClose) > 0
+                      ? formatDateTime(event.eventClose)
+                      : "N/A"
+                  }
+                />
+                <DetailRow
+                  label="Duration"
+                  value={`${Math.round(Number(event.duration) / 60)} min`}
+                />
+                <DetailRow
+                  label="Creation Tx"
+                  value={
+                    <TxLink hash={event.transactionHash} />
+                  }
+                />
                 {event.yesToken && (
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-muted-foreground">Yes Token</dt>
-                    <dd className="truncate font-mono text-xs text-foreground">
-                      {event.yesToken.slice(0, 10)}...
-                      {event.yesToken.slice(-6)}
-                    </dd>
-                  </div>
+                  <DetailRow
+                    label="Yes Token"
+                    value={
+                      <TokenLink address={event.yesToken} />
+                    }
+                  />
                 )}
                 {event.noToken && (
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-muted-foreground">No Token</dt>
-                    <dd className="truncate font-mono text-xs text-foreground">
-                      {event.noToken.slice(0, 10)}...
-                      {event.noToken.slice(-6)}
-                    </dd>
-                  </div>
-                )}
-                {settlementRequest && (
-                  <>
-                    <div className="border-t border-border/60 pt-3" />
-                    <div className="flex justify-between">
-                      <dt className="text-muted-foreground">
-                        Settlement Requested
-                      </dt>
-                      <dd className="text-foreground">
-                        {new Date(
-                          Number(settlementRequest.blockTimestamp) * 1000,
-                        ).toLocaleString()}
-                      </dd>
-                    </div>
-                  </>
+                  <DetailRow
+                    label="No Token"
+                    value={
+                      <TokenLink address={event.noToken} />
+                    }
+                  />
                 )}
                 {settlement && (
                   <>
-                    <div className="flex justify-between gap-4">
-                      <dt className="text-muted-foreground">Settlement Tx</dt>
-                      <dd className="truncate font-mono text-xs text-foreground">
-                        <a
-                          href={`https://sepolia.etherscan.io/tx/${settlement.transactionHash}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-accent underline underline-offset-4 hover:text-accent/80"
-                        >
-                          {settlement.transactionHash.slice(0, 10)}...
-                          {settlement.transactionHash.slice(-6)}
-                          <ExternalLink className="size-3" />
-                        </a>
-                      </dd>
-                    </div>
+                    <div className="border-t border-border/50" />
+                    <DetailRow
+                      label="Settlement Tx"
+                      value={<TxLink hash={settlement.transactionHash} />}
+                    />
+                    <DetailRow
+                      label="Settled At"
+                      value={formatDateTime(settlement.blockTimestamp)}
+                    />
                     <div className="flex items-center justify-between">
                       <dt className="text-muted-foreground">Outcome</dt>
                       <dd>
-                        <Badge
-                          variant="outline"
-                          className={
-                            settlement.outcome === 2
-                              ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-400"
-                              : settlement.outcome === 1
-                                ? "border-rose-500/30 bg-rose-500/15 text-rose-400"
-                                : "border-yellow-500/30 bg-yellow-500/15 text-yellow-400"
-                          }
-                        >
-                          {settlement.outcome === 2
-                            ? "Yes"
-                            : settlement.outcome === 1
-                              ? "No"
-                              : "Inconclusive"}
-                        </Badge>
+                        <OutcomePill outcome={settlement.outcome} />
                       </dd>
                     </div>
                   </>
                 )}
               </dl>
             </div>
+
+            <div className="rounded-[calc(var(--radius)+4px)] border bg-card p-6">
+              <h2 className="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                Activity
+              </h2>
+              <ActivityFeed purchases={purchases} redemptions={redemptions} />
+            </div>
           </div>
 
-          <div className="space-y-6">
+          <div className="space-y-5 lg:sticky lg:top-20 lg:self-start">
             {isOpen && <BuySharesPanel eventId={eventId} />}
             {settlement &&
               (settlement.outcome === 1 || settlement.outcome === 2) && (
-              <RedeemSharesPanel
-                eventId={eventId}
-                outcome={settlement.outcome}
-              />
+                <RedeemSharesPanel
+                  eventId={eventId}
+                  outcome={settlement.outcome}
+                />
               )}
+            {!isOpen && !settlement && (
+              <div className="rounded-[calc(var(--radius)+4px)] border bg-card p-6 text-center text-sm text-muted-foreground">
+                {status === "closed"
+                  ? "This market is closed. Trading is no longer available."
+                  : "Trading is not available for this market."}
+              </div>
+            )}
           </div>
         </div>
       )}
     </main>
+  );
+}
+
+function DetailRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="text-right text-foreground">{value}</dd>
+    </div>
+  );
+}
+
+function TxLink({ hash }: { hash: string }) {
+  return (
+    <a
+      href={`https://sepolia.etherscan.io/tx/${hash}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1 font-mono text-xs text-accent underline-offset-4 hover:underline"
+    >
+      {hash.slice(0, 10)}...{hash.slice(-6)}
+      <ExternalLink className="size-2.5" />
+    </a>
+  );
+}
+
+function TokenLink({ address }: { address: string }) {
+  return (
+    <a
+      href={`https://sepolia.etherscan.io/token/${address}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1 font-mono text-xs text-accent underline-offset-4 hover:underline"
+    >
+      {address.slice(0, 10)}...{address.slice(-6)}
+      <ExternalLink className="size-2.5" />
+    </a>
+  );
+}
+
+function StatusPill({ status }: { status: string | null }) {
+  switch (status) {
+    case "open":
+      return (
+        <Badge variant="accent" className="text-[0.6rem]">
+          <span className="mr-0.5 inline-block size-1.5 animate-pulse rounded-full bg-current" />
+          Live
+        </Badge>
+      );
+    case "closed":
+      return (
+        <Badge variant="muted" className="text-[0.6rem]">
+          Closed
+        </Badge>
+      );
+    case "settled":
+      return (
+        <Badge variant="muted" className="text-[0.6rem]">
+          Settled
+        </Badge>
+      );
+    default:
+      return null;
+  }
+}
+
+function OutcomePill({ outcome }: { outcome: number }) {
+  const label = outcomeLabel(outcome);
+  if (outcome === 2) {
+    return (
+      <Badge
+        variant="outline"
+        className="border-emerald-500/30 bg-emerald-500/15 text-[0.6rem] text-emerald-400"
+      >
+        <CheckCircle2 className="size-2.5" />
+        {label}
+      </Badge>
+    );
+  }
+  if (outcome === 1) {
+    return (
+      <Badge
+        variant="outline"
+        className="border-rose-500/30 bg-rose-500/15 text-[0.6rem] text-rose-400"
+      >
+        <XCircle className="size-2.5" />
+        {label}
+      </Badge>
+    );
+  }
+  return (
+    <Badge
+      variant="outline"
+      className="border-yellow-500/30 bg-yellow-500/15 text-[0.6rem] text-yellow-400"
+    >
+      {label}
+    </Badge>
+  );
+}
+
+function AdminClosePanel({
+  onClose,
+  closing,
+  error: closeError,
+  txHash,
+}: {
+  onClose: () => void;
+  closing: boolean;
+  error: string | null;
+  txHash: string | null;
+}) {
+  return (
+    <div className="rounded-[calc(var(--radius)+4px)] border border-orange-500/20 bg-orange-500/5 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-sm font-medium text-orange-300">
+            Admin: Close Event Early
+          </div>
+          <div className="mt-0.5 text-xs text-orange-400/60">
+            Sets close time to now for immediate settlement.
+          </div>
+        </div>
+        <Button
+          onClick={onClose}
+          disabled={closing}
+          variant="outline"
+          size="sm"
+          className="border-orange-500/30 text-orange-300 hover:border-orange-500/50 hover:bg-orange-500/10"
+        >
+          {closing ? (
+            <>
+              <Loader2 className="size-3.5 animate-spin" />
+              Closing...
+            </>
+          ) : (
+            "Admin Close"
+          )}
+        </Button>
+      </div>
+      {closeError && (
+        <div className="mt-2 text-xs text-destructive">{closeError}</div>
+      )}
+      {txHash && (
+        <div className="mt-2 text-xs text-emerald-400">
+          Event closed! <TxLink hash={txHash} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SettlePanel({
+  onSettle,
+  settling,
+  error: settleError,
+  txHash,
+}: {
+  onSettle: () => void;
+  settling: boolean;
+  error: string | null;
+  txHash: string | null;
+}) {
+  return (
+    <div className="rounded-[calc(var(--radius)+4px)] border border-accent/20 bg-accent/5 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-sm text-muted-foreground">
+          Market closed — ready for settlement via Chainlink CRE.
+        </div>
+        <Button
+          onClick={onSettle}
+          disabled={settling}
+          variant="accent"
+          size="sm"
+        >
+          {settling ? (
+            <>
+              <Loader2 className="size-3.5 animate-spin" />
+              Requesting...
+            </>
+          ) : (
+            "Settle"
+          )}
+        </Button>
+      </div>
+      {settleError && (
+        <div className="mt-2 text-xs text-destructive">{settleError}</div>
+      )}
+      {txHash && (
+        <div className="mt-2 text-xs text-emerald-400">
+          Settlement requested! <TxLink hash={txHash} />
+        </div>
+      )}
+    </div>
   );
 }
