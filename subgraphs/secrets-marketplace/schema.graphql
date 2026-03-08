@@ -135,6 +135,14 @@ type MarketplaceUpdated @entity(immutable: true) {
   transactionHash: Bytes!
 }
 
+type AuctionAdminExpired @entity(immutable: true) {
+  id: Bytes!
+  auctionId: BigInt! # uint256
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
 enum AuctionStatus {
   Open
   Closed
