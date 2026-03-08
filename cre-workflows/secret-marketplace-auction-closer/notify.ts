@@ -39,6 +39,7 @@ export function sendNotification(
   runtime: Runtime<Config>,
   title: string,
   message: string,
+  clickUrl?: string,
 ): void {
   if (!runtime.config.ntfyEnabled) return;
 
@@ -50,7 +51,7 @@ export function sendNotification(
     httpClient
       .sendRequest(
         runtime,
-        postNotification(url, title, body),
+        postNotification(url, title, body, clickUrl),
         consensusIdenticalAggregation<number>(),
       )(runtime.config)
       .result();
@@ -63,16 +64,19 @@ export function sendNotification(
 }
 
 const postNotification =
-  (url: string, title: string, body: string) =>
+  (url: string, title: string, body: string, clickUrl?: string) =>
   (sendRequester: HTTPSendRequester, config: Config): number => {
     const encodedBody = base64Encode(new TextEncoder().encode(body));
+
+    const headers: Record<string, string> = { Title: title };
+    if (clickUrl) headers.Click = clickUrl;
 
     const resp = sendRequester
       .sendRequest({
         url,
         method: "POST" as const,
         body: encodedBody,
-        headers: { Title: title },
+        headers,
         cacheSettings: { readFromCache: false, maxAgeMs: 0 },
       })
       .result();

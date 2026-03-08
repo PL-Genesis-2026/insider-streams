@@ -40,7 +40,7 @@ Reads from `.env` in this directory (or inherits from parent).
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `RPC_URL` | `https://ethereum-sepolia-rpc.publicnode.com` | Ethereum Sepolia RPC endpoint |
+| `RPC_URL` | `https://eth-sepolia.g.alchemy.com/v2/59LCREaM5uGpTVXZgR8A7z6IiULWjwG6` | Ethereum Sepolia RPC endpoint |
 | `NTFY_USER` | `UNKNOWN` | Identifier for the sender (e.g. `ad0ll`, `vps`). Prefixed to all notifications so recipients know which instance sent them. |
 | `NTFY_HOST` | `http://localhost:8090` | [ntfy](https://ntfy.sh) server base URL for push notifications |
 

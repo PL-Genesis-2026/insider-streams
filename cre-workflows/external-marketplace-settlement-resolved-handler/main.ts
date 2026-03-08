@@ -35,9 +35,11 @@ const onTrigger = (runtime: Runtime<Config>): string => {
 
     // Phase 3: Build results and submit per-event reports
     const resultMessages: string[] = [];
+    let lastTxHash = "";
 
     for (const event of settledEvents) {
       const results: AuctionResultTuple[] = [];
+      const auctionDetails: string[] = [];
 
       for (const auctionId of event.auctionIds) {
         const secret = secretsMap.get(auctionId.toString());
@@ -63,18 +65,22 @@ const onTrigger = (runtime: Runtime<Config>): string => {
         }
 
         const actualLabel = event.outcome === OUTCOME_INCONCLUSIVE ? "inconclusive" : event.outcome === OUTCOME_YES ? "yes" : "no";
+        const outcomeLabel = predictionOutcome === 1 ? "correct" : "wrong";
         runtime.log(
-          `Auction ${auctionId}: predicted=${sellerPrediction}, actual=${actualLabel}, outcome=${predictionOutcome === 1 ? "correct" : "wrong"}`,
+          `Auction ${auctionId}: predicted=${sellerPrediction}, actual=${actualLabel}, outcome=${outcomeLabel}`,
         );
+        auctionDetails.push(`  Auction ${auctionId}: predicted=${sellerPrediction}, actual=${actualLabel} → ${outcomeLabel}`);
 
         results.push({ auctionId, predictionOutcome });
       }
 
       try {
         const txHash = submitResolveReport(runtime, event.eventId, results);
+        lastTxHash = txHash;
         resultMessages.push(
-          `Event ${event.eventId}: resolved (${results.length} results, tx=${txHash})`,
+          `Event ${event.eventId}: resolved (${results.length} results)`,
         );
+        if (auctionDetails.length > 0) resultMessages.push(...auctionDetails);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         runtime.log(`Failed to resolve event ${event.eventId}: ${msg}`);
@@ -82,9 +88,10 @@ const onTrigger = (runtime: Runtime<Config>): string => {
       }
     }
 
-    const summary = resultMessages.join("; ");
+    const summary = resultMessages.join("\n");
     runtime.log(summary);
-    sendNotification(runtime, `Reputation Resolved: ${settledEvents.length} event(s)`, summary);
+    const etherscanUrl = lastTxHash ? `https://sepolia.etherscan.io/tx/${lastTxHash}` : undefined;
+    sendNotification(runtime, `Reputation Resolved: ${settledEvents.length} event(s)`, summary, etherscanUrl);
     return summary;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

@@ -58,10 +58,15 @@ async function handleEvent(
       broadcast: true,
     });
     log("settlement-requested", `CRE completed for event ${eventId}`);
-    await notify("SettlementRequested - CRE done", `Event ${eventId} settlement broadcast\nBlock ${blockNumber}\ntx ${txHash.slice(0, 16)}...`, ["white_check_mark"]);
+    await notify(
+      "SettlementRequested - CRE done",
+      `Event ${eventId} settlement requested\nBlock ${blockNumber}\nCRE: external-prediction-market-settler (broadcast)\nCRE topic: https://api.insider-streams.com/external-prediction-market-settler-cre\ntx: ${txHash}`,
+      ["white_check_mark"],
+      `https://sepolia.etherscan.io/tx/${txHash}`,
+    );
   } catch (err) {
     log("settlement-requested", `CRE FAILED for event ${eventId}: ${err}`);
-    await notify("SettlementRequested - CRE FAILED", `Event ${eventId}\n${err}`, ["x"]);
+    await notify("SettlementRequested - CRE FAILED", `Event ${eventId}\nCRE: external-prediction-market-settler\n${err}`, ["x"]);
   }
 
   processed.add(key);
