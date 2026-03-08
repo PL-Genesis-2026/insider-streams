@@ -152,6 +152,22 @@ Watches for:
 
 Deployed as a systemd service (`event-watcher.service`) on the remote server.
 
+### Local Testing Helpers
+
+Two scripts for populating the marketplace with test data during development:
+
+```bash
+# Generate AI prediction market events + place random bets from test accounts
+pnpm create-events   # from scripts/
+
+# Long-running daemon — creates one auction per cycle (default 5 min) via /api/create-auction
+pnpm spawn-auctions  # from scripts/
+```
+
+`create-events` requires `OWNER_PK`, `TEST_ACCOUNT_1..25`, `RPC_URL`, `VENICE_API_KEY` in `scripts/.env`. Reads the actual `paymentToken()` from the deployed contract at startup to avoid token address mismatches.
+
+`spawn-auctions` requires `TEST_ACCOUNT_1..25` and the frontend dev server running. Skips settled/expired events automatically. Override cycle frequency with `INTERVAL_MS` env var.
+
 ### E2E Tests
 
 All E2E scripts are TypeScript and run via `tsx` with `--env-file=.env` from the `scripts/` directory.
