@@ -21,16 +21,23 @@ const onCronTrigger = (runtime: Runtime<Config>, payload: CronPayload): string =
       return "No expired auctions";
     }
 
-    runtime.log(`Found ${expired.length} expired auction(s) to close`);
+    // CRE limits: 10 chain writes, 20 consensus calls per execution.
+    // Each close = 1 write + consensus. Cap at 8 to leave room for supabase + ntfy.
+    const MAX_PER_RUN = 8;
+    const batch = expired.slice(0, MAX_PER_RUN);
+    runtime.log(`Found ${expired.length} expired auction(s), processing ${batch.length} this run`);
 
-    // Phase 1: Close all expired auctions on-chain
+    // Phase 1: Close expired auctions on-chain (up to MAX_PER_RUN)
     const closedAuctionIds: string[] = [];
     const results: string[] = [];
-    for (const auction of expired) {
+    let lastTxHash = "";
+    for (const auction of batch) {
       try {
         const txHash = closeAuction(runtime, auction.auctionId);
         closedAuctionIds.push(auction.auctionId.toString());
-        results.push(`Auction ${auction.auctionId}: closed (tx=${txHash})`);
+        lastTxHash = txHash;
+        const bidUsdc = (Number(auction.currentBid) / 1e6).toFixed(2);
+        results.push(`Auction ${auction.auctionId} (event ${auction.eventId}, bid ${bidUsdc} USDC): closed`);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         runtime.log(`Failed to close auction ${auction.auctionId}: ${msg}`);
@@ -51,9 +58,10 @@ const onCronTrigger = (runtime: Runtime<Config>, payload: CronPayload): string =
       }
     }
 
-    const summary = results.join("; ");
+    const summary = results.join("\n");
     runtime.log(summary);
-    sendNotification(runtime, `Auctions Closed: ${closedAuctionIds.length}`, summary);
+    const etherscanUrl = lastTxHash ? `https://sepolia.etherscan.io/tx/${lastTxHash}` : undefined;
+    sendNotification(runtime, `Auctions Closed: ${closedAuctionIds.length}`, summary, etherscanUrl);
     return summary;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

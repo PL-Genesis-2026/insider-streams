@@ -6,7 +6,7 @@
   "transactionLimit": "100",
   "chainSelectorName": "ethereum-testnet-sepolia",
   "ntfyEnabled": true,
-  "ntfyHost": "http://195.201.8.147:8090",
-  "ntfyTopic": "user-balance-recording-fallback",
+  "ntfyHost": "https://api.insider-streams.com",
+  "ntfyTopic": "user-balance-recording-fallback-cre",
   "ntfyUser": "vps"
 }
