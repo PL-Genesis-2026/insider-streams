@@ -3,10 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  CONFIDENTIAL_USDC_DECIMALS,
-  PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
-} from "@private-streams/common";
+import { CONFIDENTIAL_USDC_DECIMALS } from "@private-streams/common";
 import {
   AlertCircle,
   ArrowRight,
@@ -24,7 +21,7 @@ import {
   isValid,
   parseISO,
 } from "date-fns";
-import { formatUnits, getAddress, isAddressEqual } from "viem";
+import { formatUnits } from "viem";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -50,6 +47,7 @@ import type { BuyerDashboardAuction } from "@/lib/buyer-dashboard/types";
 import { getFundingStatusCopy } from "@/lib/funding/get-funding-snapshot";
 import { useFundingSnapshot } from "@/lib/funding/use-funding-snapshot";
 import { usePrivateData } from "@/lib/private-data/use-private-data";
+import { findUsdcBalance } from "@/lib/private-token/find-usdc-balance";
 import { usePrivateBalancesMutation } from "@/lib/private-token/hooks";
 import { useSignedWalletSession } from "@/lib/wallet/use-signed-wallet-session";
 import { formatAddress } from "@/lib/wallet/format-address";
@@ -87,21 +85,6 @@ function getAuctionTimeLabel(auction: BuyerDashboardAuction): string {
   }
   if (isPast(endTime)) return "Closing soon";
   return `Closes ${formatDistanceToNowStrict(endTime, { addSuffix: true })}`;
-}
-
-function findUsdcBalance(
-  balances?: { token: string; amount: string }[],
-): { token: string; amount: string } | undefined {
-  return balances?.find((balance) => {
-    try {
-      return isAddressEqual(
-        getAddress(balance.token),
-        PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
-      );
-    } catch {
-      return false;
-    }
-  });
 }
 
 function MetricCard({
@@ -321,7 +304,7 @@ export function BuyerDashboard() {
   }, [revealForAuctions]);
 
   const handleRefresh = useCallback(() => {
-    void Promise.all([
+    void Promise.allSettled([
       dashboardQuery.refetch(),
       fundingSnapshot.refresh(),
       loadPrivateBalances({ forceFresh: true }),
