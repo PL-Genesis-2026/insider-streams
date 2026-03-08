@@ -40,6 +40,10 @@ export const configSchema = z.object({
   supabaseUrl: z.string().startsWith("https://"),
   transactionLimit: z.string().regex(/^\d+$/, "must be a numeric string"),
   chainSelectorName: z.string(),
+  ntfyEnabled: z.boolean().default(true),
+  ntfyHost: z.string().startsWith("http").default("http://localhost:8090"),
+  ntfyTopic: z.string().default("user-balance-recording-fallback"),
+  ntfyUser: z.string().default("vps"),
 });
 
 export type Config = z.infer<typeof configSchema>;

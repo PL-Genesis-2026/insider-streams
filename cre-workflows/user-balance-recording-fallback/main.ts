@@ -2,6 +2,7 @@ import { cre, type Runtime, Runner, type CronPayload } from "@chainlink/cre-sdk"
 import { configSchema, CRON_SCHEDULE, type Config } from "./types";
 import { fetchTransactions } from "./transactions";
 import { recordTransactions } from "./supabase";
+import { sendNotification } from "./notify";
 
 /**
  * Cron handler — polls Private Token API for recent transactions,
@@ -51,10 +52,12 @@ const onCronTrigger = (runtime: Runtime<Config>, payload: CronPayload): string =
 
     const summary = `Recorded ${newCount} new of ${transfers.length} transfers (${incoming.length} deposits, ${outgoing.length} withdrawals)`;
     runtime.log(summary);
+    sendNotification(runtime, "Transfers Recorded", summary);
     return summary;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     runtime.log(`onCronTrigger error: ${msg}`);
+    sendNotification(runtime, "Balance Recording FAILED", msg);
     throw err;
   }
 };
