@@ -23,7 +23,7 @@
  *   4. Shuffle the open auctions and, for each one, try to find a test account
  *      that is neither the seller nor the current highest bidder and has
  *      sufficient Supabase balance. Place a bid on the first viable pairing.
- *   5. Wait INTERVAL_MS and repeat.
+ *   5. Exit (scheduling is handled externally by cron or run-demo.sh).
  *
  * Env vars required (scripts/.env):
  *   TEST_ACCOUNT_1..25        — private keys for bidding accounts
@@ -34,7 +34,6 @@
  *
  * Optional:
  *   BASE_URL                  — frontend origin (default: http://localhost:3000)
- *   INTERVAL_MS               — cycle interval in ms (default: 300000 / 5 min)
  *   ENABLE_NTFY=true          — send notifications via ntfy
  *   NTFY_HOST                 — ntfy server URL (default: http://localhost:8090)
  *   NTFY_TOPIC                — ntfy topic (default: place-bids)
@@ -63,10 +62,6 @@ const BASE_URL =
   process.env.BASE_URL ??
   "http://localhost:3000";
 
-const INTERVAL_MS = process.env.INTERVAL_MS
-  ? parseInt(process.env.INTERVAL_MS, 10)
-  : 5 * 60 * 1000;
-
 const MIN_BID_INCREMENT = 10_000_000n;  // 10 USDC (6 decimals)
 const MAX_BID_INCREMENT = 50_000_000n;  // 50 USDC
 
@@ -78,9 +73,9 @@ const TOP_UP_AMOUNT = 10_000_000_000n;         // 10,000 USDC per top-up
 const ENABLE_NTFY = process.env.ENABLE_NTFY === "true";
 const NTFY_HOST = process.env.NTFY_HOST ?? "http://localhost:8090";
 const NTFY_TOPIC = process.env.NTFY_TOPIC ?? "place-bids";
-const NTFY_USER = process.env.NTFY_USER ?? "unknown";
+const NTFY_USER = process.env.NTFY_USER ?? "UNKNOWN";
 
-async function ntfy(title: string, message: string, tags?: string[]): Promise<void> {
+async function ntfy(title: string, message: string, tags?: string[], clickUrl?: string): Promise<void> {
   if (!ENABLE_NTFY) return;
   try {
     await fetch(`${NTFY_HOST}/${NTFY_TOPIC}`, {
@@ -88,6 +83,7 @@ async function ntfy(title: string, message: string, tags?: string[]): Promise<vo
       headers: {
         Title: title,
         ...(tags?.length ? { Tags: tags.join(",") } : {}),
+        ...(clickUrl ? { Click: clickUrl } : {}),
       },
       body: `[${NTFY_USER}] ${message}`,
       signal: AbortSignal.timeout(5000),
@@ -417,6 +413,7 @@ async function runCycle(
           "Bid placed",
           `Auction ${auction.auctionId} — ${bidAmount / 1_000_000n} USDC by ${chosenAccount.address} (bid ${bidId})`,
           ["moneybag"],
+          `${BASE_URL}/auction/${auction.auctionId}`,
         );
         return; // one bid per cycle
       }
@@ -489,24 +486,15 @@ const funderClient = new PrivateTokenApiClient(funderPk);
 console.log(`[place-bids] loaded ${accounts.length} test account(s)`);
 console.log(`[place-bids] funder: ${funderClient.account}`);
 console.log(`[place-bids] base URL: ${BASE_URL}`);
-console.log(`[place-bids] interval: ${INTERVAL_MS / 1000}s`);
 console.log(`[place-bids] subgraph: ${SUBGRAPH_URL}`);
 console.warn(`[place-bids] ⚠️  DEBUG MODE: querying private bid/seller data directly from Supabase`);
 
 const supabase = createClient<Database>(supabaseUrl, supabaseKey);
 const graphqlClient = new GraphQLClient(SUBGRAPH_URL);
 
-runCycle(graphqlClient, supabase, funderClient, accounts);
-const timer = setInterval(
-  () => runCycle(graphqlClient, supabase, funderClient, accounts),
-  INTERVAL_MS,
-);
-
-function shutdown(): void {
-  console.log("\n[place-bids] shutting down");
-  clearInterval(timer);
-  process.exit(0);
-}
-
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
+runCycle(graphqlClient, supabase, funderClient, accounts)
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error("[place-bids] fatal:", err);
+    process.exit(1);
+  });
