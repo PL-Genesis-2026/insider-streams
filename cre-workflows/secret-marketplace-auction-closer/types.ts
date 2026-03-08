@@ -21,6 +21,10 @@ const evmConfigSchema = z.object({
 export const configSchema = z.object({
   supabaseUrl: z.string().startsWith("https://"),
   evms: z.array(evmConfigSchema).min(1, "At least one EVM config is required"),
+  ntfyEnabled: z.boolean().default(true),
+  ntfyHost: z.string().startsWith("http").default("http://localhost:8090"),
+  ntfyTopic: z.string().default("secret-marketplace-auction-closer"),
+  ntfyUser: z.string().default("vps"),
 });
 
 export type Config = z.infer<typeof configSchema>;

@@ -29,6 +29,10 @@ const evmConfigSchema = z.object({
 export const configSchema = z.object({
   geminiModel: z.string(),
   evms: z.array(evmConfigSchema).min(1, "At least one EVM config is required"),
+  ntfyEnabled: z.boolean().default(true),
+  ntfyHost: z.string().startsWith("http").default("http://localhost:8090"),
+  ntfyTopic: z.string().default("external-prediction-market-settler"),
+  ntfyUser: z.string().default("vps"),
 });
 
 /** Type inferred from the validated config schema. */

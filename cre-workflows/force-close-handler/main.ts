@@ -2,6 +2,7 @@ import { cre, type Runtime, Runner, getNetwork, bytesToHex, type EVMLog } from "
 import { keccak256, toHex, decodeEventLog, parseAbi } from "viem";
 import { configSchema, type Config } from "./types";
 import { refundActiveBids } from "./supabase";
+import { sendNotification } from "./notify";
 
 /** ABI for the AuctionCancelled event CRE listens for. */
 const eventAbi = parseAbi([
@@ -38,10 +39,12 @@ const onLogTrigger = (runtime: Runtime<Config>, log: EVMLog): string => {
 
     const summary = `Refunded ${refunded} bid(s) for cancelled auction ${auctionId}`;
     runtime.log(summary);
+    sendNotification(runtime, `Bids Refunded: Auction ${auctionId}`, summary);
     return summary;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     runtime.log(`onLogTrigger error: ${msg}`);
+    sendNotification(runtime, "Force Close FAILED", msg);
     throw err;
   }
 };

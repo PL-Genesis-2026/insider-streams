@@ -5,5 +5,9 @@
       "secretMarketplaceAddress": "0x1f903548234b15C4d955Cce79beaaC853A98C514",
       "chainSelectorName": "ethereum-testnet-sepolia"
     }
-  ]
+  ],
+  "ntfyEnabled": true,
+  "ntfyHost": "http://195.201.8.147:8090",
+  "ntfyTopic": "force-close-handler",
+  "ntfyUser": "vps"
 }
