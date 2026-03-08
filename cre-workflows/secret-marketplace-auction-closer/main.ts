@@ -3,6 +3,7 @@ import { configSchema, CRON_SCHEDULE, type Config } from "./types";
 import { findExpiredAuctions } from "./monitor";
 import { closeAuction } from "./close";
 import { settleWinningBids } from "./supabase";
+import { sendNotification } from "./notify";
 
 /**
  * Cron handler — fires on schedule, checks for expired auctions, closes them,
@@ -52,10 +53,12 @@ const onCronTrigger = (runtime: Runtime<Config>, payload: CronPayload): string =
 
     const summary = results.join("; ");
     runtime.log(summary);
+    sendNotification(runtime, `Auctions Closed: ${closedAuctionIds.length}`, summary);
     return summary;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     runtime.log(`onCronTrigger error: ${msg}`);
+    sendNotification(runtime, "Auction Close FAILED", msg);
     throw err;
   }
 };
