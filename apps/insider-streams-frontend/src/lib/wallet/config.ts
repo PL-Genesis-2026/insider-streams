@@ -59,4 +59,8 @@ export function ensureAppKit() {
   return createdAppKit;
 }
 
+export function openAppKitConnectModal() {
+  return ensureAppKit().open({ view: "Connect" });
+}
+
 export const walletConfig = wagmiAdapter.wagmiConfig;

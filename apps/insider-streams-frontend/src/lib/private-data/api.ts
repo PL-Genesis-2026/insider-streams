@@ -1,7 +1,7 @@
 import type {
   PrivateSellerRecord,
   PrivateBidRecord,
-  PrivateSecretRecord,
+  PrivateSecretState,
 } from "./types";
 
 export async function fetchMySeller(
@@ -43,7 +43,9 @@ export async function fetchMyBids(
     );
   }
 
-  const json = (await res.json()) as { data: Record<string, PrivateBidRecord> };
+  const json = (await res.json()) as {
+    data: Record<string, PrivateBidRecord>;
+  };
   return json.data;
 }
 
@@ -51,7 +53,7 @@ export async function fetchMySecrets(
   signature: string,
   timestamp: number,
   auctionIds: string[],
-): Promise<Record<string, PrivateSecretRecord>> {
+): Promise<Record<string, PrivateSecretState>> {
   const res = await fetch("/api/private-data/secrets", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -66,7 +68,7 @@ export async function fetchMySecrets(
   }
 
   const json = (await res.json()) as {
-    data: Record<string, PrivateSecretRecord>;
+    data: Record<string, PrivateSecretState>;
   };
   return json.data;
 }

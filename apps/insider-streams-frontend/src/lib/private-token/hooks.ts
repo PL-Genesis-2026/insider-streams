@@ -14,6 +14,7 @@ import {
 } from "wagmi";
 import { reconcileFunding } from "@/lib/funding/api";
 import { getFundingSnapshotQueryKey } from "@/lib/funding/queries";
+import { useSignedWalletSession } from "@/lib/wallet/use-signed-wallet-session";
 import {
   getBalances,
   isPrivateAccountNotFoundError,
@@ -104,6 +105,7 @@ export function usePrivateBalancesMutation(address?: Address) {
 export function usePrivateTransferFundingMutation(address?: Address) {
   const queryClient = useQueryClient();
   const signTypedData = usePrivateTokenSigner();
+  const { getSignedSession } = useSignedWalletSession();
 
   return useMutation({
     mutationFn: async (
@@ -133,7 +135,8 @@ export function usePrivateTransferFundingMutation(address?: Address) {
       }
 
       try {
-        const reconcileResponse = await reconcileFunding(address);
+        const signedSession = await getSignedSession();
+        const reconcileResponse = await reconcileFunding(signedSession);
 
         queryClient.setQueryData(
           getFundingSnapshotQueryKey(address),
