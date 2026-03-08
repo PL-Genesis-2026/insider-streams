@@ -31,7 +31,7 @@ export const configSchema = z.object({
   evms: z.array(evmConfigSchema).min(1, "At least one EVM config is required"),
   ntfyEnabled: z.boolean().default(true),
   ntfyHost: z.string().startsWith("http").default("http://localhost:8090"),
-  ntfyTopic: z.string().default("external-prediction-market-settler"),
+  ntfyTopic: z.string().default("external-prediction-market-settler-cre"),
   ntfyUser: z.string().default("vps"),
 });
 
