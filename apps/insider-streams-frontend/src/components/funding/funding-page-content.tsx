@@ -17,8 +17,6 @@ import {
 } from "lucide-react";
 import {
   erc20Abi,
-  getAddress,
-  isAddressEqual,
   parseUnits,
   type Address,
   zeroAddress,
@@ -46,6 +44,7 @@ import {
   usePrivateTransferFundingMutation,
   useVaultFunding,
 } from "@/lib/private-token/hooks";
+import { findUsdcBalance } from "@/lib/private-token/find-usdc-balance";
 import { useWalletSession } from "@/lib/wallet/use-wallet-session";
 
 type FundingStep =
@@ -56,21 +55,6 @@ type FundingStep =
   | "ready_to_activate"
   | "activating"
   | "complete";
-
-function findUsdcBalance(
-  balances?: { token: string; amount: string }[],
-): { token: string; amount: string } | undefined {
-  return balances?.find((balance) => {
-    try {
-      return isAddressEqual(
-        getAddress(balance.token),
-        PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
-      );
-    } catch {
-      return false;
-    }
-  });
-}
 
 function StepDone({ children }: { children: React.ReactNode }) {
   return (
