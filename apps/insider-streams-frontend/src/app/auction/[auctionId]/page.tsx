@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 
 import {
-  SECRET_MARKETPLACE_ADDRESS,
   EXAMPLE_PREDICTION_MARKET_NAME,
 } from "@private-streams/common";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +27,7 @@ import {
   getAuctionDetail,
   type AuctionDetailData,
 } from "@/lib/auction-detail";
+import { SECRET_MARKETPLACE_ADDRESS } from "@/lib/contract-addresses";
 import { cn } from "@/lib/utils";
 
 type AuctionDetailPageProps = {

@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
-import {
-  examplePredictionMarketAbi,
-  EXAMPLE_PREDICTION_MARKET_ADDRESS,
-} from "@private-streams/common";
-import type { Address } from "viem";
+import { examplePredictionMarketAbi } from "@private-streams/common";
 import { getPublicClient } from "@/lib/viem";
+import { EXAMPLE_PREDICTION_MARKET_ADDRESS } from "@/lib/contract-addresses";
 
 const EVENT_STATUS_LABELS = [
   "Open",
@@ -15,7 +12,7 @@ const EVENT_STATUS_LABELS = [
 
 export async function GET() {
   const publicClient = getPublicClient();
-  const marketAddress = EXAMPLE_PREDICTION_MARKET_ADDRESS as Address;
+  const marketAddress = EXAMPLE_PREDICTION_MARKET_ADDRESS;
 
   try {
     const nextEventId = await publicClient.readContract({
