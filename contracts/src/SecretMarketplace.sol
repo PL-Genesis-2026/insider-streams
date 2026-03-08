@@ -111,6 +111,10 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
         address indexed newMarketplace
     );
 
+    event AuctionAdminExpired(
+        uint256 indexed auctionId
+    );
+
     // ===========================
     // ======== ERRORS ===========
     // ===========================
@@ -178,6 +182,15 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
 
     function withdrawFunds(address to, uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
         paymentToken.safeTransfer(to, amount);
+    }
+
+    /// @notice Debug only: immediately expire an open auction so the CRE closer can close it on its next poll.
+    function adminExpireAuction(uint256 auctionId) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        Auction storage a = _auctions[auctionId];
+        if (a.endTime == 0) revert AuctionDoesNotExist();
+        if (a.status != AuctionStatus.Open) revert AuctionAlreadySettled();
+        a.endTime = block.timestamp;
+        emit AuctionAdminExpired(auctionId);
     }
 
     // ===========================
