@@ -16,7 +16,7 @@ import {
   EXAMPLE_PREDICTION_MARKET_ADDRESS,
 } from "@private-streams/common";
 
-const RPC_URL = process.env.RPC_URL ?? "https://ethereum-sepolia-rpc.publicnode.com";
+const RPC_URL = process.env.RPC_URL ?? "https://eth-sepolia.g.alchemy.com/v2/59LCREaM5uGpTVXZgR8A7z6IiULWjwG6";
 const OWNER_PK = process.env.OWNER_PK;
 
 if (!OWNER_PK) {

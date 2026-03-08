@@ -331,6 +331,21 @@ for workflow in external-prediction-market-settler secret-marketplace-auction-cl
 done
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Phase 2b: Restart Services
+# ═══════════════════════════════════════════════════════════════════════════════
+
+echo ""
+echo "▶ Phase 2b: Restarting services..."
+
+WATCHER_STATUS=$(ssh "$REMOTE_HOST" "systemctl is-active event-watcher.service 2>/dev/null || echo inactive")
+if [ "$WATCHER_STATUS" = "active" ]; then
+  ssh "$REMOTE_HOST" "sudo systemctl restart event-watcher.service"
+  success "event-watcher restarted"
+else
+  warn "event-watcher was not running — skipping restart"
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Phase 3: E2E Verification
 # ═══════════════════════════════════════════════════════════════════════════════
 

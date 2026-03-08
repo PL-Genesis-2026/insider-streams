@@ -22,7 +22,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 CREATE_EVENTS_INTERVAL_S=$(( ${CREATE_EVENTS_INTERVAL_MS:-1800000} / 1000 ))
-DAEMON_INTERVAL_S=$(( ${INTERVAL_MS:-300000} / 1000 ))
+PLACE_BIDS_INTERVAL_S=$(( ${INTERVAL_MS:-300000} / 1000 ))
 
 SPAWN_PID=""
 BIDS_PID=""
@@ -43,8 +43,8 @@ echo "[run-demo] =================================================="
 echo "[run-demo]  Insider Streams — Demo Orchestrator"
 echo "[run-demo] =================================================="
 echo "[run-demo]  create-events:  once at startup, then every ${CREATE_EVENTS_INTERVAL_S}s"
-echo "[run-demo]  spawn-auctions: every ${DAEMON_INTERVAL_S}s"
-echo "[run-demo]  place-bids:     every ${DAEMON_INTERVAL_S}s"
+echo "[run-demo]  spawn-auctions: via cron (run-demo loops it every ${PLACE_BIDS_INTERVAL_S}s)"
+echo "[run-demo]  place-bids:     every ${PLACE_BIDS_INTERVAL_S}s"
 echo "[run-demo]  base URL:       ${BASE_URL:-http://localhost:3000}"
 echo ""
 
@@ -53,14 +53,24 @@ echo "[run-demo] Running create-events (initial seed)..."
 pnpm run create-events || echo "[run-demo] create-events exited non-zero — continuing"
 echo ""
 
-# ── 2. Start long-running daemons ─────────────────────────────────────────────
-pnpm run spawn-auctions &
+# ── 2. Start background loops ─────────────────────────────────────────────────
+(
+  while true; do
+    pnpm run spawn-auctions || echo "[run-demo] spawn-auctions failed — continuing"
+    sleep "$PLACE_BIDS_INTERVAL_S"
+  done
+) &
 SPAWN_PID=$!
-echo "[run-demo] spawn-auctions started (PID $SPAWN_PID)"
+echo "[run-demo] spawn-auctions loop started (PID $SPAWN_PID)"
 
-pnpm run place-bids &
+(
+  while true; do
+    pnpm run place-bids || echo "[run-demo] place-bids failed — continuing"
+    sleep "$PLACE_BIDS_INTERVAL_S"
+  done
+) &
 BIDS_PID=$!
-echo "[run-demo] place-bids started (PID $BIDS_PID)"
+echo "[run-demo] place-bids loop started (PID $BIDS_PID)"
 
 # ── 3. Periodic create-events refresh ─────────────────────────────────────────
 (
