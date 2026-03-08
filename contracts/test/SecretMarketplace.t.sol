@@ -122,6 +122,24 @@ contract SecretMarketplaceTest is Test {
         sm.registerSeller("Alice");
     }
 
+    function test_registerSeller_revert_alreadyRegistered() public {
+        sm.registerSeller("Alice");
+        vm.expectRevert(
+            abi.encodeWithSelector(SecretMarketplace.SellerAlreadyRegistered.selector, "Alice")
+        );
+        sm.registerSeller("Alice");
+    }
+
+    function test_registerSeller_doesNotWipeReputation() public {
+        sm.registerSeller("Alice");
+        // Re-registering should revert, not silently reset score
+        vm.expectRevert(
+            abi.encodeWithSelector(SecretMarketplace.SellerAlreadyRegistered.selector, "Alice")
+        );
+        sm.registerSeller("Alice");
+        assertEq(sm.getSeller("Alice").reputationScore, 0);
+    }
+
     function test_createAuction_autoRegistersSeller() public {
         uint256 id = _createDefaultAuction();
         assertEq(id, 0);
@@ -350,6 +368,56 @@ contract SecretMarketplaceTest is Test {
         vm.expectRevert();
         vm.prank(nobody);
         sm.withdrawFunds(nobody, 1e6);
+    }
+
+    // ===========================
+    // ==== ADMIN EXPIRE =========
+    // ===========================
+
+    function test_adminExpireAuction_setsEndTimeToNow() public {
+        uint256 id = _createDefaultAuction();
+        SecretMarketplace.Auction memory before = sm.getAuction(id);
+        assertTrue(before.endTime > block.timestamp);
+
+        sm.adminExpireAuction(id);
+
+        SecretMarketplace.Auction memory after_ = sm.getAuction(id);
+        assertEq(after_.endTime, block.timestamp);
+        assertEq(uint8(after_.status), uint8(SecretMarketplace.AuctionStatus.Open));
+    }
+
+    function test_adminExpireAuction_emitsEvent() public {
+        uint256 id = _createDefaultAuction();
+        vm.expectEmit(true, false, false, false);
+        emit SecretMarketplace.AuctionAdminExpired(id);
+        sm.adminExpireAuction(id);
+    }
+
+    function test_adminExpireAuction_revert_notAdmin() public {
+        uint256 id = _createDefaultAuction();
+        vm.expectRevert();
+        vm.prank(nobody);
+        sm.adminExpireAuction(id);
+    }
+
+    function test_adminExpireAuction_revert_doesNotExist() public {
+        vm.expectRevert(SecretMarketplace.AuctionDoesNotExist.selector);
+        sm.adminExpireAuction(999);
+    }
+
+    function test_adminExpireAuction_revert_notOpen() public {
+        uint256 id = _createDefaultAuction();
+        sm.adminExpireAuction(id);
+        sm.closeAuction(id);
+        vm.expectRevert(SecretMarketplace.AuctionAlreadySettled.selector);
+        sm.adminExpireAuction(id);
+    }
+
+    function test_adminExpireAuction_allowsImmediateClose() public {
+        uint256 id = _createDefaultAuction();
+        sm.adminExpireAuction(id);
+        sm.closeAuction(id);
+        assertEq(uint8(sm.getAuction(id).status), uint8(SecretMarketplace.AuctionStatus.Closed));
     }
 
     // ===========================
