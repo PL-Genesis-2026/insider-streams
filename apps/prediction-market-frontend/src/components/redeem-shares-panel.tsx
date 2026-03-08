@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useWalletSession } from "@/lib/wallet/use-wallet-session";
 import { ConnectWalletButton } from "@/components/wallet/connect-wallet-button";
+import { SwitchNetworkButton } from "@/components/wallet/switch-network-button";
 
 type RedeemSharesPanelProps = {
   eventId: string;
@@ -85,19 +86,8 @@ export function RedeemSharesPanel({
     }
   }, [canRedeem, parsedAmount, writeContractAsync, eventId]);
 
-  if (!walletSession.isConnected) {
-    return (
-      <div className="rounded-[calc(var(--radius)+6px)] border border-emerald-500/20 bg-emerald-500/5 p-5">
-        <h2 className="mb-3 font-serif text-xl font-medium tracking-[-0.03em] text-emerald-300">
-          Redeem winnings
-        </h2>
-        <p className="mb-4 text-sm text-muted-foreground">
-          Connect your wallet to redeem winning shares.
-        </p>
-        <ConnectWalletButton variant="accent" />
-      </div>
-    );
-  }
+  const needsWallet = !walletSession.isConnected;
+  const needsNetwork = walletSession.isConnected && !walletSession.isSupportedChain;
 
   if (redeemState.step === "success") {
     return (
@@ -166,22 +156,28 @@ export function RedeemSharesPanel({
           </div>
         )}
 
-        <Button
-          type="button"
-          className="w-full"
-          variant="accent"
-          disabled={!canRedeem}
-          onClick={() => void handleRedeem()}
-        >
-          {redeemState.step === "redeeming" ? (
-            <>
-              <Loader2 className="size-4 animate-spin" />
-              Redeeming...
-            </>
-          ) : (
-            "Redeem shares"
-          )}
-        </Button>
+        {needsWallet ? (
+          <ConnectWalletButton className="w-full [&>button]:w-full" variant="accent" />
+        ) : needsNetwork ? (
+          <SwitchNetworkButton className="w-full [&>button]:w-full" showError />
+        ) : (
+          <Button
+            type="button"
+            className="w-full"
+            variant="accent"
+            disabled={!canRedeem}
+            onClick={() => void handleRedeem()}
+          >
+            {redeemState.step === "redeeming" ? (
+              <>
+                <Loader2 className="size-4 animate-spin" />
+                Redeeming...
+              </>
+            ) : (
+              "Redeem shares"
+            )}
+          </Button>
+        )}
       </div>
     </div>
   );

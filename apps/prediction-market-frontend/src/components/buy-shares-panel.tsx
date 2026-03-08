@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { useWriteContract } from "wagmi";
 import {
   examplePredictionMarketAbi,
   confidentialUsdcAbi,
@@ -44,11 +44,6 @@ export function BuySharesPanel({ eventId }: BuySharesPanelProps) {
   });
 
   const { writeContractAsync } = useWriteContract();
-  const { refetch: waitForTx } = useWaitForTransactionReceipt({
-    hash: purchaseState.step === "confirming" ? undefined : undefined,
-  });
-
-  void waitForTx;
 
   const parsedAmount = (() => {
     try {
@@ -117,33 +112,8 @@ export function BuySharesPanel({ eventId }: BuySharesPanelProps) {
     amount,
   ]);
 
-  if (!walletSession.isConnected) {
-    return (
-      <div className="rounded-[calc(var(--radius)+6px)] border bg-card p-5">
-        <h2 className="mb-3 font-serif text-xl font-medium tracking-[-0.03em] text-card-foreground">
-          Trade
-        </h2>
-        <p className="mb-4 text-sm text-muted-foreground">
-          Connect your wallet to buy shares on this event.
-        </p>
-        <ConnectWalletButton variant="accent" />
-      </div>
-    );
-  }
-
-  if (!walletSession.isSupportedChain) {
-    return (
-      <div className="rounded-[calc(var(--radius)+6px)] border bg-card p-5">
-        <h2 className="mb-3 font-serif text-xl font-medium tracking-[-0.03em] text-card-foreground">
-          Trade
-        </h2>
-        <p className="mb-4 text-sm text-muted-foreground">
-          Switch to the correct network to trade.
-        </p>
-        <SwitchNetworkButton showError />
-      </div>
-    );
-  }
+  const needsWallet = !walletSession.isConnected;
+  const needsNetwork = walletSession.isConnected && !walletSession.isSupportedChain;
 
   if (purchaseState.step === "success") {
     const insiderStreamsUrl = env.NEXT_PUBLIC_INSIDER_STREAMS_URL;
@@ -294,34 +264,40 @@ export function BuySharesPanel({ eventId }: BuySharesPanelProps) {
           </div>
         )}
 
-        <Button
-          type="button"
-          className="w-full"
-          variant={selectedOutcome === "yes" ? "yes" : selectedOutcome === "no" ? "no" : "default"}
-          disabled={!canBuy}
-          onClick={() => void handleBuy()}
-        >
-          {purchaseState.step === "approving" ? (
-            <>
-              <Loader2 className="size-4 animate-spin" />
-              Approving USDC...
-            </>
-          ) : purchaseState.step === "buying" ? (
-            <>
-              <Loader2 className="size-4 animate-spin" />
-              Buying shares...
-            </>
-          ) : purchaseState.step === "confirming" ? (
-            <>
-              <Loader2 className="size-4 animate-spin" />
-              Confirming...
-            </>
-          ) : selectedOutcome ? (
-            `Buy ${selectedOutcome.toUpperCase()} shares`
-          ) : (
-            "Select an outcome"
-          )}
-        </Button>
+        {needsWallet ? (
+          <ConnectWalletButton className="w-full [&>button]:w-full" variant="accent" />
+        ) : needsNetwork ? (
+          <SwitchNetworkButton className="w-full [&>button]:w-full" showError />
+        ) : (
+          <Button
+            type="button"
+            className="w-full"
+            variant={selectedOutcome === "yes" ? "yes" : selectedOutcome === "no" ? "no" : "default"}
+            disabled={!canBuy}
+            onClick={() => void handleBuy()}
+          >
+            {purchaseState.step === "approving" ? (
+              <>
+                <Loader2 className="size-4 animate-spin" />
+                Approving USDC...
+              </>
+            ) : purchaseState.step === "buying" ? (
+              <>
+                <Loader2 className="size-4 animate-spin" />
+                Buying shares...
+              </>
+            ) : purchaseState.step === "confirming" ? (
+              <>
+                <Loader2 className="size-4 animate-spin" />
+                Confirming...
+              </>
+            ) : selectedOutcome ? (
+              `Buy ${selectedOutcome.toUpperCase()} shares`
+            ) : (
+              "Select an outcome"
+            )}
+          </Button>
+        )}
 
         <p className="text-center text-xs text-muted-foreground">
           Requires ConfidentialUSDC on Sepolia. 1 USDC = 1 share at par.
