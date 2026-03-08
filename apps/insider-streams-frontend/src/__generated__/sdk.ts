@@ -3074,6 +3074,8 @@ export type HomepageAuctionsQueryVariables = Exact<{
   limit: Scalars['Int']['input'];
   skip: Scalars['Int']['input'];
   where?: InputMaybe<Auction_Filter>;
+  orderBy?: InputMaybe<Auction_OrderBy>;
+  orderDirection?: InputMaybe<OrderDirection>;
 }>;
 
 
@@ -3144,12 +3146,12 @@ export const AuctionDetailSubgraphDocument = gql`
 }
     `;
 export const HomepageAuctionsDocument = gql`
-    query HomepageAuctions($limit: Int!, $skip: Int!, $where: Auction_filter) {
+    query HomepageAuctions($limit: Int!, $skip: Int!, $where: Auction_filter, $orderBy: Auction_orderBy, $orderDirection: OrderDirection) {
   auctions(
     first: $limit
     skip: $skip
-    orderBy: blockTimestamp
-    orderDirection: desc
+    orderBy: $orderBy
+    orderDirection: $orderDirection
     where: $where
   ) {
     auctionId
