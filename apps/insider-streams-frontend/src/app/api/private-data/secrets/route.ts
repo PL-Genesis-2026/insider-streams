@@ -37,7 +37,6 @@ export async function POST(request: Request) {
 
   const supabase = getSupabaseServiceClient();
 
-  // 1. Find user's seller record (if any)
   const { data: seller, error: sellerError } = await supabase
     .from("sellers")
     .select("id")
@@ -52,7 +51,6 @@ export async function POST(request: Request) {
     );
   }
 
-  // 2. Find user's winning bids for the requested auctions
   const { data: winningBids, error: bidsError } = await supabase
     .from("private_bids")
     .select("auction_id")
@@ -68,78 +66,49 @@ export async function POST(request: Request) {
     );
   }
 
-  // 3. Build set of authorized auction IDs
-  const winningBidAuctionIds = new Set(
-    winningBids.map((b) => b.auction_id),
-  );
+  const { data: secrets, error: secretsError } = await supabase
+    .from("secrets")
+    .select("auction_id, seller_id, secret_data, event_data")
+    .in("auction_id", auctionIds);
 
-  // Collect all authorized auction IDs (seller OR winning bidder)
-  const authorizedAuctionIds = new Set<string>();
-
-  // Seller auctions: we need to query secrets by seller_id
-  // Winning bid auctions: we need to query secrets by auction_id
-  // We'll do two queries if needed and merge results
-
-  const result: Record<string, { secret_data: string; event_data: unknown }> =
-    {};
-
-  // 4a. Query secrets for seller's auctions
-  if (seller) {
-    const { data: sellerSecrets, error: sellerSecretsError } = await supabase
-      .from("secrets")
-      .select("auction_id, secret_data, event_data")
-      .eq("seller_id", seller.id)
-      .in("auction_id", auctionIds);
-
-    if (sellerSecretsError) {
-      console.error(
-        "[private-data/secrets] Supabase seller secrets error:",
-        sellerSecretsError,
-      );
-      return NextResponse.json(
-        { error: "Internal server error", code: "DB_ERROR" },
-        { status: 500 },
-      );
-    }
-
-    for (const secret of sellerSecrets) {
-      result[secret.auction_id] = {
-        secret_data: secret.secret_data,
-        event_data: secret.event_data,
-      };
-      authorizedAuctionIds.add(secret.auction_id);
-    }
+  if (secretsError) {
+    console.error("[private-data/secrets] Supabase secrets error:", secretsError);
+    return NextResponse.json(
+      { error: "Internal server error", code: "DB_ERROR" },
+      { status: 500 },
+    );
   }
 
-  // 4b. Query secrets for winning bid auctions (skip ones already found as seller)
-  const remainingWinningAuctionIds = [...winningBidAuctionIds].filter(
-    (id) => !authorizedAuctionIds.has(id),
+  const winningBidAuctionIds = new Set(winningBids.map((bid) => bid.auction_id));
+  const secretsByAuctionId = new Map(
+    secrets.map((secret) => [secret.auction_id, secret]),
   );
 
-  if (remainingWinningAuctionIds.length > 0) {
-    const { data: bidSecrets, error: bidSecretsError } = await supabase
-      .from("secrets")
-      .select("auction_id, secret_data, event_data")
-      .in("auction_id", remainingWinningAuctionIds);
+  const result = Object.fromEntries(
+    auctionIds.map((auctionId) => {
+      const secret = secretsByAuctionId.get(auctionId);
 
-    if (bidSecretsError) {
-      console.error(
-        "[private-data/secrets] Supabase bid secrets error:",
-        bidSecretsError,
-      );
-      return NextResponse.json(
-        { error: "Internal server error", code: "DB_ERROR" },
-        { status: 500 },
-      );
-    }
+      if (!secret) {
+        return [auctionId, { kind: "not_found" as const }];
+      }
 
-    for (const secret of bidSecrets) {
-      result[secret.auction_id] = {
-        secret_data: secret.secret_data,
-        event_data: secret.event_data,
-      };
-    }
-  }
+      const canAccessSecret =
+        secret.seller_id === seller?.id || winningBidAuctionIds.has(auctionId);
+
+      if (!canAccessSecret) {
+        return [auctionId, { kind: "forbidden" as const }];
+      }
+
+      return [
+        auctionId,
+        {
+          kind: "accessible" as const,
+          secret_data: secret.secret_data,
+          event_data: secret.event_data,
+        },
+      ];
+    }),
+  );
 
   return NextResponse.json({ data: result });
 }

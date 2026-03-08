@@ -99,8 +99,8 @@ Common options:
 Command options:
   events
   secrets --ids <csv>
-  snapshot --address <address>
-  reconcile --address <address>
+  snapshot [--pk <hex>] [--env-key <name>]
+  reconcile [--pk <hex>] [--env-key <name>]
   private-balances [--pk <hex>] [--env-key <name>]
   private-transfer --recipient <address> --amount <base-units> [--token <address>] [--flag <value> ...]
   faucet [--address <address>] [--pk <hex>] [--env-key <name>]
@@ -446,63 +446,46 @@ async function runSecrets(args: string[]): Promise<void> {
 }
 
 async function runSnapshot(args: string[]): Promise<void> {
-  const parsed = parseArgs({
-    args,
-    allowPositionals: false,
-    strict: true,
-    options: {
-      address: { type: "string" },
-      "base-url": { type: "string" },
-      help: { type: "boolean", short: "h" },
-    },
-  });
-
-  if (parsed.values.help) {
-    console.log("Usage: pnpm frontend-api snapshot --address <address> [--base-url <url>]");
+  const common = toCommonOptions(parseCommonOptions(args));
+  if (common.help) {
+    console.log(
+      "Usage: pnpm frontend-api snapshot [--pk <hex>] [--env-key <name>] [--base-url <url>]",
+    );
     return;
   }
 
-  const address = parsed.values.address;
-  if (!address) {
-    fail("missing required argument: --address");
-  }
+  const { payloadWithSignature } = await signStablePayload(common, {
+    timestamp: timestamp(),
+  });
 
   const response = await requestJson(
-    { baseUrl: parsed.values["base-url"], help: parsed.values.help },
-    "GET",
-    `/api/funding/snapshot?address=${validateAddress(address, "address")}`,
+    common,
+    "POST",
+    "/api/funding/snapshot",
+    payloadWithSignature,
   );
   printResponse("snapshot", response);
   exitOnHttpError(response);
 }
 
 async function runReconcile(args: string[]): Promise<void> {
-  const parsed = parseArgs({
-    args,
-    allowPositionals: false,
-    strict: true,
-    options: {
-      address: { type: "string" },
-      "base-url": { type: "string" },
-      help: { type: "boolean", short: "h" },
-    },
-  });
-
-  if (parsed.values.help) {
-    console.log("Usage: pnpm frontend-api reconcile --address <address> [--base-url <url>]");
+  const common = toCommonOptions(parseCommonOptions(args));
+  if (common.help) {
+    console.log(
+      "Usage: pnpm frontend-api reconcile [--pk <hex>] [--env-key <name>] [--base-url <url>]",
+    );
     return;
   }
 
-  const address = parsed.values.address;
-  if (!address) {
-    fail("missing required argument: --address");
-  }
+  const { payloadWithSignature } = await signStablePayload(common, {
+    timestamp: timestamp(),
+  });
 
   const response = await requestJson(
-    { baseUrl: parsed.values["base-url"], help: parsed.values.help },
+    common,
     "POST",
     "/api/funding/reconcile",
-    { address: validateAddress(address, "address") },
+    payloadWithSignature,
   );
   printResponse("reconcile", response);
   exitOnHttpError(response);

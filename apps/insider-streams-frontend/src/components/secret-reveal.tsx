@@ -4,14 +4,14 @@ import Image from "next/image";
 import { useCallback, useState } from "react";
 import { ExternalLink, Eye, EyeOff, Loader2, Lock } from "lucide-react";
 import { useAccount } from "wagmi";
-import { useAppKit } from "@reown/appkit/react";
 import { EXAMPLE_PREDICTION_MARKET_NAME } from "@private-streams/common";
 import { Button } from "@/components/ui/button";
 import { env } from "@/env";
 import type { EventData } from "@/lib/supabase/secrets";
-import type { PrivateSecretRecord } from "@/lib/private-data/types";
+import type { PrivateSecretState } from "@/lib/private-data/types";
 import { usePrivateData } from "@/lib/private-data/use-private-data";
 import { cn } from "@/lib/utils";
+import { openAppKitConnectModal } from "@/lib/wallet/config";
 
 type SecretRevealCardProps = {
   auctionId: string;
@@ -59,7 +59,11 @@ function MarketLink({ eventData }: { eventData: EventData }) {
   );
 }
 
-function RevealedContent({ data }: { data: PrivateSecretRecord }) {
+function RevealedContent({
+  data,
+}: {
+  data: Extract<PrivateSecretState, { kind: "accessible" }>;
+}) {
   return (
     <div>
       <div className="space-y-2">
@@ -81,15 +85,19 @@ function RevealedContent({ data }: { data: PrivateSecretRecord }) {
 export function SecretRevealCard({ auctionId }: SecretRevealCardProps) {
   const [hidden, setHidden] = useState(false);
   const { isConnected } = useAccount();
-  const { open } = useAppKit();
-  const { getSecret, revealForAuctions, isLoading, error, isRevealed: isSessionRevealed } = usePrivateData();
+  const {
+    getSecretState,
+    revealForAuctions,
+    isLoading,
+    error,
+    isRevealed: isSessionRevealed,
+  } = usePrivateData();
 
-  const secret = getSecret(auctionId);
-  const isRevealed = !!secret && !hidden;
+  const secretState = getSecretState(auctionId);
 
   const handleConnect = useCallback(() => {
-    void open({ view: "Connect" });
-  }, [open]);
+    void openAppKitConnectModal();
+  }, []);
 
   const handleReveal = useCallback(() => {
     setHidden(false);
@@ -100,10 +108,10 @@ export function SecretRevealCard({ auctionId }: SecretRevealCardProps) {
     setHidden(true);
   }, []);
 
-  if (isRevealed) {
+  if (secretState?.kind === "accessible" && !hidden) {
     return (
       <div>
-        <RevealedContent data={secret} />
+        <RevealedContent data={secretState} />
         <div className="mt-5 flex justify-center">
           <Button variant="ghost" size="sm" onClick={handleHide}>
             <EyeOff className="size-3.5" />
@@ -114,13 +122,25 @@ export function SecretRevealCard({ auctionId }: SecretRevealCardProps) {
     );
   }
 
-  // User has already authenticated but no secret exists for this auction
-  if (isSessionRevealed && !secret && !isLoading) {
+  if (!isLoading && secretState?.kind === "forbidden") {
+    return (
+      <p className="text-sm leading-7 text-muted-foreground">
+        This secret exists, but only the seller and the winning bidder can view
+        it.
+      </p>
+    );
+  }
+
+  if (!isLoading && secretState?.kind === "not_found") {
     return (
       <p className="text-sm leading-7 text-muted-foreground">
         No secret record is available for this auction.
       </p>
     );
+  }
+
+  if (isSessionRevealed && error && !secretState && !isLoading) {
+    return <p className="text-sm leading-7 text-destructive">{error}</p>;
   }
 
   return (

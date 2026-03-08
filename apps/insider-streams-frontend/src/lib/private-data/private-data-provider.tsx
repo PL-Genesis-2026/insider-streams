@@ -8,29 +8,15 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useAccount, useWalletClient } from "wagmi";
-import { useAppKit } from "@reown/appkit/react";
+import { useAccount } from "wagmi";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
-import stringify from "fast-json-stable-stringify";
 import type {
   PrivateSellerRecord,
   PrivateBidRecord,
-  PrivateSecretRecord,
+  PrivateSecretState,
 } from "./types";
 import { fetchMySeller, fetchMyBids, fetchMySecrets } from "./api";
-
-// ---------------------------------------------------------------------------
-// Signature session — reuse within 9.5 min (570s) of the 10 min TTL
-// ---------------------------------------------------------------------------
-
-type StoredSession = { signature: string; timestamp: number };
-
-const SIGNATURE_MAX_AGE_SECONDS = 570; // 30s safety margin before 600s TTL
-
-function isSessionValid(session: StoredSession | null): session is StoredSession {
-  if (!session) return false;
-  return Date.now() / 1000 - session.timestamp < SIGNATURE_MAX_AGE_SECONDS;
-}
+import { useSignedWalletSession } from "@/lib/wallet/use-signed-wallet-session";
 
 // ---------------------------------------------------------------------------
 // Context
@@ -45,7 +31,7 @@ export type PrivateDataContextValue = {
   // Data accessors
   seller: PrivateSellerRecord | null;
   getBid: (auctionId: string) => PrivateBidRecord | undefined;
-  getSecret: (auctionId: string) => PrivateSecretRecord | undefined;
+  getSecretState: (auctionId: string) => PrivateSecretState | undefined;
 
   // Actions
   revealForAuctions: (auctionIds: string[]) => Promise<void>;
@@ -94,11 +80,9 @@ function secretsKey(address: string) {
  */
 export function PrivateDataProvider({ children }: { children: ReactNode }) {
   const { address, isConnected } = useAccount();
-  const { data: walletClient } = useWalletClient();
-  const { open } = useAppKit();
+  const { getSignedSession } = useSignedWalletSession();
   const queryClient = useQueryClient();
 
-  const sessionRef = useRef<StoredSession | null>(null);
   const visibleAuctionsRef = useRef<Map<string, string[]>>(new Map());
 
   const [isRevealed, setIsRevealed] = useState(false);
@@ -121,7 +105,7 @@ export function PrivateDataProvider({ children }: { children: ReactNode }) {
     staleTime: BIDS_STALE_TIME,
   });
 
-  const { data: secretsData } = useQuery<Record<string, PrivateSecretRecord>>({
+  const { data: secretsData } = useQuery<Record<string, PrivateSecretState>>({
     queryKey: address ? secretsKey(address) : ["private-secrets", "__none__"],
     queryFn: () => ({}), // populated via setQueryData
     enabled: false,
@@ -160,8 +144,8 @@ export function PrivateDataProvider({ children }: { children: ReactNode }) {
     [bidsData],
   );
 
-  const getSecret = useCallback(
-    (auctionId: string): PrivateSecretRecord | undefined => {
+  const getSecretState = useCallback(
+    (auctionId: string): PrivateSecretState | undefined => {
       return secretsData?.[auctionId];
     },
     [secretsData],
@@ -171,14 +155,8 @@ export function PrivateDataProvider({ children }: { children: ReactNode }) {
 
   const revealForAuctions = useCallback(
     async (auctionIds: string[]) => {
-      // 1. Ensure wallet is connected
       if (!isConnected || !address) {
-        void open({ view: "Connect" });
-        return;
-      }
-
-      if (!walletClient) {
-        setError("Wallet client not available. Please try again.");
+        setError("Connect wallet to reveal private data.");
         return;
       }
 
@@ -186,19 +164,8 @@ export function PrivateDataProvider({ children }: { children: ReactNode }) {
       setError(null);
 
       try {
-        // 2. Get or create signature
-        let session = sessionRef.current;
-        if (!isSessionValid(session)) {
-          const timestamp = Math.floor(Date.now() / 1000);
-          const message = stringify({ timestamp });
-          const signature = await walletClient.signMessage({ message });
-          session = { signature, timestamp };
-          sessionRef.current = session;
-        }
+        const { signature, timestamp } = await getSignedSession();
 
-        const { signature, timestamp } = session;
-
-        // 3. Parallel fetch
         const [sellerResult, bidsResult, secretsResult] =
           await Promise.allSettled([
             fetchMySeller(signature, timestamp),
@@ -227,7 +194,7 @@ export function PrivateDataProvider({ children }: { children: ReactNode }) {
         if (secretsResult.status === "fulfilled") {
           queryClient.setQueryData(
             secretsKey(address),
-            (existing: Record<string, PrivateSecretRecord> | undefined) => ({
+            (existing: Record<string, PrivateSecretState> | undefined) => ({
               ...existing,
               ...secretsResult.value,
             }),
@@ -261,7 +228,7 @@ export function PrivateDataProvider({ children }: { children: ReactNode }) {
         setIsLoading(false);
       }
     },
-    [isConnected, address, walletClient, open, queryClient],
+    [isConnected, address, getSignedSession, queryClient],
   );
 
   // ---- Wallet disconnect cleanup --------------------------------------
@@ -274,7 +241,6 @@ export function PrivateDataProvider({ children }: { children: ReactNode }) {
       queryClient.removeQueries({ queryKey: ["private-secrets"] });
       setIsRevealed(false);
       setError(null);
-      sessionRef.current = null;
     }
   }, [isConnected, queryClient]);
 
@@ -286,7 +252,7 @@ export function PrivateDataProvider({ children }: { children: ReactNode }) {
     error,
     seller: sellerData ?? null,
     getBid,
-    getSecret,
+    getSecretState,
     revealForAuctions,
     registerVisibleAuctions,
     unregisterVisibleAuctions,

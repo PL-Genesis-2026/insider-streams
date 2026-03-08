@@ -23,10 +23,10 @@ import { usePrivateData } from "@/lib/private-data/use-private-data";
 import { useWalletSession } from "@/lib/wallet/use-wallet-session";
 
 export function WalletAccountControl() {
-  const fundingSnapshot = useFundingSnapshot();
   const walletSession = useWalletSession();
   const { disconnect } = useDisconnect();
   const { isRevealed } = usePrivateData();
+  const fundingSnapshot = useFundingSnapshot({ enabled: isRevealed });
   const displayBalance = isRevealed
     ? getDisplayFundingBalance(fundingSnapshot.balance)
     : null;
@@ -71,7 +71,13 @@ export function WalletAccountControl() {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <FundingStatusBadge status={fundingSnapshot.status} />
+              {isRevealed ? (
+                <FundingStatusBadge status={fundingSnapshot.status} />
+              ) : (
+                <span className="text-xs font-normal text-muted-foreground">
+                  Private wallet status hidden until reveal.
+                </span>
+              )}
               <span className="text-xs font-normal text-muted-foreground">
                 {walletSession.currentChainName ?? walletSession.requiredChainName}
               </span>
