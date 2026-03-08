@@ -1,7 +1,142 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --font-theme-sans: var(--font-geist-sans);
+  --font-theme-serif: var(--font-geist-sans);
+
+  --background: #ffffff;
+  --foreground: #171717;
+  --card: #ffffff;
+  --card-foreground: #171717;
+  --popover: #ffffff;
+  --popover-foreground: #171717;
+  --primary: #171717;
+  --primary-foreground: #f7f7f7;
+  --secondary: #f5f5f5;
+  --secondary-foreground: #171717;
+  --muted: #f5f5f5;
+  --muted-foreground: #5f5f5f;
+  --accent: #ececec;
+  --accent-foreground: #171717;
+  --destructive: #b74d3e;
+  --destructive-foreground: #fff3f1;
+  --border: color-mix(in srgb, #171717 10%, transparent);
+  --input: color-mix(in srgb, #171717 12%, transparent);
+  --ring: #5f5f5f;
+  --radius: 1.25rem;
+  --sidebar: hsl(0 0% 98%);
+  --sidebar-foreground: hsl(240 5.3% 26.1%);
+  --sidebar-primary: hsl(240 5.9% 10%);
+  --sidebar-primary-foreground: hsl(0 0% 98%);
+  --sidebar-accent: hsl(240 4.8% 95.9%);
+  --sidebar-accent-foreground: hsl(240 5.9% 10%);
+  --sidebar-border: hsl(220 13% 91%);
+  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --font-sans: var(--font-theme-sans);
+  --font-serif: var(--font-theme-serif);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+}
+
+.theme-bollymarket {
+  --font-theme-sans: var(--font-ember-body);
+  --font-theme-serif: var(--font-ember-display);
+
+  --background: #080b12;
+  --foreground: #dfe6f0;
+  --card: #0d1118;
+  --card-foreground: #e0e7f1;
+  --popover: #111620;
+  --popover-foreground: #e0e7f1;
+  --primary: #c8d4e4;
+  --primary-foreground: #0e1219;
+  --secondary: #1a2030;
+  --secondary-foreground: #d0dae8;
+  --muted: #141a26;
+  --muted-foreground: #8a9ab2;
+  --accent: #5b8af0;
+  --accent-foreground: #080b12;
+  --destructive: #b35747;
+  --destructive-foreground: #fff4f1;
+  --border: color-mix(in srgb, #ffffff 12%, transparent);
+  --input: color-mix(in srgb, #ffffff 16%, transparent);
+  --ring: #5b8af0;
+  --radius: 1.5rem;
+  --sidebar: #0a0e16;
+  --sidebar-foreground: #dfe6f0;
+  --sidebar-primary: #c8d4e4;
+  --sidebar-primary-foreground: #0e1219;
+  --sidebar-accent: #1a2030;
+  --sidebar-accent-foreground: #d0dae8;
+  --sidebar-border: color-mix(in srgb, #ffffff 10%, transparent);
+  --sidebar-ring: #5b8af0;
+  color-scheme: dark;
+}
+
 body {
-  background: #0a0a0a;
-  color: #ededed;
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+* {
+  border-color: var(--border);
+}
+
+:where(
+    a[href],
+    button:not(:disabled),
+    [role="button"]:not([aria-disabled="true"]),
+    summary,
+    label[for]
+  ) {
+  cursor: pointer;
+}
+
+:where(button:disabled, [aria-disabled="true"]) {
+  cursor: not-allowed;
+}
+
+.theme-bollymarket {
+  background:
+    radial-gradient(circle at top, rgb(91 138 240 / 0.12), transparent 28%),
+    radial-gradient(circle at bottom right, rgb(200 212 228 / 0.04), transparent 24%),
+    linear-gradient(180deg, #080b12 0%, #0a0e16 100%);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+.theme-bollymarket ::selection {
+  background: color-mix(in srgb, var(--accent) 40%, transparent);
+  color: var(--foreground);
 }
