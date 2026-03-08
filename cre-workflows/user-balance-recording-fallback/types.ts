@@ -42,7 +42,7 @@ export const configSchema = z.object({
   chainSelectorName: z.string(),
   ntfyEnabled: z.boolean().default(true),
   ntfyHost: z.string().startsWith("http").default("http://localhost:8090"),
-  ntfyTopic: z.string().default("user-balance-recording-fallback"),
+  ntfyTopic: z.string().default("user-balance-recording-fallback-cre"),
   ntfyUser: z.string().default("vps"),
 });
 

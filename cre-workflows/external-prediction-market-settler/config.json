@@ -9,6 +9,6 @@
   ],
   "ntfyEnabled": true,
   "ntfyHost": "https://api.insider-streams.com",
-  "ntfyTopic": "external-prediction-market-settler",
+  "ntfyTopic": "external-prediction-market-settler-cre",
   "ntfyUser": "vps"
 }

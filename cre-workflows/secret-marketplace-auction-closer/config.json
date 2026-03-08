@@ -9,6 +9,6 @@
   ],
   "ntfyEnabled": true,
   "ntfyHost": "https://api.insider-streams.com",
-  "ntfyTopic": "secret-marketplace-auction-closer",
+  "ntfyTopic": "secret-marketplace-auction-closer-cre",
   "ntfyUser": "vps"
 }

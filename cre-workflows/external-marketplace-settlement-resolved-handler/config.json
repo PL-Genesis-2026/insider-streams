@@ -10,6 +10,6 @@
   ],
   "ntfyEnabled": true,
   "ntfyHost": "https://api.insider-streams.com",
-  "ntfyTopic": "external-marketplace-settlement-resolved-handler",
+  "ntfyTopic": "external-marketplace-settlement-resolved-handler-cre",
   "ntfyUser": "vps"
 }

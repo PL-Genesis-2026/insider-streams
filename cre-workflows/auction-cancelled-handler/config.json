@@ -8,6 +8,6 @@
   ],
   "ntfyEnabled": true,
   "ntfyHost": "https://api.insider-streams.com",
-  "ntfyTopic": "auction-cancelled-handler",
+  "ntfyTopic": "auction-cancelled-handler-cre",
   "ntfyUser": "vps"
 }
