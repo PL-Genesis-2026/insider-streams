@@ -4,7 +4,7 @@
 # Checks out a branch on the remote, installs deps, runs E2E tests.
 # Handles uncommitted local changes, offers rollback on failure.
 #
-# Usage: ./scripts/deploy.sh [--branch <name>] [--repo-path <path>] [--skip-e2e] [--yes]
+# Usage: ./scripts/deploy.sh [--branch <name>] [--repo-path <path>] [--e2e] [--yes]
 # Requires: ssh access to remote
 
 set -euo pipefail
@@ -23,7 +23,7 @@ NC='\033[0m' # No Color
 # ─── Parse CLI arguments ─────────────────────────────────────────────────────
 BRANCH=""
 REPO_PATH=""
-SKIP_E2E=false
+RUN_E2E=false
 AUTO_YES=false
 
 while [[ $# -gt 0 ]]; do
@@ -36,8 +36,8 @@ while [[ $# -gt 0 ]]; do
       REPO_PATH="$2"
       shift 2
       ;;
-    --skip-e2e)
-      SKIP_E2E=true
+    --e2e)
+      RUN_E2E=true
       shift
       ;;
     --yes)
@@ -46,7 +46,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     *)
       echo -e "${RED}Unknown argument: $1${NC}"
-      echo "Usage: ./scripts/deploy.sh [--branch <name>] [--repo-path <path>] [--skip-e2e] [--yes]"
+      echo "Usage: ./scripts/deploy.sh [--branch <name>] [--repo-path <path>] [--e2e] [--yes]"
       exit 1
       ;;
   esac
@@ -142,7 +142,7 @@ echo "════════════════════════�
 echo "  Remote:  $REMOTE_HOST"
 echo "  Branch:  $BRANCH"
 echo "  Repo:    $REPO_PATH"
-echo "  E2E:     $([ "$SKIP_E2E" = true ] && echo "skip" || echo "run")"
+echo "  E2E:     $([ "$RUN_E2E" = true ] && echo "run" || echo "skip")"
 echo "═══════════════════════════════════════════════════════"
 
 # ─── Check for uncommitted changes ───────────────────────────────────────────
@@ -334,9 +334,9 @@ done
 # Phase 3: E2E Verification
 # ═══════════════════════════════════════════════════════════════════════════════
 
-if [ "$SKIP_E2E" = true ]; then
+if [ "$RUN_E2E" = false ]; then
   echo ""
-  warn "Skipping E2E verification (--skip-e2e)"
+  warn "Skipping E2E verification (pass --e2e to run)"
 else
   echo ""
   echo "▶ Phase 3: Running E2E verification..."
@@ -522,7 +522,7 @@ echo "  Remote:    $REMOTE_HOST"
 echo "  Branch:    $BRANCH"
 echo "  Commit:    $DEPLOYED_COMMIT"
 echo "  Repo:      $REPO_PATH"
-if [ "$SKIP_E2E" = false ]; then
+if [ "$RUN_E2E" = true ]; then
   echo "  Workflows: secret-marketplace=$SECRET_MARKETPLACE_RESULT auction-closer=$SECRET_MARKETPLACE_AUCTION_CLOSER_RESULT simple-market=$SIMPLE_MARKET_RESULT deposit-reconciler=$USER_BALANCE_RECORDING_FALLBACK_RESULT reputation=$REPUTATION_RESOLVER_RESULT force-close=$FORCE_CLOSE_HANDLER_RESULT"
 fi
 echo "═══════════════════════════════════════════════════════"

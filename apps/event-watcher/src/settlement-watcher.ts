@@ -1,6 +1,7 @@
 /**
  * Settlement watcher — subscribes to SettlementRequested events via WebSocket
  * and triggers the external-prediction-market-settler CRE workflow.
+ * Note: The external-prediction-market-scheduler CRE is also invoked directly by cron on the VPS in case this misses something
  *
  * On startup, catches up from lastProcessedBlock using getLogs, then switches
  * to real-time WebSocket subscription.
@@ -13,6 +14,7 @@ import {
 } from "@private-streams/common";
 import { runCRE } from "./cre-runner.js";
 import { log } from "./index.js";
+import { notify } from "./notify.js";
 
 const processed = new Set<string>();
 const MAX_PROCESSED = 1000;
@@ -55,8 +57,10 @@ async function handleEvent(
       broadcast: true,
     });
     log("settlement", `CRE completed for event ${eventId}`);
+    await notify("SettlementRequested — CRE done", `Event ${eventId} settlement broadcast\nBlock ${blockNumber}\ntx ${txHash.slice(0, 16)}…`, ["white_check_mark"]);
   } catch (err) {
     log("settlement", `CRE FAILED for event ${eventId}: ${err}`);
+    await notify("SettlementRequested — CRE FAILED", `Event ${eventId}\n${err}`, ["x"]);
   }
 
   processed.add(key);

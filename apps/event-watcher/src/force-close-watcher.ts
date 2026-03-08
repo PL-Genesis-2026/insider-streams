@@ -13,6 +13,7 @@ import {
 } from "@private-streams/common";
 import { runCRE } from "./cre-runner.js";
 import { log } from "./index.js";
+import { notify } from "./notify.js";
 
 const processed = new Set<string>();
 const MAX_PROCESSED = 1000;
@@ -54,8 +55,10 @@ async function handleEvent(
       evmEventIndex: eventIndex,
     });
     log("force-close", `CRE completed for auction ${auctionId}`);
+    await notify("AuctionCancelled — CRE done", `Auction ${auctionId} force-close handled\nBlock ${blockNumber}\ntx ${txHash.slice(0, 16)}…`, ["white_check_mark"]);
   } catch (err) {
     log("force-close", `CRE FAILED for auction ${auctionId}: ${err}`);
+    await notify("AuctionCancelled — CRE FAILED", `Auction ${auctionId}\n${err}`, ["x"]);
   }
 
   processed.add(key);

@@ -8,7 +8,8 @@ AI-powered prediction market built on Chainlink Runtime Environment (CRE) with G
 private-streams/
 ├── apps/
 │   ├── prediction-market-frontend/  # Next.js — settlement history UI (Firebase/Firestore)
-│   └── insider-streams-frontend/    # Next.js — main app (scaffolded, not yet built)
+│   ├── insider-streams-frontend/    # Next.js — main app (scaffolded, not yet built)
+│   └── event-watcher/               # Long-running event watcher that triggers CRE workflow simulations
 ├── packages/
 │   ├── common/                          # Shared ABIs, addresses, utilities (@private-streams/common)
 │   └── chainlink-private-token-api-client/  # Typed API client for Compliant Private Token API
@@ -28,14 +29,7 @@ private-streams/
 │   │   ├── reputation-resolver-e2e.ts   # Reputation resolver CRE workflow E2E
 │   │   ├── force-close-handler-e2e.ts   # Force close handler CRE workflow E2E
 │   │   └── user-balance-recording-fallback-e2e.ts    # Deposit reconciler workflow E2E
-│   ├── event-watcher/               # Long-running event watcher (systemd service)
-│   │   ├── index.ts                 # Entry point — polls chain, triggers CRE workflows
-│   │   ├── force-close-watcher.ts   # AuctionCancelled log polling
-│   │   ├── settlement-watcher.ts    # SettlementRequested log polling
-│   │   ├── auction-expiry-watcher.ts # Expired auction contract polling
-│   │   ├── cre-runner.ts            # Shared runCRE helper
-│   │   ├── state.ts                 # Block state persistence
-│   │   └── event-watcher.service    # systemd unit file
+│   ├── cre-runner.ts                # Shared runCRE helper (used by E2E tests)
 │   ├── generate-contract-types.sh   # Compile contracts + regenerate types/ABIs
 │   ├── generate-supabase-types.sh   # Regenerate Supabase TypeScript types
 │   ├── deploy-contracts.sh          # Interactive contract deploy + address replacement
@@ -143,10 +137,11 @@ cre workflow simulate user-balance-recording-fallback --target local-simulation 
 
 ### Event Watcher
 
-Long-running process that polls the chain and triggers CRE workflows on events:
+Long-running background process (`apps/event-watcher/`) that monitors the chain via WebSocket and HTTP polling, then triggers CRE workflow simulations. Needed because simulated CRE workflows are one-shot — only deployed workflows on the Chainlink DON run continuously.
 
 ```bash
-pnpm watch    # from scripts/ — starts the event watcher
+pnpm watch                           # from repo root
+pnpm start                           # from apps/event-watcher/
 ```
 
 Watches for:
@@ -360,6 +355,7 @@ This updates the generated GraphQL types in the frontend, scripts, and CRE workf
 | `contracts/.env`                             | `PRIVATE_KEY`, `RPC_URL` for Foundry scripts            |
 | `cre-workflows/.env`                         | CRE private key, Gemini key, Firebase keys              |
 | `scripts/.env`                               | `OWNER_PK`, `BIDDER_PK`, `RPC_URL` for E2E test scripts |
+| `apps/event-watcher/.env`                    | `RPC_URL` for the event watcher                         |
 | `apps/prediction-market-frontend/.env.local` | `NEXT_PUBLIC_FIREBASE_*` vars                           |
 | `apps/insider-streams-frontend/.env.local`   | `NEXT_PUBLIC_SUBGRAPH_URL`                              |
 
@@ -389,7 +385,7 @@ After deploying, follow the full procedure in **"After a Contract Deployment"** 
 - **Force-close-handler CRE workflow** is log-triggered on `AuctionCancelled` events. When an auction is cancelled, it finds active private bids in Supabase for that auction and refunds them (sets `status="refunded"`, `refunded_at=now`). Uses 2 HTTP calls (Supabase GET + PATCH). No on-chain writes.
 - **User-balance-recording-fallback CRE workflow** runs on a 60-second cron, polls the Private Token API for transfers to/from the platform EOA, and records them as deposits or withdrawals in the Supabase `transfers` table
 - `recordEventOutcomeAndUpdateRepScore(eventId, AuctionResult[])` accepts per-auction prediction outcomes — each `AuctionResult` has `{auctionId, predictionOutcome}` where `predictionOutcome` is a `PredictionOutcome` enum (NoPrediction=0, PredictionCorrect=1, PredictionWrong=2). Auctions not in the results array get NoPrediction (0 score change, still marked resolved).
-- **Event watcher** (`scripts/event-watcher/`) is a long-running Node.js process that subscribes to `AuctionCancelled` and `SettlementRequested` events via WebSocket, and polls for expired auctions every 30s via HTTP. On startup, catches up missed blocks using `getLogs`. Triggers the appropriate CRE workflows via `cre workflow simulate`. Deployed as a systemd service on the remote server. Persists last-processed block to `.watcher-state.json`.
+- **Event watcher** (`apps/event-watcher/`) is a long-running Node.js process that subscribes to `AuctionCancelled` and `SettlementRequested` events via WebSocket, and polls for expired auctions every 30s via HTTP. On startup, catches up missed blocks using `getLogs`. Triggers the appropriate CRE workflows via `cre workflow simulate`. Only needed for simulation — deployed CRE workflows on the Chainlink DON handle event monitoring automatically. Deployed as a systemd service on the remote server. Persists last-processed block to `.watcher-state.json`.
 - CRE CLI installed at `~/.cre/bin/cre` (add to PATH: `export PATH="$HOME/.cre/bin:$PATH"`)
 
 ## Reference Docs

@@ -11,7 +11,7 @@
  * switches to real-time WebSocket subscriptions. The auction-expiry watcher
  * always uses HTTP polling since there's no event to subscribe to.
  *
- * Usage: pnpm watch   (or: npx tsx event-watcher/index.ts)
+ * Usage: pnpm start   (from apps/event-watcher/)
  *
  * Env: RPC_URL (optional, defaults to public Sepolia RPC)
  */
@@ -23,6 +23,7 @@ import { loadState, saveState } from "./state.js";
 import { catchUpForceClose, watchForceClose } from "./force-close-watcher.js";
 import { catchUpSettlement, watchSettlement } from "./settlement-watcher.js";
 import { pollExpiredAuctions } from "./auction-expiry-watcher.js";
+import { notify } from "./notify.js";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -128,6 +129,7 @@ async function main(): Promise<void> {
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
 
+  await notify("Event Watcher started", `RPC: ${HTTP_RPC_URL}\nPoll interval: ${EXPIRY_POLL_INTERVAL_MS / 1000}s`, ["rocket"]);
   log("main", "Watcher running. Press Ctrl+C to stop.");
 }
 
