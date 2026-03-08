@@ -4,6 +4,14 @@ import { z } from "zod";
 export const env = createEnv({
   server: {
     OWNER_PK: z.string().min(1).optional(),
+    SECRET_MARKETPLACE_ADDRESS: z
+      .string()
+      .regex(/^0x[a-fA-F0-9]{40}$/)
+      .optional(),
+    EXAMPLE_PREDICTION_MARKET_ADDRESS: z
+      .string()
+      .regex(/^0x[a-fA-F0-9]{40}$/)
+      .optional(),
     RPC_URL: z
       .string()
       .url()
@@ -26,6 +34,9 @@ export const env = createEnv({
   },
   runtimeEnv: {
     OWNER_PK: process.env.OWNER_PK,
+    SECRET_MARKETPLACE_ADDRESS: process.env.SECRET_MARKETPLACE_ADDRESS,
+    EXAMPLE_PREDICTION_MARKET_ADDRESS:
+      process.env.EXAMPLE_PREDICTION_MARKET_ADDRESS,
     RPC_URL: process.env.RPC_URL,
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
     NEXT_PUBLIC_PROJECT_ID: process.env.NEXT_PUBLIC_PROJECT_ID,

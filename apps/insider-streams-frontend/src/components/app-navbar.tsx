@@ -1,31 +1,35 @@
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
 import { WalletAccountControl } from "@/components/wallet/wallet-account-control";
+import { RevealPrivateDataButton } from "@/components/reveal-private-data-button";
 
 export function AppNavbar() {
   return (
     <header className="border-b border-border/60">
-      <nav className="mx-auto flex w-full max-w-7xl items-center justify-between gap-6 px-6 py-4 md:px-10">
+      <nav className="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 px-4 py-4 sm:gap-6 sm:px-6 md:px-10">
         <Link href="/" className="transition-opacity hover:opacity-80">
           <Logo />
         </Link>
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-2 sm:gap-4 md:gap-6">
           <Link
             href="/create"
-            className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground transition-colors duration-100 ease-out hover:text-foreground"
+            className="hidden text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground transition-colors duration-100 ease-out hover:text-foreground md:inline-flex"
           >
             Sell
           </Link>
           <Link
             href="/#auctions"
-            className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground transition-colors duration-100 ease-out hover:text-foreground"
+            className="hidden text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground transition-colors duration-100 ease-out hover:text-foreground sm:inline-flex"
           >
             Auctions
           </Link>
-          <Button asChild variant="outline" size="sm">
-            <Link href="/funding">Fund wallet</Link>
-          </Button>
+          <Link
+            href="/dashboard"
+            className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground transition-colors duration-100 ease-out hover:text-foreground"
+          >
+            Dashboard
+          </Link>
+          <RevealPrivateDataButton />
           <WalletAccountControl />
         </div>
       </nav>

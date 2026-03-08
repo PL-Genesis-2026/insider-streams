@@ -20,39 +20,48 @@ const fundingStatusCopy: Record<FundingStatus, FundingStatusCopy> = {
     description: "Funding your Insider Streams private wallet is only supported on Ethereum Sepolia.",
   },
   funding_unavailable: {
-    title: "Wallet unavailable",
+    title: "Retry wallet",
     description:
-      "Your Insider Streams private wallet is temporarily unavailable. Try again in a moment.",
+      "Your wallet data could not be loaded right now. Refresh and try again.",
+  },
+  private_data_hidden: {
+    title: "Unlock wallet",
+    description:
+      "Reveal private data to see your bidding balance, withdrawals, and next wallet action.",
   },
   not_funded_yet: {
-    title: "Private wallet not funded yet",
+    title: "Add funds",
     description:
-      "This wallet does not have private balance yet. Start with the vault flow: approve USDC, deposit into the private vault, then check balance here once the credit lands.",
+      "Deposit USDC into the private wallet, then activate it so auction bids can use the balance.",
   },
   reconciling_transfer: {
-    title: "Updating wallet balance",
+    title: "Updating wallet",
     description:
-      "A private transfer was submitted. Insider Streams is updating your private wallet balance now.",
+      "A transfer is still settling. Your wallet will refresh automatically once the balance lands.",
   },
   funded: {
-    title: "Wallet funded",
+    title: "Ready to bid",
     description:
-      "Your Insider Streams private wallet is funded and ready for future bid flows.",
+      "Your private balance is active. You can place bids now from auction pages.",
   },
   withdrawal_available: {
-    title: "Wallet balance available",
+    title: "Ready to bid or withdraw",
     description:
-      "Your Insider Streams private wallet balance is available for bidding or later withdrawal flows.",
+      "Your wallet has available capital. Use it for bids or move it back to your public wallet.",
   },
 };
 
 export function getFundingStatusCopy(status: FundingStatus): FundingStatusCopy {
-  return fundingStatusCopy[status];
+  const copy = fundingStatusCopy[status];
+  if (copy) return copy;
+  return fundingStatusCopy.private_data_hidden;
 }
 
 type FundingSnapshotOptions = {
   isReconcilePending?: boolean;
   errorMessage?: string;
+  /** When true, server has not been queried yet (e.g. private data not revealed) */
+  fundingNotYetChecked?: boolean;
 };
 
 function hasPositiveValue(value?: string | null) {
@@ -99,6 +108,19 @@ export function getFundingSnapshot(
       isReconciling: false,
       transfers: serverSnapshot?.transfers ?? [],
       balance: serverSnapshot?.balance,
+    };
+  }
+
+  if (options?.fundingNotYetChecked || serverSnapshot === undefined) {
+    return {
+      status: "private_data_hidden",
+      address: session.address,
+      currentChainName: session.currentChainName,
+      requiredChainName: session.requiredChainName,
+      platformRecipientAddress: serverSnapshot?.platformRecipientAddress,
+      canPlaceBid: false,
+      isReconciling: false,
+      transfers: [],
     };
   }
 

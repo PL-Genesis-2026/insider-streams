@@ -1,0 +1,19 @@
+{
+  "name": "external-marketplace-settlement-resolved-handler",
+  "version": "1.0.0",
+  "main": "dist/main.js",
+  "private": true,
+  "scripts": {
+    "postinstall": "bunx cre-setup"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@chainlink/cre-sdk": "0.0.8-alpha",
+    "@private-streams/common": "file:../../packages/common",
+    "viem": "^2.38.3",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/bun": "1.2.21"
+  }
+}

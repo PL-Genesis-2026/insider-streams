@@ -2,12 +2,14 @@ query HomepageAuctions(
   $limit: Int!
   $skip: Int!
   $where: Auction_filter
+  $orderBy: Auction_orderBy
+  $orderDirection: OrderDirection
 ) {
   auctions(
     first: $limit
     skip: $skip
-    orderBy: blockTimestamp
-    orderDirection: desc
+    orderBy: $orderBy
+    orderDirection: $orderDirection
     where: $where
   ) {
     auctionId

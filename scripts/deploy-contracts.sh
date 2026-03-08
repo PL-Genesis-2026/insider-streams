@@ -192,11 +192,11 @@ deploy_contract() {
 
 # ─── Read current addresses ─────────────────────────────────────────────────
 
-# Read from packages/common/src/index.ts (the canonical source).
+# Read from packages/common/src/consts.ts (the canonical source).
 # Address may be on the same line or the next line, so grab both with -A1.
-CURRENT_CONFIDENTIAL_USDC=$(grep -A1 'export const CONFIDENTIAL_USDC_ADDRESS' "$ROOT_DIR/packages/common/src/index.ts" | grep -oE '0x[0-9a-fA-F]{40}' | head -1)
-CURRENT_PREDICTION_MARKET=$(grep -A1 'EXAMPLE_PREDICTION_MARKET_ADDRESS' "$ROOT_DIR/packages/common/src/index.ts" | grep -oE '0x[0-9a-fA-F]{40}' | head -1)
-CURRENT_SECRET_MARKETPLACE=$(grep -A1 'SECRET_MARKETPLACE_ADDRESS' "$ROOT_DIR/packages/common/src/index.ts" | grep -oE '0x[0-9a-fA-F]{40}' | head -1)
+CURRENT_CONFIDENTIAL_USDC=$(grep -A1 'export const CONFIDENTIAL_USDC_ADDRESS' "$ROOT_DIR/packages/common/src/consts.ts" | grep -oE '0x[0-9a-fA-F]{40}' | head -1)
+CURRENT_PREDICTION_MARKET=$(grep -A1 'EXAMPLE_PREDICTION_MARKET_ADDRESS' "$ROOT_DIR/packages/common/src/consts.ts" | grep -oE '0x[0-9a-fA-F]{40}' | head -1)
+CURRENT_SECRET_MARKETPLACE=$(grep -A1 'SECRET_MARKETPLACE_ADDRESS' "$ROOT_DIR/packages/common/src/consts.ts" | grep -oE '0x[0-9a-fA-F]{40}' | head -1)
 
 # Also read from .env files — addresses there may differ from packages/common
 # (stale from a previous deploy). We'll replace these too.

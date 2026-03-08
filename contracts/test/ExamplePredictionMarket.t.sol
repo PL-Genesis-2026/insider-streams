@@ -470,6 +470,47 @@ contract ExamplePredictionMarketTest is Test {
         assertEq(usdc.balanceOf(buyer1), balBefore + yesShares);
     }
 
+    // ── adminCloseEvent tests ────────────────────────────────
+
+    function test_adminCloseEvent_setsEventCloseToNow() public {
+        uint256 id = _createEvent();
+        uint256 closeBefore = sm.getEvent(id).eventClose;
+        assertTrue(closeBefore > block.timestamp);
+
+        sm.adminCloseEvent(id);
+
+        assertEq(sm.getEvent(id).eventClose, block.timestamp);
+    }
+
+    function test_adminCloseEvent_emitsEvent() public {
+        uint256 id = _createEvent();
+        vm.expectEmit(true, false, false, false);
+        emit ExamplePredictionMarket.EventAdminClosed(id);
+        sm.adminCloseEvent(id);
+    }
+
+    function test_adminCloseEvent_allowsImmediateRequestSettlement() public {
+        uint256 id = _createEvent();
+        sm.adminCloseEvent(id);
+        // requestSettlement should not revert
+        sm.requestSettlement(id);
+        assertEq(uint8(sm.getEvent(id).status), uint8(ExamplePredictionMarket.Status.SettlementRequested));
+    }
+
+    function test_adminCloseEvent_revert_notOwner() public {
+        uint256 id = _createEvent();
+        vm.prank(buyer1);
+        vm.expectRevert();
+        sm.adminCloseEvent(id);
+    }
+
+    function test_adminCloseEvent_revert_notOpen() public {
+        uint256 id = _createEvent();
+        _settleEvent(id, ExamplePredictionMarket.Outcome.Yes);
+        vm.expectRevert(abi.encodeWithSelector(ExamplePredictionMarket.StatusNotOpen.selector, ExamplePredictionMarket.Status.Settled));
+        sm.adminCloseEvent(id);
+    }
+
     // ── Price view tests ────────────────────────────────────
 
     function test_prices_sumToOne() public {

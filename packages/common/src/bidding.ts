@@ -66,28 +66,104 @@ export async function executeBid(
   let contractCurrentBid: bigint;
   let auctionSellerId: string;
   try {
+    const auctionIdBigInt = BigInt(auctionId);
+    // #region agent log
+    const chainId = await publicClient.getChainId();
+    fetch("http://127.0.0.1:7859/ingest/ba8f260b-7c31-4bbf-85d3-412660c8b25b", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "25cc9c" },
+      body: JSON.stringify({
+        sessionId: "25cc9c",
+        location: "bidding.ts:readContract-before",
+        message: "About to read getAuction from contract",
+        data: {
+          auctionId,
+          auctionIdBigInt: auctionIdBigInt.toString(),
+          marketplaceAddress,
+          chainId,
+          expectedSepoliaChainId: 11155111,
+        },
+        timestamp: Date.now(),
+        hypothesisId: "B,C,D",
+      }),
+    }).catch(() => {});
+    // #endregion
     const auctionData = await publicClient.readContract({
       address: marketplaceAddress,
       abi: secretMarketplaceAbi,
       functionName: "getAuction",
-      args: [BigInt(auctionId)],
+      args: [auctionIdBigInt],
     });
+    // #region agent log
+    fetch("http://127.0.0.1:7859/ingest/ba8f260b-7c31-4bbf-85d3-412660c8b25b", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "25cc9c" },
+      body: JSON.stringify({
+        sessionId: "25cc9c",
+        location: "bidding.ts:getAuction-result",
+        message: "getAuction returned",
+        data: {
+          auctionId,
+          endTime: auctionData.endTime.toString(),
+          endTimeIsZero: auctionData.endTime === BigInt(0),
+          status: auctionData.status,
+          currentBid: auctionData.currentBid.toString(),
+        },
+        timestamp: Date.now(),
+        hypothesisId: "C,E",
+      }),
+    }).catch(() => {});
+    // #endregion
     if (auctionData.endTime === BigInt(0)) {
+      // #region agent log
+      fetch("http://127.0.0.1:7859/ingest/ba8f260b-7c31-4bbf-85d3-412660c8b25b", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "25cc9c" },
+        body: JSON.stringify({
+          sessionId: "25cc9c",
+          location: "bidding.ts:AUCTION_NOT_FOUND",
+          message: "Returning Auction does not exist (endTime=0)",
+          data: { auctionId, chainId },
+          timestamp: Date.now(),
+          hypothesisId: "C",
+        }),
+      }).catch(() => {});
+      // #endregion
+      const sepoliaChainId = 11155111;
+      const rpcMismatchHint =
+        chainId !== sepoliaChainId
+          ? ` RPC reports chain ID ${chainId}; Sepolia is ${sepoliaChainId}. Ensure RPC_URL points to Ethereum Sepolia.`
+          : ` The subgraph may index an old contract deployment. Redeploy the subgraph: ./scripts/deploy-subgraph.sh --address ${marketplaceAddress}`;
       return {
         ok: false,
         status: 400,
-        error: "Auction does not exist",
+        error: `Auction does not exist on-chain.${rpcMismatchHint}`,
         code: "AUCTION_NOT_FOUND",
       };
     }
     auctionStatus = auctionData.status;
     contractCurrentBid = auctionData.currentBid;
     auctionSellerId = auctionData.sellerId;
-  } catch {
+  } catch (err) {
+    // #region agent log
+    const errMsg = err instanceof Error ? err.message : String(err);
+    fetch("http://127.0.0.1:7859/ingest/ba8f260b-7c31-4bbf-85d3-412660c8b25b", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "25cc9c" },
+      body: JSON.stringify({
+        sessionId: "25cc9c",
+        location: "bidding.ts:readContract-catch",
+        message: "readContract threw",
+        data: { auctionId, error: errMsg },
+        timestamp: Date.now(),
+        hypothesisId: "B,E",
+      }),
+    }).catch(() => {});
+    // #endregion
     return {
       ok: false,
       status: 500,
-      error: "Failed to read auction from contract",
+      error: `Failed to read auction from contract: ${errMsg}`,
       code: "CONTRACT_ERROR",
     };
   }

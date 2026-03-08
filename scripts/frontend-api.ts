@@ -13,8 +13,9 @@ import {
   PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
   VAULT_ADDRESS,
 } from "@private-streams/common";
+import { PrivateTokenApiClient } from "@private-streams/chainlink-private-token-api-client";
 import { privateKeyToAccount } from "viem/accounts";
-import { createWalletClient, http, isAddress, type Hex } from "viem";
+import { createPublicClient, createWalletClient, http, isAddress, type Hex } from "viem";
 import { sepolia } from "viem/chains";
 
 type Command =
@@ -22,6 +23,7 @@ type Command =
   | "secrets"
   | "snapshot"
   | "reconcile"
+  | "withdraw"
   | "private-balances"
   | "private-transfer"
   | "faucet"
@@ -56,6 +58,20 @@ const DEFAULT_BASE_URL = "http://localhost:3000";
   loadEnv({ path, override: index > 0, quiet: true });
 });
 
+const vaultWithdrawAbi = [
+  {
+    type: "function",
+    name: "withdrawWithTicket",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "token", type: "address" },
+      { name: "amount", type: "uint256" },
+      { name: "ticket", type: "bytes" },
+    ],
+    outputs: [],
+  },
+] as const;
+
 const PRIVATE_TOKEN_EIP712_DOMAIN = {
   name: "CompliantPrivateTokenDemo" as const,
   version: "0.0.1" as const,
@@ -68,6 +84,7 @@ const COMMAND_DESCRIPTIONS: Record<Command, string> = {
   secrets: "Fetch secret payloads by auction id.",
   snapshot: "Fetch funding snapshot for a wallet.",
   reconcile: "Reconcile funding history for a wallet.",
+  withdraw: "Run the full funding withdrawal flow.",
   "private-balances": "Call the Next private balances route.",
   "private-transfer": "Call the Next private transfer route.",
   faucet: "Call the Next confidential USDC faucet route.",
@@ -84,6 +101,7 @@ Commands:
   secrets            ${COMMAND_DESCRIPTIONS.secrets}
   snapshot           ${COMMAND_DESCRIPTIONS.snapshot}
   reconcile          ${COMMAND_DESCRIPTIONS.reconcile}
+  withdraw           ${COMMAND_DESCRIPTIONS.withdraw}
   private-balances   ${COMMAND_DESCRIPTIONS["private-balances"]}
   private-transfer   ${COMMAND_DESCRIPTIONS["private-transfer"]}
   faucet             ${COMMAND_DESCRIPTIONS.faucet}
@@ -99,8 +117,9 @@ Common options:
 Command options:
   events
   secrets --ids <csv>
-  snapshot --address <address>
-  reconcile --address <address>
+  snapshot [--pk <hex>] [--env-key <name>]
+  reconcile [--pk <hex>] [--env-key <name>]
+  withdraw --amount <base-units> [--pk <hex>] [--env-key <name>]
   private-balances [--pk <hex>] [--env-key <name>]
   private-transfer --recipient <address> --amount <base-units> [--token <address>] [--flag <value> ...]
   faucet [--address <address>] [--pk <hex>] [--env-key <name>]
@@ -446,66 +465,150 @@ async function runSecrets(args: string[]): Promise<void> {
 }
 
 async function runSnapshot(args: string[]): Promise<void> {
-  const parsed = parseArgs({
-    args,
-    allowPositionals: false,
-    strict: true,
-    options: {
-      address: { type: "string" },
-      "base-url": { type: "string" },
-      help: { type: "boolean", short: "h" },
-    },
-  });
-
-  if (parsed.values.help) {
-    console.log("Usage: pnpm frontend-api snapshot --address <address> [--base-url <url>]");
+  const common = toCommonOptions(parseCommonOptions(args));
+  if (common.help) {
+    console.log(
+      "Usage: pnpm frontend-api snapshot [--pk <hex>] [--env-key <name>] [--base-url <url>]",
+    );
     return;
   }
 
-  const address = parsed.values.address;
-  if (!address) {
-    fail("missing required argument: --address");
-  }
+  const { payloadWithSignature } = await signStablePayload(common, {
+    timestamp: timestamp(),
+  });
 
   const response = await requestJson(
-    { baseUrl: parsed.values["base-url"], help: parsed.values.help },
-    "GET",
-    `/api/funding/snapshot?address=${validateAddress(address, "address")}`,
+    common,
+    "POST",
+    "/api/funding/snapshot",
+    payloadWithSignature,
   );
   printResponse("snapshot", response);
   exitOnHttpError(response);
 }
 
 async function runReconcile(args: string[]): Promise<void> {
+  const common = toCommonOptions(parseCommonOptions(args));
+  if (common.help) {
+    console.log(
+      "Usage: pnpm frontend-api reconcile [--pk <hex>] [--env-key <name>] [--base-url <url>]",
+    );
+    return;
+  }
+
+  const { payloadWithSignature } = await signStablePayload(common, {
+    timestamp: timestamp(),
+  });
+
+  const response = await requestJson(
+    common,
+    "POST",
+    "/api/funding/reconcile",
+    payloadWithSignature,
+  );
+  printResponse("reconcile", response);
+  exitOnHttpError(response);
+}
+
+async function runWithdraw(args: string[]): Promise<void> {
   const parsed = parseArgs({
     args,
     allowPositionals: false,
     strict: true,
     options: {
-      address: { type: "string" },
+      amount: { type: "string" },
       "base-url": { type: "string" },
+      "env-key": { type: "string" },
       help: { type: "boolean", short: "h" },
+      pk: { type: "string" },
     },
   });
 
   if (parsed.values.help) {
-    console.log("Usage: pnpm frontend-api reconcile --address <address> [--base-url <url>]");
+    console.log(
+      "Usage: pnpm frontend-api withdraw --amount <base-units> [--pk <hex>] [--env-key <name>] [--base-url <url>]",
+    );
     return;
   }
 
-  const address = parsed.values.address;
-  if (!address) {
-    fail("missing required argument: --address");
+  const amount = parsed.values.amount;
+
+  if (!amount) {
+    fail("missing required argument: --amount");
   }
 
+  const common = toCommonOptions(parsed.values);
+  const validatedAmount = validateAmount(amount);
   const response = await requestJson(
-    { baseUrl: parsed.values["base-url"], help: parsed.values.help },
+    common,
     "POST",
-    "/api/funding/reconcile",
-    { address: validateAddress(address, "address") },
+    "/api/funding/withdraw",
+    (
+      await signStablePayload(common, {
+        amount: validatedAmount,
+        timestamp: timestamp(),
+      })
+    ).payloadWithSignature,
   );
-  printResponse("reconcile", response);
+  printResponse("withdraw", response);
   exitOnHttpError(response);
+
+  const responseData =
+    response.data && typeof response.data === "object" && !Array.isArray(response.data)
+      ? response.data as { transactionId?: unknown }
+      : null;
+  const transactionId =
+    typeof responseData?.transactionId === "string"
+      ? responseData.transactionId
+      : null;
+
+  if (!transactionId) {
+    fail("withdraw route response did not contain transactionId");
+  }
+
+  const privateTokenClient = new PrivateTokenApiClient(getPrivateKey(common));
+  const withdrawal = await privateTokenClient.withdraw({
+    token: PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
+    amount: validatedAmount,
+  });
+
+  const { account, walletClient } = getSigner(common);
+  const publicClient = createPublicClient({
+    chain: sepolia,
+    transport: http(),
+  });
+
+  const redeemHash = await walletClient.writeContract({
+    account,
+    address: VAULT_ADDRESS as Hex,
+    abi: vaultWithdrawAbi,
+    functionName: "withdrawWithTicket",
+    args: [
+      PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
+      BigInt(validatedAmount),
+      withdrawal.ticket as Hex,
+    ],
+  });
+
+  await publicClient.waitForTransactionReceipt({ hash: redeemHash });
+
+  const finalizeResponse = await requestJson(
+    common,
+    "POST",
+    "/api/funding/withdraw/finalize",
+    (
+      await signStablePayload(common, {
+        amount: validatedAmount,
+        transactionId,
+        withdrawalId: withdrawal.id,
+        ticket: withdrawal.ticket,
+        deadline: withdrawal.deadline,
+        timestamp: timestamp(),
+      })
+    ).payloadWithSignature,
+  );
+  printResponse("withdraw", finalizeResponse);
+  exitOnHttpError(finalizeResponse);
 }
 
 async function runPrivateBalances(args: string[]): Promise<void> {
@@ -757,6 +860,7 @@ const commands: Record<Command, (commandArgs: string[]) => Promise<void>> = {
   secrets: runSecrets,
   snapshot: runSnapshot,
   reconcile: runReconcile,
+  withdraw: runWithdraw,
   "private-balances": runPrivateBalances,
   "private-transfer": runPrivateTransfer,
   faucet: runFaucet,

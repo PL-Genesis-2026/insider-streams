@@ -1,27 +1,19 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
-import { isAddress } from "viem";
 import { reconcileFundingServerSnapshot } from "@/lib/funding/server";
 import type { FundingReconcileResponse } from "@/lib/funding/types";
-
-const reconcilePayloadSchema = z.object({
-  address: z.string().min(1),
-});
+import { verifyPrivateDataRequest } from "@/lib/signed-request";
 
 export async function POST(request: Request) {
-  const json = await request.json().catch(() => null);
-  const parsedPayload = reconcilePayloadSchema.safeParse(json);
+  const body = await request.json().catch(() => null);
+  const verified = await verifyPrivateDataRequest<Record<string, never>>(body);
 
-  if (!parsedPayload.success || !isAddress(parsedPayload.data.address)) {
-    return NextResponse.json(
-      { error: "A valid wallet address is required." },
-      { status: 400 },
-    );
+  if (!verified.ok) {
+    return verified.response;
   }
 
   try {
     const { reconciledCount, scannedCount, ...data } =
-      await reconcileFundingServerSnapshot(parsedPayload.data.address);
+      await reconcileFundingServerSnapshot(verified.payload.userAddress);
 
     return NextResponse.json<FundingReconcileResponse>({
       data,

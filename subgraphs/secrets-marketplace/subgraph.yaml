@@ -72,14 +72,15 @@ dataSources:
     name: ExamplePredictionMarket
     network: sepolia
     source:
-      address: "0x83B1F9d683b1a760569C237Bfb89C50112c05e24"
+      address: "0xFfe58E05eFc5888a0f5F5155c72f3Ca2341fEDc7"
       abi: ExamplePredictionMarket
-      startBlock: 10400148
+      startBlock: 10409348
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
       language: wasm/assemblyscript
       entities:
+        - EventAdminClosed
         - EventCreated
         - LiquidityWithdrawn
         - SettlementRequested
@@ -103,4 +104,6 @@ dataSources:
           handler: handleSharesPurchased
         - event: SharesRedeemed(indexed uint256,indexed address,uint256,uint256)
           handler: handleSharesRedeemed
+        - event: EventAdminClosed(indexed uint256)
+          handler: handleEventAdminClosed
       file: ./src/example-prediction-market.ts

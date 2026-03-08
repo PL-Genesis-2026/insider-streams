@@ -7,33 +7,48 @@ import {
   useReconcileFundingMutation,
 } from "./queries";
 import { useWalletSession } from "@/lib/wallet/use-wallet-session";
+import { useSignedWalletSession } from "@/lib/wallet/use-signed-wallet-session";
 
-export function useFundingSnapshot() {
+type UseFundingSnapshotOptions = {
+  enabled?: boolean;
+};
+
+export function useFundingSnapshot(options?: UseFundingSnapshotOptions) {
   const walletSession = useWalletSession();
+  const { canSign, getSignedSession } = useSignedWalletSession();
   const canQueryFunding =
+    (options?.enabled ?? true) &&
     walletSession.isConnected &&
     walletSession.isSupportedChain &&
-    Boolean(walletSession.address);
+    Boolean(walletSession.address) &&
+    canSign;
   const fundingSnapshotQuery = useFundingSnapshotQuery(
     walletSession.address,
+    getSignedSession,
     canQueryFunding,
   );
   const reconcileFundingMutation = useReconcileFundingMutation(
     walletSession.address,
+    getSignedSession,
   );
   const errorMessage =
     fundingSnapshotQuery.error instanceof Error
       ? fundingSnapshotQuery.error.message
       : undefined;
 
+  const fundingNotYetChecked =
+    fundingSnapshotQuery.data === undefined && !fundingSnapshotQuery.isError;
+
   const fundingSnapshot = useMemo(
     () =>
       getFundingSnapshot(walletSession, fundingSnapshotQuery.data, {
         isReconcilePending: reconcileFundingMutation.isPending,
         errorMessage,
+        fundingNotYetChecked,
       }),
     [
       errorMessage,
+      fundingNotYetChecked,
       fundingSnapshotQuery.data,
       reconcileFundingMutation.isPending,
       walletSession,

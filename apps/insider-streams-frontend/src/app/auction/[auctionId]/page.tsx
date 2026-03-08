@@ -9,11 +9,10 @@ import {
   ShieldCheck,
   Sparkles,
   TrendingUp,
-  Trophy,
   User,
 } from "lucide-react";
+
 import {
-  SECRET_MARKETPLACE_ADDRESS,
   EXAMPLE_PREDICTION_MARKET_NAME,
 } from "@private-streams/common";
 import { Badge } from "@/components/ui/badge";
@@ -21,12 +20,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { SecretRevealCard } from "@/components/secret-reveal";
+import { AuctionDetailPrivate } from "@/components/auction-detail-private";
+import { BidHistoryList } from "@/components/bid-history-list";
 import { AuctionBidGate } from "@/components/funding/auction-bid-gate";
 import {
   getAuctionDetail,
-  type AuctionDetailBid,
   type AuctionDetailData,
 } from "@/lib/auction-detail";
+import { SECRET_MARKETPLACE_ADDRESS } from "@/lib/contract-addresses";
 import { cn } from "@/lib/utils";
 
 type AuctionDetailPageProps = {
@@ -66,14 +67,6 @@ function formatCurrency(amount: number | undefined) {
 
 function formatSignedNumber(value: number) {
   return value > 0 ? `+${value}` : String(value);
-}
-
-function shortHash(hash: string) {
-  if (hash.length <= 14) {
-    return hash;
-  }
-
-  return `${hash.slice(0, 8)}...${hash.slice(-4)}`;
 }
 
 function buildTimeline(auction: AuctionDetailData) {
@@ -184,55 +177,6 @@ function TimelineEvent({
   );
 }
 
-function BidRow({
-  bid,
-  highlightLabel,
-}: {
-  bid: AuctionDetailBid;
-  highlightLabel?: "Leading" | "Winner";
-}) {
-  return (
-    <div
-      className={cn(
-        "flex items-center gap-4 rounded-lg px-4 py-3 transition-colors",
-        highlightLabel
-          ? "bg-accent/8 ring-1 ring-accent/20"
-          : "hover:bg-muted/40",
-      )}
-    >
-      <div
-        className={cn(
-          "flex size-8 shrink-0 items-center justify-center rounded-full",
-          highlightLabel === "Winner"
-            ? "bg-accent/20 text-accent"
-            : "bg-muted/60 text-muted-foreground",
-        )}
-      >
-        {highlightLabel === "Winner" ? (
-          <Trophy className="size-3.5" />
-        ) : (
-          <User className="size-3.5" />
-        )}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline justify-between gap-3">
-          <p className="truncate text-sm font-medium text-foreground">
-            {formatCurrency(bid.amountUsdc)}
-            {highlightLabel ? (
-              <span className="ml-2 text-xs font-normal text-accent">
-                {highlightLabel}
-              </span>
-            ) : null}
-          </p>
-        </div>
-        <div className="mt-0.5 flex items-center gap-3 text-xs text-muted-foreground/70">
-          <time>{formatTimestamp(bid.timestamp)}</time>
-          <span className="font-mono">{shortHash(bid.transactionHash)}</span>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export const dynamic = "force-dynamic";
 
@@ -250,7 +194,6 @@ export default async function AuctionDetailPage({
   }
 
   const isOpen = auction.status === "Open";
-  const isClosed = auction.status === "Closed";
   const statusVariant =
     auction.status === "Closed"
       ? "secondary"
@@ -261,6 +204,7 @@ export default async function AuctionDetailPage({
 
   return (
     <main className="theme-ember-editorial min-h-screen text-foreground">
+      <AuctionDetailPrivate auctionId={auction.auctionId}>
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-6 py-8 md:px-10">
         <nav className="flex items-center gap-3 text-sm text-muted-foreground">
           <Button asChild variant="ghost" size="xs">
@@ -328,21 +272,11 @@ export default async function AuctionDetailPage({
               </CardHeader>
               <CardContent className="space-y-1">
                 {auction.bids.length > 0 ? (
-                  auction.bids.map((bid, index) => (
-                    <BidRow
-                      key={bid.transactionHash}
-                      bid={bid}
-                      highlightLabel={
-                        index === 0
-                          ? isClosed
-                            ? "Winner"
-                            : isOpen
-                              ? "Leading"
-                              : undefined
-                          : undefined
-                      }
-                    />
-                  ))
+                  <BidHistoryList
+                    auctionId={auction.auctionId}
+                    bids={auction.bids}
+                    auctionStatus={auction.status}
+                  />
                 ) : (
                   <p className="rounded-lg bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
                     No bids have been placed for this auction yet.
@@ -364,7 +298,7 @@ export default async function AuctionDetailPage({
           <aside className="flex flex-col gap-6 lg:sticky lg:top-8 lg:self-start">
             <Card className="border-border/90 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_96%,transparent),color-mix(in_srgb,var(--secondary)_28%,transparent))]">
               {isOpen ? (
-                <AuctionBidGate auctionId={auction.auctionId} currentBidUsdc={auction.currentBidUsdc} />
+                <AuctionBidGate auctionId={auction.auctionId} sellerAddress={auction.sellerAddress} currentBidUsdc={auction.currentBidUsdc} />
               ) : (
                 <>
                   <CardHeader className="gap-5 pb-0">
@@ -482,6 +416,7 @@ export default async function AuctionDetailPage({
           </aside>
         </div>
       </div>
+      </AuctionDetailPrivate>
     </main>
   );
 }

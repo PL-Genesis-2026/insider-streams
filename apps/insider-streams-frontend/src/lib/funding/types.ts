@@ -8,6 +8,7 @@ export type FundingStatus =
   | "wallet_required"
   | "wrong_network"
   | "funding_unavailable"
+  | "private_data_hidden"
   | "not_funded_yet"
   | "reconciling_transfer"
   | "funded"
@@ -27,6 +28,17 @@ export type FundingReconcileResponse = {
   data: FundingServerSnapshot;
   reconciledCount: number;
   scannedCount: number;
+};
+
+export type FundingWithdrawResponse = {
+  data: FundingServerSnapshot;
+  transactionId: string;
+};
+
+export type FundingFinalizeWithdrawalResponse = {
+  data: FundingServerSnapshot;
+  transactionId: string;
+  withdrawalId: string;
 };
 
 export type FundingSnapshot = {

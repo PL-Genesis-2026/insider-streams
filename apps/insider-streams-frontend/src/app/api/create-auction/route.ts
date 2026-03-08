@@ -2,9 +2,7 @@ import { NextResponse } from "next/server";
 import { parseEventLogs, recoverTypedDataAddress, type Address } from "viem";
 import {
   secretMarketplaceAbi,
-  SECRET_MARKETPLACE_ADDRESS,
   examplePredictionMarketAbi,
-  EXAMPLE_PREDICTION_MARKET_ADDRESS,
 } from "@private-streams/common";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
 import { getPublicClient, getAdminWalletClient } from "@/lib/viem";
@@ -17,6 +15,10 @@ import {
   type CreateAuctionSuccessResponse,
 } from "@/lib/create-auction/shared";
 import { generateSellerId } from "@/lib/seller/generate-seller-id";
+import {
+  EXAMPLE_PREDICTION_MARKET_ADDRESS,
+  SECRET_MARKETPLACE_ADDRESS,
+} from "@/lib/contract-addresses";
 
 const SIGNATURE_MAX_AGE_SECONDS = 120;
 
@@ -259,24 +261,26 @@ export async function POST(request: Request) {
     );
   }
 
-  // Store the secret data in Supabase
-  const { error: secretError } = await supabase.from("secrets").insert({
-    auction_id: auctionId,
-    secret_data: secretPayload,
-    seller_id: sellerId,
-    event_data: {
-      marketplace: "ExamplePredictionMarket",
-      event: eventTitle,
-      marketId: Number(externalEventId),
-      outcome: privateLeg,
+  // Store the secret data in Supabase (upsert so a retry after on-chain success doesn't double-fault)
+  const { error: secretError } = await supabase.from("secrets").upsert(
+    {
+      auction_id: auctionId,
+      secret_data: secretPayload,
+      seller_id: sellerId,
+      event_data: {
+        marketplace: "ExamplePredictionMarket",
+        event: eventTitle,
+        marketId: Number(externalEventId),
+        outcome: privateLeg,
+      },
     },
-  });
+    { onConflict: "auction_id" },
+  );
 
   if (secretError) {
     return errorResponse(
       {
-        error:
-          "Auction was created on-chain but storing the secret payload failed. Offchain settlement data is incomplete.",
+        error: `Auction was created on-chain but storing the secret payload failed: ${secretError.message}`,
         code: "SECRET_STORAGE_FAILED",
         auctionId,
         txHash,

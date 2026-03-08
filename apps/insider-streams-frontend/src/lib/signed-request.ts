@@ -28,3 +28,66 @@ export async function verifySignedRequest<T extends Record<string, unknown>>(
   }
   return result;
 }
+
+/**
+ * Verify a signed request that may contain unsigned body fields.
+ *
+ * The client signs only the fields NOT listed in `unsignedFields` (plus
+ * `signature` which is always stripped). After verification the unsigned
+ * fields are re-attached to the returned payload so route handlers can
+ * access them.
+ *
+ * Example: body = { timestamp, auctionIds, signature }
+ *   unsignedFields = ["auctionIds"]
+ *   → core verifies signature over stringify({ timestamp })
+ *   → returned payload includes { timestamp, auctionIds, userAddress }
+ */
+export async function verifyPrivateDataRequest<
+  T extends Record<string, unknown>,
+>(
+  body: unknown,
+  unsignedFields: string[] = [],
+): Promise<VerifyResult<T>> {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: "Invalid request body", code: "INVALID_BODY" },
+        { status: 400 },
+      ),
+    };
+  }
+
+  const raw = body as Record<string, unknown>;
+
+  // Extract unsigned field values before stripping them
+  const stripped: Record<string, unknown> = {};
+  for (const field of unsignedFields) {
+    if (field in raw) {
+      stripped[field] = raw[field];
+    }
+  }
+
+  // Build the body that the core function will verify (without unsigned fields)
+  const bodyForVerification = { ...raw };
+  for (const field of unsignedFields) {
+    delete bodyForVerification[field];
+  }
+
+  const result = await verifyCore<T>(bodyForVerification);
+  if (!result.ok) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: result.error, code: result.code },
+        { status: result.status },
+      ),
+    };
+  }
+
+  // Re-attach unsigned fields to the verified payload
+  return {
+    ok: true,
+    payload: { ...result.payload, ...stripped } as T & { userAddress: string },
+  };
+}

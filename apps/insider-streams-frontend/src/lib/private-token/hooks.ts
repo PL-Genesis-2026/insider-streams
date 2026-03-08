@@ -5,7 +5,7 @@ import {
   PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
   VAULT_ADDRESS,
 } from "@private-streams/common";
-import { erc20Abi, type Address, zeroAddress } from "viem";
+import { erc20Abi, type Address, type Hex, zeroAddress } from "viem";
 import {
   usePublicClient,
   useReadContract,
@@ -14,10 +14,12 @@ import {
 } from "wagmi";
 import { reconcileFunding } from "@/lib/funding/api";
 import { getFundingSnapshotQueryKey } from "@/lib/funding/queries";
+import { useSignedWalletSession } from "@/lib/wallet/use-signed-wallet-session";
 import {
   getBalances,
   isPrivateAccountNotFoundError,
   privateTransfer,
+  withdraw,
   type PrivateTokenSigner,
 } from "./browser-client";
 
@@ -32,6 +34,15 @@ type PrivateTransferFundingResult = {
   reconcileErrorMessage?: string;
 };
 
+type PrivateWithdrawFundingVariables = {
+  amount: string;
+};
+
+type RedeemWithdrawalTicketVariables = {
+  amount: string;
+  ticket: Hex;
+};
+
 const vaultAbi = [
   {
     type: "function",
@@ -40,6 +51,17 @@ const vaultAbi = [
     inputs: [
       { name: "token", type: "address" },
       { name: "amount", type: "uint256" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "withdrawWithTicket",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "token", type: "address" },
+      { name: "amount", type: "uint256" },
+      { name: "ticket", type: "bytes" },
     ],
     outputs: [],
   },
@@ -55,14 +77,39 @@ export type PrivateBalancesResult =
       balances: [];
     };
 
+const PRIVATE_BALANCE_CACHE_TTL_SECONDS = 25;
+const privateBalanceResultCache = new Map<
+  string,
+  { result: PrivateBalancesResult; timestamp: number }
+>();
+
+type ReadPrivateBalancesOptions = {
+  forceFresh?: boolean;
+};
+
 async function readPrivateBalances(
   address: Address,
   signTypedData: PrivateTokenSigner,
+  options?: ReadPrivateBalancesOptions,
 ): Promise<PrivateBalancesResult> {
+  const cacheKey = address.toLowerCase();
+  const cached = privateBalanceResultCache.get(cacheKey);
+  const now = Math.floor(Date.now() / 1000);
+
+  if (
+    !options?.forceFresh &&
+    cached &&
+    now - cached.timestamp < PRIVATE_BALANCE_CACHE_TTL_SECONDS
+  ) {
+    return cached.result;
+  }
+
+  let result: PrivateBalancesResult;
+
   try {
     const response = await getBalances(address, signTypedData);
 
-    return {
+    result = {
       status: "ready",
       balances: response.balances,
     };
@@ -71,32 +118,40 @@ async function readPrivateBalances(
       throw error;
     }
 
-    return {
+    result = {
       status: "not_funded_yet",
       balances: [],
     };
   }
+
+  privateBalanceResultCache.set(cacheKey, { result, timestamp: now });
+  return result;
 }
 
 function usePrivateTokenSigner(): PrivateTokenSigner {
   const { signTypedDataAsync } = useSignTypedData();
 
-  return (payload) =>
-    payload.primaryType === "Retrieve Balances"
-      ? signTypedDataAsync(payload)
-      : signTypedDataAsync(payload);
+  return (payload) => {
+    if (payload.primaryType === "Retrieve Balances") {
+      return signTypedDataAsync(payload);
+    }
+
+    return signTypedDataAsync(
+      payload as Parameters<typeof signTypedDataAsync>[0],
+    );
+  };
 }
 
 export function usePrivateBalancesMutation(address?: Address) {
   const signTypedData = usePrivateTokenSigner();
 
   return useMutation({
-    mutationFn: async () => {
+    mutationFn: async (options?: ReadPrivateBalancesOptions) => {
       if (!address) {
         throw new Error("Fetching private balances requires a connected wallet.");
       }
 
-      return readPrivateBalances(address, signTypedData);
+      return readPrivateBalances(address, signTypedData, options);
     },
   });
 }
@@ -104,6 +159,7 @@ export function usePrivateBalancesMutation(address?: Address) {
 export function usePrivateTransferFundingMutation(address?: Address) {
   const queryClient = useQueryClient();
   const signTypedData = usePrivateTokenSigner();
+  const { getSignedSession } = useSignedWalletSession();
 
   return useMutation({
     mutationFn: async (
@@ -133,7 +189,8 @@ export function usePrivateTransferFundingMutation(address?: Address) {
       }
 
       try {
-        const reconcileResponse = await reconcileFunding(address);
+        const signedSession = await getSignedSession();
+        const reconcileResponse = await reconcileFunding(signedSession);
 
         queryClient.setQueryData(
           getFundingSnapshotQueryKey(address),
@@ -156,6 +213,60 @@ export function usePrivateTransferFundingMutation(address?: Address) {
       return {
         transactionId: transferResponse.transaction_id,
       };
+    },
+  });
+}
+
+export function usePrivateWithdrawMutation(address?: Address) {
+  const signTypedData = usePrivateTokenSigner();
+
+  return useMutation({
+    mutationFn: async (variables: PrivateWithdrawFundingVariables) => {
+      if (!address) {
+        throw new Error("Withdrawing private funds requires a connected wallet.");
+      }
+
+      try {
+        return await withdraw(address, signTypedData, {
+          token: PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
+          amount: variables.amount,
+        });
+      } catch (error) {
+        if (isPrivateAccountNotFoundError(error)) {
+          throw new Error(
+            "The private withdrawal could not find a funded account for this wallet yet. Try again in a moment.",
+          );
+        }
+
+        throw error;
+      }
+    },
+  });
+}
+
+export function useRedeemWithdrawalTicketMutation() {
+  const publicClient = usePublicClient();
+  const { writeContractAsync } = useWriteContract();
+
+  return useMutation({
+    mutationFn: async (variables: RedeemWithdrawalTicketVariables) => {
+      if (!publicClient) {
+        throw new Error("Wallet client unavailable. Try reconnecting your wallet.");
+      }
+
+      const hash = await writeContractAsync({
+        address: VAULT_ADDRESS,
+        abi: vaultAbi,
+        functionName: "withdrawWithTicket",
+        args: [
+          PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
+          BigInt(variables.amount),
+          variables.ticket,
+        ],
+      });
+
+      await publicClient.waitForTransactionReceipt({ hash });
+      return { hash };
     },
   });
 }
