@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { useWriteContract } from "wagmi";
+import { usePublicClient, useWriteContract } from "wagmi";
 import {
   examplePredictionMarketAbi,
   EXAMPLE_PREDICTION_MARKET_ADDRESS,
@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { useWalletSession } from "@/lib/wallet/use-wallet-session";
 import { ConnectWalletButton } from "@/components/wallet/connect-wallet-button";
 import { SwitchNetworkButton } from "@/components/wallet/switch-network-button";
+import { walletEnabled } from "@/lib/wallet/config";
 
 type RedeemSharesPanelProps = {
   eventId: string;
@@ -41,12 +42,34 @@ export function RedeemSharesPanel({
   eventId,
   outcome,
 }: RedeemSharesPanelProps) {
+  if (!walletEnabled) {
+    return (
+      <div className="rounded-[calc(var(--radius)+6px)] border border-border/70 bg-card p-5">
+        <h2 className="mb-2 font-serif text-xl font-medium tracking-[-0.03em] text-card-foreground">
+          Redemption unavailable
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Wallet redemption is disabled in this deployment until
+          `NEXT_PUBLIC_PROJECT_ID` is configured.
+        </p>
+      </div>
+    );
+  }
+
+  return <RedeemSharesPanelWithWallet eventId={eventId} outcome={outcome} />;
+}
+
+function RedeemSharesPanelWithWallet({
+  eventId,
+  outcome,
+}: RedeemSharesPanelProps) {
   const walletSession = useWalletSession();
   const [amount, setAmount] = useState("");
   const [redeemState, setRedeemState] = useState<RedeemState>({
     step: "idle",
   });
 
+  const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
 
   const parsedAmount = (() => {
@@ -67,16 +90,39 @@ export function RedeemSharesPanel({
 
   const handleRedeem = useCallback(async () => {
     if (!canRedeem || !parsedAmount) return;
+    if (!publicClient) {
+      setRedeemState({
+        step: "error",
+        message: "Public client unavailable. Reconnect your wallet and try again.",
+      });
+      return;
+    }
+    if (!walletSession.address) {
+      setRedeemState({
+        step: "error",
+        message: "Wallet address unavailable. Reconnect your wallet and try again.",
+      });
+      return;
+    }
 
     try {
       setRedeemState({ step: "redeeming" });
 
-      const txHash = await writeContractAsync({
+      const gas = await publicClient.estimateContractGas({
+        account: walletSession.address,
         address: EXAMPLE_PREDICTION_MARKET_ADDRESS as Address,
         abi: examplePredictionMarketAbi,
         functionName: "redeemShares",
         args: [BigInt(eventId), parsedAmount],
       });
+      const txHash = await writeContractAsync({
+        address: EXAMPLE_PREDICTION_MARKET_ADDRESS as Address,
+        abi: examplePredictionMarketAbi,
+        functionName: "redeemShares",
+        args: [BigInt(eventId), parsedAmount],
+        gas,
+      });
+      await publicClient.waitForTransactionReceipt({ hash: txHash });
 
       setRedeemState({ step: "success", txHash });
     } catch (err) {
@@ -84,7 +130,14 @@ export function RedeemSharesPanel({
         err instanceof Error ? err.message : "Redemption failed";
       setRedeemState({ step: "error", message });
     }
-  }, [canRedeem, parsedAmount, writeContractAsync, eventId]);
+  }, [
+    canRedeem,
+    parsedAmount,
+    publicClient,
+    walletSession.address,
+    writeContractAsync,
+    eventId,
+  ]);
 
   const needsWallet = !walletSession.isConnected;
   const needsNetwork = walletSession.isConnected && !walletSession.isSupportedChain;
