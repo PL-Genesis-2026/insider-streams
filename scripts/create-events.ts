@@ -67,7 +67,8 @@ const MAX_BET_USDC = 500; // $500
 const MIN_BETS_PER_EVENT = 3;
 const MAX_BETS_PER_EVENT = 5;
 const BET_PAUSE_MS = 5_000; // 5s pause between bets
-const NUM_EVENTS_TO_GENERATE = 3;
+const NUM_EVENTS_TO_GENERATE =
+  Math.floor(Math.random() * 3) + 1; // 1–3 events per run
 
 // Outcome enum: 1=No, 2=Yes
 const OUTCOMES = [1, 2] as const;

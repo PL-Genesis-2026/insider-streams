@@ -1,7 +1,5 @@
 import { z } from "zod";
-export { secretMarketplaceAbi, examplePredictionMarketAbi } from "@private-streams/common";
-
-export const CRON_SCHEDULE = "*/60 * * * * *";
+export { secretMarketplaceAbi } from "@private-streams/common";
 
 const evmConfigSchema = z.object({
   chainSelectorName: z.string().min(1),
@@ -15,6 +13,7 @@ const evmConfigSchema = z.object({
 
 export const configSchema = z.object({
   supabaseUrl: z.string().startsWith("https://"),
+  subgraphUrl: z.string().startsWith("http"),
   evms: z.array(evmConfigSchema).min(1, "At least one EVM config is required"),
   ntfyEnabled: z.boolean().default(true),
   ntfyHost: z.string().startsWith("http").default("http://localhost:8090"),
@@ -30,7 +29,3 @@ export const ACTION_RECORD_EVENT_OUTCOME = 0x02;
 export const OUTCOME_NO = 1;
 export const OUTCOME_YES = 2;
 export const OUTCOME_INCONCLUSIVE = 3;
-
-// ExamplePredictionMarket status enum values
-export const STATUS_SETTLED = 2;
-export const STATUS_NEEDS_MANUAL = 3;

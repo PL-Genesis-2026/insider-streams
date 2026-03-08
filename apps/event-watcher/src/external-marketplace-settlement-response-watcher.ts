@@ -1,11 +1,7 @@
 /**
  * Settlement-response watcher — subscribes to SettlementResponse events via
  * WebSocket and triggers the external-marketplace-settlement-resolved-handler
- * CRE workflow to resolve per-auction reputation immediately instead of
- * waiting for its 60s cron.
- *
- * The CRE workflow is cron-triggered, so we invoke it without a tx hash
- * (same pattern as auction-closed triggering auction-closer).
+ * CRE workflow with the specific tx hash and event index (log-triggered).
  *
  * On startup, catches up from lastProcessedBlock using getLogs, then switches
  * to real-time WebSocket subscription.
@@ -35,6 +31,7 @@ function trimDedup(): void {
 }
 
 async function handleEvent(
+  publicClient: PublicClient,
   txHash: `0x${string}`,
   logIndex: number,
   eventId: bigint | undefined,
@@ -43,15 +40,20 @@ async function handleEvent(
   const key = dedupKey(txHash, logIndex);
   if (processed.has(key)) return;
 
+  const receipt = await publicClient.getTransactionReceipt({ hash: txHash });
+  const eventIndex = receipt.logs.findIndex((l) => l.logIndex === logIndex);
+
   log(
     "settlement-response",
-    `SettlementResponse eventId=${eventId} in block ${blockNumber} — txHash=${txHash.slice(0, 12)}...`,
+    `SettlementResponse eventId=${eventId} in block ${blockNumber} — txHash=${txHash.slice(0, 12)}... eventIndex=${eventIndex}`,
   );
 
   try {
     runCRE({
       workflow: "external-marketplace-settlement-resolved-handler",
       triggerIndex: 0,
+      evmTxHash: txHash,
+      evmEventIndex: eventIndex,
       broadcast: true,
     });
     log("settlement-response", `CRE completed for event ${eventId}`);
@@ -91,6 +93,7 @@ export async function catchUpSettlementResponse(
   log("settlement-response", `Catching up: ${logs.length} SettlementResponse event(s) in blocks ${fromBlock}-${toBlock}`);
   for (const entry of logs) {
     await handleEvent(
+      publicClient,
       entry.transactionHash,
       entry.logIndex,
       entry.args.eventId,
@@ -111,6 +114,7 @@ export function watchSettlementResponse(
     onLogs: (logs) => {
       for (const entry of logs) {
         handleEvent(
+          httpClient,
           entry.transactionHash,
           entry.logIndex,
           entry.args.eventId,

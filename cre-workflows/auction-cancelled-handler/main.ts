@@ -4,6 +4,8 @@ import { configSchema, type Config } from "./types";
 import { refundActiveBids } from "./supabase";
 import { sendNotification } from "./notify";
 
+const FRONTEND_URL = "https://insider-streams-insider-streams-fro.vercel.app";
+
 /** ABI for the AuctionCancelled event CRE listens for. */
 const eventAbi = parseAbi([
   "event AuctionCancelled(uint256 indexed auctionId, uint256 cancelledBidAmount, string sellerId, uint256 eventId)",
@@ -39,9 +41,9 @@ const onLogTrigger = (runtime: Runtime<Config>, log: EVMLog): string => {
     const refunded = refundActiveBids(runtime, [auctionId.toString()]);
 
     const bidUsdc = (Number(cancelledBidAmount) / 1e6).toFixed(2);
-    const summary = `Refunded ${refunded} bid(s) for cancelled auction ${auctionId}\nSeller: ${sellerId} | Event: ${eventId} | Bid: ${bidUsdc} USDC`;
+    const summary = `Refunded ${refunded} bid(s) for cancelled auction ${auctionId}\nSeller: ${sellerId} | Event: ${eventId} | Bid: ${bidUsdc} USDC\n${FRONTEND_URL}/auction/${auctionId}`;
     runtime.log(summary);
-    sendNotification(runtime, `Bids Refunded: Auction ${auctionId}`, summary);
+    sendNotification(runtime, `Bids Refunded: Auction ${auctionId}`, summary, `${FRONTEND_URL}/auction/${auctionId}`);
     return summary;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
