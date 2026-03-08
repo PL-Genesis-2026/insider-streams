@@ -3,12 +3,13 @@
  * via WebSocket and triggers CRE workflows in real-time.
  *
  * Watchers:
- *   1. force-close:    AuctionCancelled events → force-close-handler CRE  (WebSocket)
- *   2. settlement:     SettlementRequested events → external-prediction-market-settler CRE  (WebSocket)
- *   3. auction-expiry: getOpenAuctions() polling  → secret-marketplace-auction-closer CRE  (HTTP poll)
+ *   1. auction-cancelled:    AuctionCancelled events → auction-cancelled-handler CRE  (WebSocket)
+ *   2. settlement-requested: SettlementRequested events → external-prediction-market-settler CRE  (WebSocket)
+ *   3. settlement-response:  SettlementResponse events → external-marketplace-settlement-resolved-handler CRE  (WebSocket)
+ *   4. auction-closed:       getOpenAuctions() polling  → secret-marketplace-auction-closer CRE  (HTTP poll)
  *
  * On startup, catches up from lastProcessedBlock using getLogs (HTTP), then
- * switches to real-time WebSocket subscriptions. The auction-expiry watcher
+ * switches to real-time WebSocket subscriptions. The auction-closed watcher
  * always uses HTTP polling since there's no event to subscribe to.
  *
  * Usage: pnpm start   (from apps/event-watcher/)
@@ -20,9 +21,10 @@ import "dotenv/config";
 import { createPublicClient, http, webSocket } from "viem";
 import { sepolia } from "viem/chains";
 import { loadState, saveState } from "./state.js";
-import { catchUpForceClose, watchForceClose } from "./force-close-watcher.js";
-import { catchUpSettlement, watchSettlement } from "./settlement-watcher.js";
-import { pollExpiredAuctions } from "./auction-expiry-watcher.js";
+import { catchUpAuctionCancelled, watchAuctionCancelled } from "./auction-cancelled-event-watcher.js";
+import { catchUpSettlementRequested, watchSettlementRequested } from "./external-marketplace-settlement-requested-watcher.js";
+import { catchUpSettlementResponse, watchSettlementResponse } from "./external-marketplace-settlement-response-watcher.js";
+import { pollExpiredAuctions } from "./auction-closed-event-watcher.js";
 import { notify } from "./notify.js";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
@@ -51,8 +53,9 @@ const wsClient = createPublicClient({
 });
 
 let expiryPollTimer: ReturnType<typeof setInterval>;
-let unwatchForceClose: (() => void) | undefined;
-let unwatchSettlement: (() => void) | undefined;
+let unwatchAuctionCancelled: (() => void) | undefined;
+let unwatchSettlementRequested: (() => void) | undefined;
+let unwatchSettlementResponse: (() => void) | undefined;
 let shuttingDown = false;
 
 async function catchUp(): Promise<void> {
@@ -63,8 +66,9 @@ async function catchUp(): Promise<void> {
     const fromBlock = BigInt(state.lastProcessedBlock) + 1n;
     if (fromBlock <= latestBlock) {
       log("main", `Catching up from block ${fromBlock} to ${latestBlock}...`);
-      await catchUpForceClose(httpClient, fromBlock, latestBlock);
-      await catchUpSettlement(httpClient, fromBlock, latestBlock);
+      await catchUpAuctionCancelled(httpClient, fromBlock, latestBlock);
+      await catchUpSettlementRequested(httpClient, fromBlock, latestBlock);
+      await catchUpSettlementResponse(httpClient, fromBlock, latestBlock);
     } else {
       log("main", `Already up to date at block ${state.lastProcessedBlock}`);
     }
@@ -79,11 +83,14 @@ async function catchUp(): Promise<void> {
 function startSubscriptions(): void {
   log("main", "Starting WebSocket subscriptions...");
 
-  unwatchForceClose = watchForceClose(wsClient, httpClient);
+  unwatchAuctionCancelled = watchAuctionCancelled(wsClient, httpClient);
   log("main", "Subscribed to AuctionCancelled events");
 
-  unwatchSettlement = watchSettlement(wsClient, httpClient);
+  unwatchSettlementRequested = watchSettlementRequested(wsClient, httpClient);
   log("main", "Subscribed to SettlementRequested events");
+
+  unwatchSettlementResponse = watchSettlementResponse(wsClient, httpClient);
+  log("main", "Subscribed to SettlementResponse events");
 }
 
 async function pollExpiry(): Promise<void> {
@@ -92,6 +99,7 @@ async function pollExpiry(): Promise<void> {
     await pollExpiredAuctions(httpClient);
   } catch (err) {
     log("main", `Auction expiry poll error (will retry): ${err}`);
+    await notify("Auction expiry poll error", `${err}`, ["warning"]).catch(() => {});
   }
 }
 
@@ -100,8 +108,9 @@ function shutdown(): void {
   shuttingDown = true;
   log("main", "Shutting down...");
 
-  unwatchForceClose?.();
-  unwatchSettlement?.();
+  unwatchAuctionCancelled?.();
+  unwatchSettlementRequested?.();
+  unwatchSettlementResponse?.();
   clearInterval(expiryPollTimer);
 
   log("main", "Goodbye.");
@@ -133,7 +142,8 @@ async function main(): Promise<void> {
   log("main", "Watcher running. Press Ctrl+C to stop.");
 }
 
-main().catch((err) => {
+main().catch(async (err) => {
   log("main", `Fatal error: ${err}`);
+  await notify("Event Watcher FATAL", `${err}`, ["skull"]).catch(() => {});
   process.exit(1);
 });
