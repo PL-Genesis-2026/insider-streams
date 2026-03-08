@@ -21,12 +21,16 @@ const onCronTrigger = (runtime: Runtime<Config>, payload: CronPayload): string =
       return "No expired auctions";
     }
 
-    runtime.log(`Found ${expired.length} expired auction(s) to close`);
+    // CRE limits: 10 chain writes, 20 consensus calls per execution.
+    // Each close = 1 write + consensus. Cap at 8 to leave room for supabase + ntfy.
+    const MAX_PER_RUN = 8;
+    const batch = expired.slice(0, MAX_PER_RUN);
+    runtime.log(`Found ${expired.length} expired auction(s), processing ${batch.length} this run`);
 
-    // Phase 1: Close all expired auctions on-chain
+    // Phase 1: Close expired auctions on-chain (up to MAX_PER_RUN)
     const closedAuctionIds: string[] = [];
     const results: string[] = [];
-    for (const auction of expired) {
+    for (const auction of batch) {
       try {
         const txHash = closeAuction(runtime, auction.auctionId);
         closedAuctionIds.push(auction.auctionId.toString());

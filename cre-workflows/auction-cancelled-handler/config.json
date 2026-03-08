@@ -7,7 +7,7 @@
     }
   ],
   "ntfyEnabled": true,
-  "ntfyHost": "http://195.201.8.147:8090",
-  "ntfyTopic": "force-close-handler",
+  "ntfyHost": "https://api.insider-streams.com",
+  "ntfyTopic": "auction-cancelled-handler-cre",
   "ntfyUser": "vps"
 }
