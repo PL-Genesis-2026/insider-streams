@@ -78,6 +78,12 @@ type SubmitState =
   | { status: "error"; message: string; auctionId?: string; txHash?: string }
   | { status: "success"; auctionId: string; sellerId: string; txHash: string };
 
+type CreateAuctionDraftFormProps = {
+  initialEventId?: string;
+  initialPrivateLeg?: "yes" | "no";
+  isDeepLinkedFromTrade?: boolean;
+};
+
 const initialDraftState: DraftState = {
   eventId: "",
   privateLeg: "",
@@ -128,10 +134,18 @@ function getErrorDetails(result: CreateAuctionResponse) {
   };
 }
 
-export function CreateAuctionDraftForm() {
+export function CreateAuctionDraftForm({
+  initialEventId,
+  initialPrivateLeg,
+  isDeepLinkedFromTrade = false,
+}: CreateAuctionDraftFormProps) {
   const walletSession = useWalletSession();
   const { signTypedDataAsync } = useSignTypedData();
-  const [draft, setDraft] = useState<DraftState>(initialDraftState);
+  const [draft, setDraft] = useState<DraftState>(() => ({
+    ...initialDraftState,
+    eventId: initialEventId ?? "",
+    privateLeg: initialPrivateLeg ?? "",
+  }));
   const [eventCatalog, setEventCatalog] = useState<EventCatalogState>({
     status: "idle",
   });
@@ -156,6 +170,24 @@ export function CreateAuctionDraftForm() {
   const selectedEvent = useMemo(() => {
     if (eventCatalog.status !== "ready" || draft.eventId === "") return null;
     return eventCatalog.events.find((event) => event.eventId === draft.eventId) ?? null;
+  }, [draft.eventId, eventCatalog]);
+
+  useEffect(() => {
+    if (eventCatalog.status !== "ready" || draft.eventId === "") {
+      return;
+    }
+
+    const hasMatchingEvent = eventCatalog.events.some(
+      (event) => event.eventId === draft.eventId,
+    );
+
+    if (!hasMatchingEvent) {
+      setDraft((current) => ({
+        ...current,
+        eventId: "",
+        privateLeg: "",
+      }));
+    }
   }, [draft.eventId, eventCatalog]);
 
   useEffect(() => {
@@ -212,13 +244,13 @@ export function CreateAuctionDraftForm() {
 
   const canSubmit =
     walletSession.isSupportedChain &&
-    draft.eventId !== "" &&
+    selectedEvent !== null &&
     draft.privateLeg !== "" &&
     draft.secretPayload.trim().length > 0 &&
     !isSubmitting;
 
   async function handleSubmit() {
-    if (!canSubmit || draft.privateLeg === "") {
+    if (!canSubmit || draft.privateLeg === "" || selectedEvent === null) {
       return;
     }
 
@@ -309,11 +341,9 @@ export function CreateAuctionDraftForm() {
             <div className="mb-2 flex size-14 items-center justify-center rounded-full border border-border/50 bg-muted/40">
               <Wallet className="size-6 text-muted-foreground" />
             </div>
-            <CardTitle>Connect your wallet</CardTitle>
+            <CardTitle>Connect wallet</CardTitle>
             <CardDescription>
-              A connected wallet is required to create auctions. Your seller
-              identity will be auto-generated and permanently linked to this
-              wallet the first time you list.
+              Connect to create auctions
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-4 pt-2">
@@ -332,10 +362,9 @@ export function CreateAuctionDraftForm() {
             <div className="mb-2 flex size-14 items-center justify-center rounded-full border border-emerald-500/25 bg-emerald-500/10 text-emerald-300">
               <Check className="size-6" />
             </div>
-            <CardTitle>Auction created</CardTitle>
+            <CardTitle>Auction live</CardTitle>
             <CardDescription>
-              The auction was created on-chain and the seller identity was
-              resolved for this wallet.
+              Your signal is now available for bidding
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 pt-2">
@@ -382,11 +411,6 @@ export function CreateAuctionDraftForm() {
       <Card className="border-border/70 bg-background/92">
         <CardHeader className="border-b border-border/60">
           <CardTitle>Create auction</CardTitle>
-          <CardDescription>
-            Pick a prediction market, declare your position, and describe the
-            signal you are selling. Your seller identity will be auto-assigned
-            when you submit.
-          </CardDescription>
         </CardHeader>
 
         <CardContent className="grid gap-8">
@@ -421,15 +445,38 @@ export function CreateAuctionDraftForm() {
             </Alert>
           ) : null}
 
-          <div className="grid gap-5 border-t border-border/60 pt-8">
-            <div className="space-y-1">
-              <h2 className="font-serif text-[1.5rem] leading-none tracking-[-0.04em]">
-                Event &amp; position
-              </h2>
-              <p className="text-sm leading-7 text-muted-foreground">
-                Pick an open prediction market, then declare your position.
-              </p>
+          {isDeepLinkedFromTrade && (
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge
+                variant="outline"
+                className="border-accent/30 bg-accent/10 text-accent"
+              >
+                From trade
+              </Badge>
+              {draft.eventId !== "" && (
+                <Badge variant="outline" className="border-border/60 bg-background/50">
+                  Event #{draft.eventId}
+                </Badge>
+              )}
+              {draft.privateLeg !== "" && (
+                <Badge
+                  variant="outline"
+                  className={
+                    draft.privateLeg === "yes"
+                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                      : "border-rose-500/30 bg-rose-500/10 text-rose-400"
+                  }
+                >
+                  {draft.privateLeg.toUpperCase()}
+                </Badge>
+              )}
             </div>
+          )}
+
+          <div className="grid gap-5 border-t border-border/60 pt-8">
+            <h2 className="font-serif text-[1.5rem] leading-none tracking-[-0.04em]">
+              Event &amp; position
+            </h2>
 
             <div className="grid gap-2">
               <Label>Prediction market event</Label>
@@ -465,7 +512,7 @@ export function CreateAuctionDraftForm() {
             {eventCatalog.status === "error" ? (
               <Alert variant="destructive">
                 <AlertCircle className="size-4" />
-                <AlertTitle>Event list failed to load</AlertTitle>
+                <AlertTitle>Failed to load events</AlertTitle>
                 <AlertDescription>{eventCatalog.message}</AlertDescription>
               </Alert>
             ) : null}
@@ -473,10 +520,8 @@ export function CreateAuctionDraftForm() {
             {eventCatalog.status === "loading" ? (
               <Alert>
                 <Loader2 className="size-4 animate-spin" />
-                <AlertTitle>Loading prediction market events</AlertTitle>
-                <AlertDescription>
-                  Pulling the current list of events from the market contract.
-                </AlertDescription>
+                <AlertTitle>Loading events...</AlertTitle>
+                <AlertDescription>Loading...</AlertDescription>
               </Alert>
             ) : null}
 
@@ -506,7 +551,7 @@ export function CreateAuctionDraftForm() {
 
                 <div className="mt-5 space-y-2">
                   <p className="text-sm font-medium text-foreground">
-                    What&apos;s your call?
+                    Your position
                   </p>
                   <div className="grid grid-cols-2 gap-3">
                     <button
@@ -542,23 +587,17 @@ export function CreateAuctionDraftForm() {
           </div>
 
           <div className="grid gap-5 border-t border-border/60 pt-8">
-            <div className="space-y-1">
-              <h2 className="font-serif text-[1.5rem] leading-none tracking-[-0.04em]">
-                Signal details
-              </h2>
-              <p className="text-sm leading-7 text-muted-foreground">
-                This is the private content revealed to the winning bidder
-                after purchase.
-              </p>
-            </div>
+            <h2 className="font-serif text-[1.5rem] leading-none tracking-[-0.04em]">
+              Private signal
+            </h2>
 
             <div className="grid gap-2">
-              <Label htmlFor="secret-payload">Private signal payload</Label>
+              <Label htmlFor="secret-payload">Signal</Label>
               <Textarea
                 id="secret-payload"
-                rows={7}
+                rows={6}
                 disabled={isSubmitting}
-                placeholder="The actual thesis, supporting detail, and why it matters."
+                placeholder="Your thesis, reasoning, and what makes this trade actionable..."
                 value={draft.secretPayload}
                 onChange={(event) =>
                   setDraftField("secretPayload", event.target.value)
@@ -598,7 +637,7 @@ export function CreateAuctionDraftForm() {
           {submitState.status === "error" ? (
             <Alert variant="destructive">
               <AlertCircle className="size-4" />
-              <AlertTitle>Auction creation failed</AlertTitle>
+              <AlertTitle>Creation failed</AlertTitle>
               <AlertDescription className="space-y-3">
                 <p>{submitState.message}</p>
                 {submitState.txHash ? (
@@ -645,12 +684,16 @@ export function CreateAuctionDraftForm() {
                   <Loader2 className="size-4 animate-spin" />
                   Creating auction...
                 </>
+              ) : draft.privateLeg === "yes" ? (
+                "Sell YES signal"
+              ) : draft.privateLeg === "no" ? (
+                "Sell NO signal"
               ) : (
                 "Create auction"
               )}
             </Button>
             <Button asChild variant="outline">
-              <Link href="/#auctions">Browse live auctions</Link>
+              <Link href="/#auctions">Browse auctions</Link>
             </Button>
           </div>
         </CardContent>
