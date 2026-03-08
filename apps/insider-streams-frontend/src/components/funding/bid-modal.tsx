@@ -24,6 +24,7 @@ type BidModalProps = {
   auctionId: string;
   currentBidUsdc?: number;
   availableBalance: string | null;
+  onBidSuccess?: () => void;
 };
 
 function formatUsd(usdc: number) {
@@ -40,6 +41,7 @@ export function BidModal({
   auctionId,
   currentBidUsdc,
   availableBalance,
+  onBidSuccess,
 }: BidModalProps) {
   const router = useRouter();
   const { signMessageAsync } = useSignMessage();
@@ -102,9 +104,11 @@ export function BidModal({
       }
 
       setPhase("success");
+      onBidSuccess?.();
       setTimeout(() => {
         onOpenChange(false);
-        router.refresh();
+        // Delay page refresh to give subgraph time to index the new bid
+        setTimeout(() => router.refresh(), 1500);
       }, 1500);
     } catch (err) {
       setPhase("error");
