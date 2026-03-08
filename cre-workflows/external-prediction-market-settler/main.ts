@@ -9,6 +9,7 @@ import { configSchema, type Config, type FirestoreWriteResponse, type GeminiResp
 import { askGemini } from "./gemini";
 import { writeToFirestore } from "./firebase";
 import { settleEvent } from "./evm";
+import { sendNotification } from "./notify";
 
 /** ABI for the SettlementRequested event CRE listens for. */
 const eventAbi = parseAbi(["event SettlementRequested(uint256 indexed eventId, string question)"]);
@@ -74,10 +75,13 @@ const onLogTrigger = (runtime: Runtime<Config>, log: EVMLog): string => {
     const firestoreResult: FirestoreWriteResponse = writeToFirestore(runtime, question, result, txHash);
     runtime.log(`Firestore Document: ${firestoreResult.name}`);
 
+    sendNotification(runtime, `Market Settled: Event ${eventId}`, `Outcome: ${result.geminiResponse}, tx: ${txHash.slice(0, 10)}...`);
+
     return "Settlement Request Processed";
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     runtime.log(`onLogTrigger error: ${msg}`);
+    sendNotification(runtime, "Settlement FAILED", msg);
     throw err;
   }
 };

@@ -2,12 +2,12 @@
  * External Marketplace Settlement Resolved Handler E2E Test Script
  *
  * Full lifecycle test on Eth Sepolia:
- *   1. Owner creates an ExamplePredictionMarket event (60s duration)
+ *   1. Owner creates an ExamplePredictionMarket event
  *   2. Owner creates 2 auctions — SellerA predicts "yes", SellerB predicts "no"
  *   3. Owner places bids on both auctions
  *   4. Insert Supabase records (sellers, secrets with event_data, deposits, private_bids)
- *   5. Waits for auctions to expire -> CRE auction-closer closes them
- *   6. Waits for prediction market event to close + force settles it to "Yes"
+ *   5. Admin-expires both auctions immediately -> CRE auction-closer closes them
+ *   6. Admin-closes prediction market event + requests settlement + CRE settler settles to "Yes"
  *   7. Runs CRE external-marketplace-settlement-resolved-handler (broadcast)
  *   8. Verifies: SellerA reputation +1, SellerB reputation -1, event marked resolved
  *
@@ -35,7 +35,7 @@ import {
   secretMarketplaceAbi,
 } from "@private-streams/common";
 import type { Database } from "@private-streams/common";
-import type { Address, Hex } from "viem";
+import type { Hex } from "viem";
 import {
   MIN_BALANCE,
   MINT_AMOUNT,
@@ -50,7 +50,6 @@ import {
   runCRE,
   setupSupabaseAuctionBid,
   step,
-  waitForTimestamp,
   waitForTx,
 } from "./e2e-helpers.js";
 
@@ -75,10 +74,9 @@ const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_KEY);
 const SELLER_A = "E2EReputationSellerA";
 const SELLER_B = "E2EReputationSellerB";
 const BID_AMOUNT = 1_000_000n; // 1 USDC
-const AUCTION_DURATION = 120; // 120 seconds — needs headroom for 2 auction creates + 2 bids + remote latency
-const EVENT_DURATION = BigInt(180); // 180 seconds — must outlast auctions
+const EVENT_DURATION = BigInt(3600); // 1 hour — well beyond test duration
 const DEPOSIT_AMOUNT = BID_AMOUNT * 10n; // 10 USDC headroom
-const QUESTION = "Settlement resolved handler E2E test event";
+const QUESTION = "The New York Yankees won the 2009 World Series."; // factual "Yes" for Gemini
 
 // Unique transaction ID for the mock deposit (avoids collisions with real data)
 const DEPOSIT_TX_ID = `e2e-settlement-resolved-deposit-${Date.now()}`;
@@ -167,9 +165,9 @@ async function main() {
   console.log(`  Event ID: ${eventId}`);
 
   // ── Step 5: Create auction A (SellerA predicts "yes") ──────────────────────
-  step(`Creating auction A — ${SELLER_A} predicts "yes" (${AUCTION_DURATION}s duration)...`);
+  step(`Creating auction A — ${SELLER_A} predicts "yes"...`);
   const latestBlockA = await publicClient.getBlock({ blockTag: "latest" });
-  const endTimeA = latestBlockA.timestamp + BigInt(AUCTION_DURATION);
+  const endTimeA = latestBlockA.timestamp + BigInt(3600); // 1 hour — will be admin-expired immediately
 
   const createAuctionAHash = await ownerClient.writeContract({
     address: SECRET_MARKETPLACE,
@@ -188,9 +186,9 @@ async function main() {
   console.log(`  Auction A ID: ${auctionIdA}`);
 
   // ── Step 6: Create auction B (SellerB predicts "no") ───────────────────────
-  step(`Creating auction B — ${SELLER_B} predicts "no" (${AUCTION_DURATION}s duration)...`);
+  step(`Creating auction B — ${SELLER_B} predicts "no"...`);
   const latestBlockB = await publicClient.getBlock({ blockTag: "latest" });
-  const endTimeB = latestBlockB.timestamp + BigInt(AUCTION_DURATION);
+  const endTimeB = latestBlockB.timestamp + BigInt(3600); // 1 hour — will be admin-expired immediately
 
   const createAuctionBHash = await ownerClient.writeContract({
     address: SECRET_MARKETPLACE,
@@ -282,25 +280,23 @@ async function main() {
     skipDeposit: true,
   });
 
-  // ── Step 9: Wait for auctions to expire ────────────────────────────────────
-  step("Waiting for auctions to expire...");
-  const auctionDataA = await publicClient.readContract({
+  // ── Step 9: Admin-expire both auctions immediately ─────────────────────────
+  step("Admin expiring both auctions immediately...");
+  const expireAHash = await ownerClient.writeContract({
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
-    functionName: "getAuction",
+    functionName: "adminExpireAuction",
     args: [auctionIdA],
   });
-  const auctionDataB = await publicClient.readContract({
+  await waitForTx(publicClient, expireAHash, "Auction A admin-expired");
+
+  const expireBHash = await ownerClient.writeContract({
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
-    functionName: "getAuction",
+    functionName: "adminExpireAuction",
     args: [auctionIdB],
   });
-  // Wait for the later of the two end times
-  const latestEndTime = auctionDataA.endTime > auctionDataB.endTime
-    ? auctionDataA.endTime
-    : auctionDataB.endTime;
-  await waitForTimestamp(publicClient, latestEndTime, "Auction expiry");
+  await waitForTx(publicClient, expireBHash, "Auction B admin-expired");
 
   // ── Step 10: Run CRE auction-closer (broadcast) ────────────────────────────
   // NOTE: Skip dry run — CRE simulation makes real HTTP calls even without
@@ -335,25 +331,41 @@ async function main() {
   );
   console.log(`  ok Auction B (${auctionIdB}) is Closed (status=1)`);
 
-  // ── Step 12: Wait for prediction market event to close ─────────────────────
-  step("Waiting for prediction market event to close...");
-  const eventData = await publicClient.readContract({
+  // ── Step 12: Admin-close event + request settlement + CRE settler ──────────
+  step("Admin-closing prediction market event...");
+  const adminCloseHash = await ownerClient.writeContract({
+    address: SIMPLE_MARKET,
+    abi: examplePredictionMarketAbi,
+    functionName: "adminCloseEvent",
+    args: [eventId],
+  });
+  await waitForTx(publicClient, adminCloseHash, "Event admin-closed");
+
+  step("Requesting settlement...");
+  const settlementRequestHash = await ownerClient.writeContract({
+    address: SIMPLE_MARKET,
+    abi: examplePredictionMarketAbi,
+    functionName: "requestSettlement",
+    args: [eventId],
+  });
+  await waitForTx(publicClient, settlementRequestHash, "Settlement requested");
+
+  step("Running CRE external-prediction-market-settler with broadcast...");
+  runCRE({
+    workflow: "external-prediction-market-settler",
+    evmTxHash: settlementRequestHash,
+    evmEventIndex: 0,
+    triggerIndex: 0,
+    broadcast: true,
+  });
+  const settledEvent = await publicClient.readContract({
     address: SIMPLE_MARKET,
     abi: examplePredictionMarketAbi,
     functionName: "getEvent",
     args: [eventId],
   });
-  await waitForTimestamp(publicClient, eventData.eventClose, "Event close time");
-
-  // ── Step 13: Force settle event to "Yes" outcome ───────────────────────────
-  step('Force settling event to "Yes" outcome...');
-  const forceSettleHash = await ownerClient.writeContract({
-    address: SIMPLE_MARKET,
-    abi: examplePredictionMarketAbi,
-    functionName: "forceSettle",
-    args: [eventId, 2, 9500, "E2E test"],
-  });
-  await waitForTx(publicClient, forceSettleHash, "Event force-settled to Yes");
+  assert(settledEvent.status === 2, `Expected event status=2 (Settled), got ${settledEvent.status}`);
+  console.log(`  ok Event ${eventId} settled — outcome: ${settledEvent.outcome === 2 ? "Yes" : settledEvent.outcome === 1 ? "No" : `Unknown(${settledEvent.outcome})`}`);
 
   // ── Step 14: Record reputation before ──────────────────────────────────────
   step("Recording seller reputations before settlement-resolved-handler...");

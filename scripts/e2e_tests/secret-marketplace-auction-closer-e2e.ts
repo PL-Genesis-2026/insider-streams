@@ -3,10 +3,10 @@
  *
  * Full lifecycle test on Eth Sepolia:
  *   1. Owner creates an ExamplePredictionMarket event
- *   2. Owner creates a SecretMarketplace auction (short duration)
+ *   2. Owner creates a SecretMarketplace auction
  *   3. Owner places on-chain bid
  *   4. Insert Supabase records (seller, secret, deposit transfer, private_bid)
- *   5. Waits for auction to expire
+ *   5. Admin expires auction immediately via adminExpireAuction
  *   6. CRE secret-marketplace-auction-closer broadcast — closes auction on-chain + settles bid
  *   7. Verifies auction is closed on-chain
  *   8. Verifies bid settled in Supabase (status=won, won_at set)
@@ -36,7 +36,7 @@ import {
   secretMarketplaceAbi,
 } from "@private-streams/common";
 import type { Database } from "@private-streams/common";
-import { formatUnits, type Address, type Hex } from "viem";
+import { formatUnits, type Hex } from "viem";
 import {
   MIN_BALANCE,
   MINT_AMOUNT,
@@ -52,7 +52,6 @@ import {
   runCRE,
   setupSupabaseAuctionBid,
   step,
-  waitForTimestamp,
   waitForTx,
 } from "./e2e-helpers.js";
 
@@ -76,7 +75,6 @@ const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_KEY);
 
 const BID_AMOUNT = 2_000_000n; // 2 USDC
 const EVENT_DURATION = BigInt(60); // 60 seconds (market event duration)
-const AUCTION_DURATION = 45; // 45 seconds — needs headroom for Sepolia tx confirmation
 const SELLER_ID = "E2ETestSeller";
 
 // Unique transaction ID for the mock deposit (avoids collisions with real data)
@@ -145,12 +143,9 @@ async function main() {
   console.log(`  Event ID: ${eventId}`);
 
   // ── Step 4: Create auction ─────────────────────────────────────────────────
-  step("Owner creating auction (45s duration)...");
-  // Compute endTime from latest on-chain block, not local clock, to avoid
-  // clock skew causing the auction to expire before the bid tx lands.
-  // Use 45s (not 30s) to give enough headroom for Sepolia tx confirmation.
+  step("Owner creating auction...");
   const latestBlock = await publicClient.getBlock({ blockTag: "latest" });
-  const endTime = latestBlock.timestamp + BigInt(AUCTION_DURATION);
+  const endTime = latestBlock.timestamp + BigInt(3600); // 1 hour — will be force-expired immediately
 
   const createAuctionHash = await ownerClient.writeContract({
     address: SECRET_MARKETPLACE,
@@ -214,15 +209,15 @@ async function main() {
   const buyerAvailBefore = BigInt(buyerBalBefore!.available_balance!);
   console.log(`  Buyer available: ${formatUnits(buyerAvailBefore, USDC_DECIMALS)}, locked: ${formatUnits(buyerLockedBefore, USDC_DECIMALS)}`);
 
-  // ── Step 7: Wait for auction to expire ─────────────────────────────────────
-  step("Waiting for auction to expire...");
-  const auctionData = await publicClient.readContract({
+  // ── Step 7: Admin expire auction immediately ────────────────────────────────
+  step("Admin expiring auction immediately...");
+  const expireHash = await ownerClient.writeContract({
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
-    functionName: "getAuction",
+    functionName: "adminExpireAuction",
     args: [auctionId],
   });
-  await waitForTimestamp(publicClient, auctionData.endTime, "Auction expiry");
+  await waitForTx(publicClient, expireHash, "Auction admin-expired");
 
   // ── Step 8: CRE broadcast — closes auction + settles bid ───────────────────
   // NOTE: Skip dry run — CRE simulation makes real HTTP calls even without

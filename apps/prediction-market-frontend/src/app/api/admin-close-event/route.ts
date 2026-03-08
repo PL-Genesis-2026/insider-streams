@@ -12,7 +12,7 @@ import { env } from "@/env";
 const abi = [
   {
     type: "function",
-    name: "requestSettlement",
+    name: "adminCloseEvent",
     inputs: [{ name: "eventId", type: "uint256" }],
     outputs: [],
     stateMutability: "nonpayable",
@@ -57,7 +57,7 @@ export async function POST(request: Request) {
 
     if (!env.OWNER_PK) {
       return NextResponse.json(
-        { error: "Server not configured for settlement (missing OWNER_PK)" },
+        { error: "Server not configured (missing OWNER_PK)" },
         { status: 503 },
       );
     }
@@ -74,22 +74,11 @@ export async function POST(request: Request) {
       args: [BigInt(eventId)],
     });
 
-    const status = eventData[4]; // status field (index 4 in struct)
-    const eventClose = eventData[3]; // eventClose field (index 3 in struct)
-
-    // Status.Open = 0
+    const status = eventData[4]; // Status enum index
     if (status !== 0) {
       const statusLabels = ["Open", "SettlementRequested", "Settled", "NeedsManual"];
       return NextResponse.json(
         { error: `Event status is ${statusLabels[status] ?? status}, must be Open` },
-        { status: 400 },
-      );
-    }
-
-    const now = BigInt(Math.floor(Date.now() / 1000));
-    if (eventClose > now) {
-      return NextResponse.json(
-        { error: "Event has not closed yet" },
         { status: 400 },
       );
     }
@@ -104,14 +93,14 @@ export async function POST(request: Request) {
     const hash = await walletClient.writeContract({
       address: CONTRACT_ADDRESS,
       abi,
-      functionName: "requestSettlement",
+      functionName: "adminCloseEvent",
       args: [BigInt(eventId)],
     });
 
     return NextResponse.json({ hash });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
-    console.error("Settlement request failed:", message);
+    console.error("Admin close event failed:", message);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
