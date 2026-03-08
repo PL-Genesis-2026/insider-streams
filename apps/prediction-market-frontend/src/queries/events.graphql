@@ -24,6 +24,15 @@ query PredictionEvents($limit: Int!, $skip: Int!) {
     blockTimestamp
     transactionHash
   }
+  sharesPurchaseds(first: 1000, orderBy: blockTimestamp, orderDirection: desc) {
+    eventId
+    buyer
+    outcome
+    usdcIn
+    sharesOut
+    blockTimestamp
+    transactionHash
+  }
 }
 
 query EventDetail($eventId: BigInt!) {
@@ -55,6 +64,35 @@ query EventDetail($eventId: BigInt!) {
   settlementRequesteds(first: 1, where: { eventId: $eventId }) {
     eventId
     question
+    blockTimestamp
+    transactionHash
+  }
+  sharesPurchaseds(
+    first: 100
+    where: { eventId: $eventId }
+    orderBy: blockTimestamp
+    orderDirection: desc
+  ) {
+    id
+    eventId
+    buyer
+    outcome
+    usdcIn
+    sharesOut
+    blockTimestamp
+    transactionHash
+  }
+  sharesRedeemeds(
+    first: 100
+    where: { eventId: $eventId }
+    orderBy: blockTimestamp
+    orderDirection: desc
+  ) {
+    id
+    eventId
+    redeemer
+    sharesIn
+    usdcOut
     blockTimestamp
     transactionHash
   }

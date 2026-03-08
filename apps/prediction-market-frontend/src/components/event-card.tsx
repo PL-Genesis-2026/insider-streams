@@ -1,6 +1,19 @@
+"use client";
+
+import Link from "next/link";
 import type { PredictionEventsQuery } from "@/__generated__/graphql";
 import { Badge } from "@/components/ui/badge";
+import { DualProgress } from "@/components/ui/progress";
+import { Countdown } from "@/components/countdown";
+import {
+  type EventVolume,
+  type EventStatus,
+  getEventStatus,
+  formatUsdc,
+  outcomeLabel,
+} from "@/lib/market-utils";
 import { cn } from "@/lib/utils";
+import { Clock, Users, BarChart3, CheckCircle2, XCircle } from "lucide-react";
 
 type EventCreatedItem = PredictionEventsQuery["eventCreateds"][number];
 type SettlementResponseItem =
@@ -9,118 +22,147 @@ type SettlementResponseItem =
 type EventCardProps = {
   event: EventCreatedItem;
   settlement?: SettlementResponseItem;
-  href?: string;
+  volume: EventVolume;
+  href: string;
 };
 
-function outcomeLabel(outcome: number): string {
-  switch (outcome) {
-    case 1:
-      return "No";
-    case 2:
-      return "Yes";
-    case 3:
-      return "Inconclusive";
-    default:
-      return "Unknown";
+function StatusIndicator({ status }: { status: EventStatus }) {
+  switch (status) {
+    case "open":
+      return (
+        <Badge variant="accent" className="text-[0.6rem]">
+          <span className="mr-0.5 inline-block size-1.5 animate-pulse rounded-full bg-current" />
+          Live
+        </Badge>
+      );
+    case "closed":
+      return (
+        <Badge variant="muted" className="text-[0.6rem]">
+          Closed
+        </Badge>
+      );
+    case "settling":
+      return (
+        <Badge
+          variant="outline"
+          className="border-yellow-500/30 bg-yellow-500/10 text-[0.6rem] text-yellow-400"
+        >
+          Settling
+        </Badge>
+      );
+    case "settled":
+      return (
+        <Badge variant="muted" className="text-[0.6rem]">
+          Settled
+        </Badge>
+      );
   }
 }
 
-function outcomeBadgeClass(outcome: number): string {
-  switch (outcome) {
-    case 2:
-      return "border-emerald-500/30 bg-emerald-500/15 text-emerald-400";
-    case 1:
-      return "border-rose-500/30 bg-rose-500/15 text-rose-400";
-    case 3:
-      return "border-yellow-500/30 bg-yellow-500/15 text-yellow-400";
-    default:
-      return "bg-muted text-muted-foreground";
+function OutcomeBadge({ outcome }: { outcome: number }) {
+  const label = outcomeLabel(outcome);
+  if (outcome === 2) {
+    return (
+      <Badge
+        variant="outline"
+        className="border-emerald-500/30 bg-emerald-500/15 text-[0.6rem] text-emerald-400"
+      >
+        <CheckCircle2 className="size-2.5" />
+        {label}
+      </Badge>
+    );
   }
-}
-
-function statusLabel(
-  event: EventCreatedItem,
-  settlement?: SettlementResponseItem,
-): string {
-  if (settlement) return "Settled";
-  const closeTime = Number(event.eventClose) * 1000;
-  if (Date.now() > closeTime) return "Closed";
-  return "Open";
-}
-
-function formatDate(unixSeconds: string): string {
-  return new Date(Number(unixSeconds) * 1000).toLocaleString();
-}
-
-function shortenAddress(addr: string): string {
-  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-}
-
-export function EventCard({ event, settlement, href }: EventCardProps) {
-  const status = statusLabel(event, settlement);
-
-  const content = (
-    <div
-      className={cn(
-        "rounded-[calc(var(--radius)+6px)] border bg-card p-5 transition-colors",
-        href && "hover:border-accent/30 hover:bg-card/80",
-      )}
+  if (outcome === 1) {
+    return (
+      <Badge
+        variant="outline"
+        className="border-rose-500/30 bg-rose-500/15 text-[0.6rem] text-rose-400"
+      >
+        <XCircle className="size-2.5" />
+        {label}
+      </Badge>
+    );
+  }
+  return (
+    <Badge
+      variant="outline"
+      className="border-yellow-500/30 bg-yellow-500/15 text-[0.6rem] text-yellow-400"
     >
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <h3 className="text-base font-semibold leading-snug text-card-foreground">
-          {event.question}
-        </h3>
-        <div className="flex shrink-0 items-center gap-2">
-          <Badge
-            variant={
-              status === "Open"
-                ? "accent"
-                : status === "Settled"
-                  ? "default"
-                  : "muted"
-            }
-            className="text-[0.65rem]"
-          >
-            {status}
-          </Badge>
-          {settlement && (
-            <Badge
-              variant="outline"
-              className={cn("text-[0.65rem]", outcomeBadgeClass(settlement.outcome))}
-            >
-              {outcomeLabel(settlement.outcome)}
-            </Badge>
+      {label}
+    </Badge>
+  );
+}
+
+export function EventCard({ event, settlement, volume, href }: EventCardProps) {
+  const status = getEventStatus(event, settlement);
+  const closeTime = Number(event.eventClose);
+  const hasVolume = volume.totalUsdc > BigInt(0);
+
+  return (
+    <Link href={href} className="group block">
+      <div
+        className={cn(
+          "flex h-full flex-col rounded-[calc(var(--radius)+4px)] border bg-card p-5 transition-all duration-200",
+          "hover:border-accent/25 hover:bg-card/90 hover:shadow-[0_8px_32px_rgba(91,138,240,0.06)]",
+          status === "open" && "border-accent/10",
+        )}
+      >
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <h3 className="line-clamp-2 text-[0.9rem] font-semibold leading-snug text-card-foreground group-hover:text-foreground">
+            {event.question}
+          </h3>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {settlement && <OutcomeBadge outcome={settlement.outcome} />}
+            <StatusIndicator status={status} />
+          </div>
+        </div>
+
+        {hasVolume && (
+          <div className="mb-3.5">
+            <div className="mb-1.5 flex items-center justify-between text-xs">
+              <span className="font-medium text-emerald-400">
+                Yes {volume.yesPercent.toFixed(0)}%
+              </span>
+              <span className="font-medium text-rose-400">
+                {volume.noPercent.toFixed(0)}% No
+              </span>
+            </div>
+            <DualProgress yesPercent={volume.yesPercent} />
+          </div>
+        )}
+
+        {!hasVolume && !settlement && (
+          <div className="mb-3.5">
+            <div className="mb-1.5 flex items-center justify-between text-xs text-muted-foreground">
+              <span>Yes 50%</span>
+              <span>50% No</span>
+            </div>
+            <DualProgress yesPercent={50} className="opacity-40" />
+          </div>
+        )}
+
+        <div className="mt-auto flex items-center gap-4 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-1">
+            <BarChart3 className="size-3" />
+            {hasVolume ? `$${formatUsdc(volume.totalUsdc)}` : "$0"}
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <Users className="size-3" />
+            {volume.traderCount}
+          </span>
+          {status === "open" && closeTime > 0 && (
+            <span className="ml-auto inline-flex items-center gap-1 text-accent/80">
+              <Clock className="size-3" />
+              <Countdown targetUnix={closeTime} />
+            </span>
+          )}
+          {status !== "open" && (
+            <span className="ml-auto text-muted-foreground/60">
+              #{event.eventId}
+            </span>
           )}
         </div>
       </div>
-
-      <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
-        <span>Event #{event.eventId}</span>
-        <span>Creator: {shortenAddress(event.creator)}</span>
-        <span>Created: {formatDate(event.blockTimestamp)}</span>
-        {event.eventClose !== "0" && (
-          <span>Closes: {formatDate(event.eventClose)}</span>
-        )}
-      </div>
-
-      {settlement && (
-        <div className="mt-3 rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-          Settled at {formatDate(settlement.blockTimestamp)} &mdash; Outcome:{" "}
-          <span className="font-semibold text-foreground">
-            {outcomeLabel(settlement.outcome)}
-          </span>
-        </div>
-      )}
-    </div>
+    </Link>
   );
-
-  if (href) {
-    return (
-      <a href={href} className="block">
-        {content}
-      </a>
-    );
-  }
-
-  return content;
 }

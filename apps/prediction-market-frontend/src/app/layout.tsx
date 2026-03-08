@@ -37,7 +37,7 @@ const emberBody = Instrument_Sans({
 export const metadata: Metadata = {
   title: "Bollymarket — Prediction Market",
   description:
-    "Trade on prediction market outcomes. Buy Yes/No shares and sell your signal on Insider Streams.",
+    "Trade on real-world outcomes with on-chain prediction markets settled by Chainlink CRE and Gemini AI.",
 };
 
 export default async function RootLayout({

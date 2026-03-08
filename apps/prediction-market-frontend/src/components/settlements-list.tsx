@@ -10,6 +10,7 @@ import {
   getDocs,
 } from "firebase/firestore";
 import { Badge } from "@/components/ui/badge";
+import { ExternalLink, Bot, CheckCircle2, AlertCircle } from "lucide-react";
 
 interface SettlementDoc {
   id: string;
@@ -22,22 +23,35 @@ interface SettlementDoc {
   createdAt: number;
 }
 
-const ITEMS_LIMIT = 10;
+const ITEMS_LIMIT = 20;
 
 function shortenHash(hash: string): string {
   if (
     hash ===
     "0x0000000000000000000000000000000000000000000000000000000000000000"
   ) {
-    return "0x00000... (simulated)";
+    return "Simulated (no tx)";
   }
   return `${hash.slice(0, 10)}...${hash.slice(-6)}`;
+}
+
+function parseGeminiResponse(raw: string): { answer?: string; confidence?: number; sources?: string[] } | null {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed === "object" && parsed !== null) {
+      return parsed as { answer?: string; confidence?: number; sources?: string[] };
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 export function SettlementsList() {
   const [docs, setDocs] = useState<SettlementDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchDocs = async () => {
@@ -70,7 +84,7 @@ export function SettlementsList() {
       }
     };
 
-    fetchDocs();
+    void fetchDocs();
   }, []);
 
   if (error) {
@@ -87,7 +101,7 @@ export function SettlementsList() {
         {Array.from({ length: 3 }).map((_, i) => (
           <div
             key={i}
-            className="h-40 animate-pulse rounded-[calc(var(--radius)+6px)] border bg-card"
+            className="h-32 animate-pulse rounded-[calc(var(--radius)+4px)] border bg-card"
           />
         ))}
       </div>
@@ -96,7 +110,7 @@ export function SettlementsList() {
 
   if (docs.length === 0) {
     return (
-      <div className="rounded-[calc(var(--radius)+6px)] border bg-card p-6 text-center text-sm text-muted-foreground">
+      <div className="rounded-[calc(var(--radius)+4px)] border bg-card p-8 text-center text-sm text-muted-foreground">
         No settlement records found.
       </div>
     );
@@ -105,40 +119,100 @@ export function SettlementsList() {
   return (
     <div className="space-y-4">
       {docs.map((doc) => {
-        let geminiParsed: string | null = null;
-        try {
-          geminiParsed = JSON.stringify(JSON.parse(doc.geminiResponse), null, 2);
-        } catch {
-          /* ignore */
-        }
+        const gemini = parseGeminiResponse(doc.geminiResponse);
+        const isExpanded = expandedId === doc.id;
+        const isSuccess = doc.statusCode === 1 || doc.statusCode === 200;
 
         return (
           <div
             key={doc.id}
-            className="rounded-[calc(var(--radius)+6px)] border bg-card p-5"
+            className="rounded-[calc(var(--radius)+4px)] border bg-card transition-colors"
           >
-            <div className="mb-2 flex items-start justify-between gap-3">
-              <h3 className="text-base font-semibold text-card-foreground">
-                {doc.question}
-              </h3>
-              <Badge
-                variant={doc.statusCode === 1 ? "accent" : "muted"}
-                className="text-[0.65rem]"
+            <div className="p-5">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <h3 className="text-base font-semibold leading-snug text-card-foreground">
+                  {doc.question}
+                </h3>
+                <Badge
+                  variant="outline"
+                  className={
+                    isSuccess
+                      ? "border-emerald-500/30 bg-emerald-500/10 text-[0.6rem] text-emerald-400"
+                      : "border-yellow-500/30 bg-yellow-500/10 text-[0.6rem] text-yellow-400"
+                  }
+                >
+                  {isSuccess ? (
+                    <CheckCircle2 className="size-2.5" />
+                  ) : (
+                    <AlertCircle className="size-2.5" />
+                  )}
+                  Status {doc.statusCode}
+                </Badge>
+              </div>
+
+              {gemini?.answer && (
+                <div className="mb-3 flex gap-2 rounded-lg border bg-muted/20 p-3">
+                  <Bot className="mt-0.5 size-4 shrink-0 text-accent" />
+                  <p className="text-sm leading-relaxed text-foreground/90">
+                    {gemini.answer}
+                  </p>
+                </div>
+              )}
+
+              {gemini?.confidence !== undefined && (
+                <div className="mb-3 text-xs text-muted-foreground">
+                  AI Confidence:{" "}
+                  <span className="font-medium text-foreground">
+                    {gemini.confidence > 100
+                      ? `${(gemini.confidence / 100).toFixed(0)}%`
+                      : `${gemini.confidence}%`}
+                  </span>
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs text-muted-foreground">
+                <span>Response: {doc.responseId}</span>
+                <a
+                  href={
+                    doc.txHash !==
+                    "0x0000000000000000000000000000000000000000000000000000000000000000"
+                      ? `https://sepolia.etherscan.io/tx/${doc.txHash}`
+                      : undefined
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-accent underline-offset-4 hover:underline"
+                >
+                  Tx: {shortenHash(doc.txHash)}
+                  {doc.txHash !==
+                    "0x0000000000000000000000000000000000000000000000000000000000000000" && (
+                    <ExternalLink className="size-2.5" />
+                  )}
+                </a>
+                <span>{new Date(doc.createdAt).toLocaleString()}</span>
+              </div>
+            </div>
+
+            <div className="border-t border-border/50 px-5 py-2">
+              <button
+                type="button"
+                onClick={() =>
+                  setExpandedId(isExpanded ? null : doc.id)
+                }
+                className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
               >
-                Status: {doc.statusCode}
-              </Badge>
+                {isExpanded ? "Hide raw response" : "Show raw response"}
+              </button>
             </div>
 
-            <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
-              <span>Response: {doc.responseId}</span>
-              <span>Tx: {shortenHash(doc.txHash)}</span>
-              <span>{new Date(doc.createdAt).toLocaleString()}</span>
-            </div>
-
-            {geminiParsed && (
-              <pre className="mt-3 overflow-x-auto rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
-                {geminiParsed}
-              </pre>
+            {isExpanded && (
+              <div className="border-t border-border/50 px-5 py-4">
+                <pre className="overflow-x-auto rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
+                  {gemini
+                    ? JSON.stringify(gemini, null, 2)
+                    : doc.geminiResponse}
+                </pre>
+              </div>
             )}
           </div>
         );
