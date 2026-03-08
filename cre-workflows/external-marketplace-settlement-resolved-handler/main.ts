@@ -1,109 +1,133 @@
-import { cre, type Runtime, Runner, getNetwork, type CronPayload } from "@chainlink/cre-sdk";
-import { configSchema, CRON_SCHEDULE, type Config, OUTCOME_YES, OUTCOME_NO, OUTCOME_INCONCLUSIVE } from "./types";
-import { findSettledUnresolvedEvents } from "./monitor";
+import { cre, type Runtime, Runner, getNetwork, bytesToHex, type EVMLog } from "@chainlink/cre-sdk";
+import { keccak256, toHex, decodeEventLog, parseAbi } from "viem";
+import { configSchema, type Config, OUTCOME_YES, OUTCOME_NO, OUTCOME_INCONCLUSIVE } from "./types";
+import { fetchAuctionIdsForEvent } from "./monitor";
 import { fetchSecretsForAuctions, type SecretWithPrediction } from "./supabase";
 import { submitResolveReport, type AuctionResultTuple } from "./resolve";
 import { sendNotification } from "./notify";
 
+const FRONTEND_URL = "https://insider-streams-insider-streams-fro.vercel.app";
+const ETHERSCAN_URL = "https://sepolia.etherscan.io/tx";
+
+/** ABI for the SettlementResponse event this workflow listens for. */
+const eventAbi = parseAbi([
+  "event SettlementResponse(uint256 indexed eventId, uint8 indexed status, uint8 indexed outcome)",
+]);
+const eventSignature = "SettlementResponse(uint256,uint8,uint8)";
+
 /**
- * Handler — checks for settled but unresolved events, fetches secrets from
- * Supabase, compares predictions to actual outcomes, and submits per-auction
- * reputation updates on-chain.
+ * Log-triggered handler — fires on each SettlementResponse event.
+ * Decodes the event to get eventId and outcome, fetches auction IDs from the
+ * subgraph, fetches seller predictions from Supabase, compares to actual
+ * outcome, and submits per-auction reputation updates on-chain.
+ *
+ * Resource budget per invocation:
+ *   0 chain reads (subgraph replaces getUnresolvedEvents + getEvent + getEventAuctions)
+ *   1 HTTP call (subgraph: auction IDs for this event)
+ *   1 HTTP call (Supabase: secrets/predictions for those auctions)
+ *   1 chain write (submitResolveReport)
+ *   1 HTTP call (ntfy notification)
  */
-const onTrigger = (runtime: Runtime<Config>): string => {
+const onLogTrigger = (runtime: Runtime<Config>, log: EVMLog): string => {
   try {
-    runtime.log("Reputation resolver triggered — checking for settled unresolved events");
+    // Decode the SettlementResponse event
+    const topics = log.topics.map((t) => bytesToHex(t)) as [
+      `0x${string}`,
+      ...`0x${string}`[],
+    ];
+    const data = bytesToHex(log.data);
+    const decoded = decodeEventLog({ abi: eventAbi, data, topics });
 
-    // Phase 1: Find settled unresolved events (EVM reads — free)
-    const settledEvents = findSettledUnresolvedEvents(runtime);
+    const eventId = decoded.args.eventId as bigint;
+    const outcome = Number(decoded.args.outcome);
 
-    if (settledEvents.length === 0) {
-      runtime.log("No settled unresolved events found");
-      return "No settled unresolved events";
+    runtime.log(`SettlementResponse: event=${eventId}, outcome=${outcome}`);
+
+    // Validate outcome — must be Yes (2), No (1), or Inconclusive (3)
+    if (outcome !== OUTCOME_YES && outcome !== OUTCOME_NO && outcome !== OUTCOME_INCONCLUSIVE) {
+      const msg = `Unexpected outcome ${outcome} for event ${eventId}, skipping`;
+      runtime.log(msg);
+      return msg;
     }
 
-    runtime.log(`Found ${settledEvents.length} settled unresolved event(s)`);
+    // Phase 1: Get auction IDs for this event from subgraph (1 HTTP call, 0 chain reads)
+    const auctionIds = fetchAuctionIdsForEvent(runtime, eventId);
 
-    // Phase 2: Batch-fetch secrets for all auction IDs (1 HTTP call)
-    const allAuctionIds = settledEvents.flatMap((e) =>
-      e.auctionIds.map((id) => id.toString()),
+    if (auctionIds.length === 0) {
+      const msg = `Event ${eventId}: no auctions found, nothing to resolve`;
+      runtime.log(msg);
+      sendNotification(runtime, `Reputation Skip: Event ${eventId}`, msg);
+      return msg;
+    }
+
+    // Phase 2: Fetch secrets/predictions from Supabase (1 HTTP call)
+    const secrets = fetchSecretsForAuctions(
+      runtime,
+      auctionIds.map((id) => id.toString()),
     );
-    const secrets = fetchSecretsForAuctions(runtime, allAuctionIds);
     const secretsMap = new Map<string, SecretWithPrediction>(
       secrets.map((s) => [s.auction_id, s]),
     );
 
-    // Phase 3: Build results and submit per-event reports
-    const resultMessages: string[] = [];
-    let lastTxHash = "";
+    // Phase 3: Compare predictions to actual outcome
+    const results: AuctionResultTuple[] = [];
+    const auctionDetails: string[] = [];
 
-    for (const event of settledEvents) {
-      const results: AuctionResultTuple[] = [];
-      const auctionDetails: string[] = [];
+    for (const auctionId of auctionIds) {
+      const secret = secretsMap.get(auctionId.toString());
 
-      for (const auctionId of event.auctionIds) {
-        const secret = secretsMap.get(auctionId.toString());
-
-        if (!secret || !secret.event_data) {
-          // No prediction — skip (will get 0 delta in contract Phase 3)
-          runtime.log(`Auction ${auctionId}: no event_data, skipping`);
-          continue;
-        }
-
-        const sellerPrediction = secret.event_data.outcome;
-        let predictionOutcome: number;
-        if (event.outcome === OUTCOME_INCONCLUSIVE) {
-          // Inconclusive markets penalize all predictions
-          predictionOutcome = 2; // PredictionWrong
-        } else if (
-          (sellerPrediction === "yes" && event.outcome === OUTCOME_YES) ||
-          (sellerPrediction === "no" && event.outcome === OUTCOME_NO)
-        ) {
-          predictionOutcome = 1; // PredictionCorrect
-        } else {
-          predictionOutcome = 2; // PredictionWrong
-        }
-
-        const actualLabel = event.outcome === OUTCOME_INCONCLUSIVE ? "inconclusive" : event.outcome === OUTCOME_YES ? "yes" : "no";
-        const outcomeLabel = predictionOutcome === 1 ? "correct" : "wrong";
-        runtime.log(
-          `Auction ${auctionId}: predicted=${sellerPrediction}, actual=${actualLabel}, outcome=${outcomeLabel}`,
-        );
-        auctionDetails.push(`  Auction ${auctionId}: predicted=${sellerPrediction}, actual=${actualLabel} → ${outcomeLabel}`);
-
-        results.push({ auctionId, predictionOutcome });
+      if (!secret || !secret.event_data) {
+        runtime.log(`Auction ${auctionId}: no event_data, skipping`);
+        continue;
       }
 
-      try {
-        const txHash = submitResolveReport(runtime, event.eventId, results);
-        lastTxHash = txHash;
-        resultMessages.push(
-          `Event ${event.eventId}: resolved (${results.length} results)`,
-        );
-        if (auctionDetails.length > 0) resultMessages.push(...auctionDetails);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        runtime.log(`Failed to resolve event ${event.eventId}: ${msg}`);
-        resultMessages.push(`Event ${event.eventId}: FAILED (${msg})`);
+      const sellerPrediction = secret.event_data.outcome;
+      let predictionOutcome: number;
+      if (outcome === OUTCOME_INCONCLUSIVE) {
+        predictionOutcome = 2; // PredictionWrong
+      } else if (
+        (sellerPrediction === "yes" && outcome === OUTCOME_YES) ||
+        (sellerPrediction === "no" && outcome === OUTCOME_NO)
+      ) {
+        predictionOutcome = 1; // PredictionCorrect
+      } else {
+        predictionOutcome = 2; // PredictionWrong
       }
+
+      const actualLabel = outcome === OUTCOME_INCONCLUSIVE ? "inconclusive" : outcome === OUTCOME_YES ? "yes" : "no";
+      const outcomeLabel = predictionOutcome === 1 ? "correct" : "wrong";
+      runtime.log(
+        `Auction ${auctionId}: predicted=${sellerPrediction}, actual=${actualLabel}, outcome=${outcomeLabel}`,
+      );
+      auctionDetails.push(`  Auction ${auctionId}: predicted=${sellerPrediction}, actual=${actualLabel} → ${outcomeLabel}\n    ${FRONTEND_URL}/auction/${auctionId}`);
+
+      results.push({ auctionId, predictionOutcome });
     }
 
+    // Phase 4: Submit reputation report on-chain (1 chain write)
+    const txHash = submitResolveReport(runtime, eventId, results);
+
+    const resultMessages = [
+      `Event ${eventId}: resolved (${results.length} result(s))`,
+      ...auctionDetails,
+    ];
     const summary = resultMessages.join("\n");
     runtime.log(summary);
-    const etherscanUrl = lastTxHash ? `https://sepolia.etherscan.io/tx/${lastTxHash}` : undefined;
-    sendNotification(runtime, `Reputation Resolved: ${settledEvents.length} event(s)`, summary, etherscanUrl);
+
+    const etherscanUrl = txHash ? `${ETHERSCAN_URL}/${txHash}` : undefined;
+    sendNotification(runtime, `Reputation Resolved: Event ${eventId}`, summary, etherscanUrl);
     return summary;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    runtime.log(`onTrigger error: ${msg}`);
+    runtime.log(`onLogTrigger error: ${msg}`);
     sendNotification(runtime, "Reputation Resolution FAILED", msg);
     throw err;
   }
 };
 
 /**
- * Workflow init — registers both cron and REST triggers.
- * Cron fires every 60 seconds, REST allows manual invocation for E2E tests.
+ * Workflow init — registers log trigger for SettlementResponse events
+ * on the ExamplePredictionMarket contract.
  */
 const initWorkflow = (config: Config) => {
   const network = getNetwork({
@@ -115,10 +139,21 @@ const initWorkflow = (config: Config) => {
     throw new Error(`Network not found for: ${config.evms[0].chainSelectorName}`);
   }
 
-  const cronCap = new cre.capabilities.CronCapability();
+  const evmClient = new cre.capabilities.EVMClient(
+    network.chainSelector.selector,
+  );
+
+  const responseHash = keccak256(toHex(eventSignature));
 
   return [
-    cre.handler(cronCap.trigger({ schedule: CRON_SCHEDULE }), onTrigger),
+    cre.handler(
+      evmClient.logTrigger({
+        addresses: [config.evms[0].examplePredictionMarketAddress],
+        topics: [{ values: [responseHash] }],
+        confidence: "CONFIDENCE_LEVEL_FINALIZED",
+      }),
+      onLogTrigger,
+    ),
   ];
 };
 
