@@ -229,74 +229,97 @@ export async function requestFundingWithdrawal(
   amount: string,
 ): Promise<WithdrawFundingResult> {
   const normalizedAddress = toCanonicalAddress(address);
-  const amountRaw = validateRawAmount(amount);
+  validateRawAmount(amount);
   const ownerPrivateKey = getOwnerPrivateKey();
   const ownerAddress = privateKeyToAccount(ownerPrivateKey).address;
   const supabase = getSupabaseServiceClient();
 
-  const { data: balanceRow, error: balanceError } = await supabase
-    .from("balances")
-    .select(
-      "available_balance, locked_balance, pending_withdrawal, total_from_won_bids, user_address",
-    )
-    .eq("user_address", normalizedAddress)
-    .maybeSingle();
-
-  if (balanceError) {
-    throw new Error(
-      `Failed to read funding balance for ${normalizedAddress}: ${balanceError.message}`,
-    );
-  }
-
-  const availableBalance = balanceRow?.available_balance
-    ? BigInt(balanceRow.available_balance)
-    : BigInt(0);
-
-  if (availableBalance < amountRaw) {
-    throw new Error("Withdrawal amount exceeds available balance.");
-  }
-
-  const privateTokenClient = new PrivateTokenApiClient(ownerPrivateKey);
-  const transfer = await privateTokenClient.privateTransfer({
-    recipient: normalizedAddress,
-    token: PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
-    amount,
-  });
-
-  const completedAt = new Date().toISOString();
-  const transferRow: TransferInsert = {
-    transaction_id: transfer.transaction_id,
+  // Reserve balance by inserting a 'requested' row BEFORE the private transfer.
+  // The balances view subtracts 'requested' amounts from available_balance,
+  // so any concurrent request's subsequent read will see reduced availability.
+  const reservationTxId = `withdraw-reserve-${crypto.randomUUID()}`;
+  const { error: reserveError } = await supabase.from("transfers").insert({
+    transaction_id: reservationTxId,
     user_address: normalizedAddress,
     sender_address: toCanonicalAddress(ownerAddress),
     recipient_address: normalizedAddress,
     token_address: toCanonicalAddress(PRIVATE_CONFIDENTIAL_USDC_ADDRESS),
     amount,
-    status: "transferring",
-    raw_data: {
-      id: transfer.transaction_id,
-      type: "transfer",
-      account: ownerAddress,
-      sender: ownerAddress,
+    status: "requested",
+  });
+
+  if (reserveError) {
+    throw new Error(
+      `Failed to reserve withdrawal for ${normalizedAddress}: ${reserveError.message}`,
+    );
+  }
+
+  // Verify the balance is still non-negative after this reservation committed.
+  // If a concurrent request also reserved, both will see a negative balance
+  // and both will roll back — conservative but prevents double-spend.
+  const { data: balanceRow, error: balanceError } = await supabase
+    .from("balances")
+    .select("available_balance")
+    .eq("user_address", normalizedAddress)
+    .maybeSingle();
+
+  if (balanceError || !balanceRow) {
+    await releaseWithdrawalReservation(supabase, reservationTxId);
+    throw new Error(
+      balanceError
+        ? `Failed to verify balance for ${normalizedAddress}: ${balanceError.message}`
+        : "Withdrawal amount exceeds available balance.",
+    );
+  }
+
+  const postReserveBalance = BigInt(balanceRow.available_balance ?? "0");
+  if (postReserveBalance < BigInt(0)) {
+    await releaseWithdrawalReservation(supabase, reservationTxId);
+    throw new Error("Withdrawal amount exceeds available balance.");
+  }
+
+  // Balance verified with reservation held — execute the private transfer.
+  let transferTxId: string;
+  try {
+    const privateTokenClient = new PrivateTokenApiClient(ownerPrivateKey);
+    const transfer = await privateTokenClient.privateTransfer({
       recipient: normalizedAddress,
       token: PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
       amount,
-      is_incoming: false,
-      private_transfer_completed_at: completedAt,
-      public_withdrawal_state: "awaiting_wallet_signature",
-      source: "nextjs-withdraw-route",
-    },
-  };
-
-  const { error: insertError } = await supabase
-    .from("transfers")
-    .upsert(transferRow, {
-      onConflict: "transaction_id",
-      ignoreDuplicates: false,
     });
+    transferTxId = transfer.transaction_id;
+  } catch (err) {
+    await releaseWithdrawalReservation(supabase, reservationTxId);
+    throw err;
+  }
 
-  if (insertError) {
+  // Promote the reservation to a real transfer record.
+  const completedAt = new Date().toISOString();
+  const { error: promoteError } = await supabase
+    .from("transfers")
+    .update({
+      transaction_id: transferTxId,
+      status: "transferring",
+      raw_data: {
+        id: transferTxId,
+        type: "transfer",
+        account: ownerAddress,
+        sender: ownerAddress,
+        recipient: normalizedAddress,
+        token: PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
+        amount,
+        is_incoming: false,
+        private_transfer_completed_at: completedAt,
+        public_withdrawal_state: "awaiting_wallet_signature",
+        source: "nextjs-withdraw-route",
+        reservation_id: reservationTxId,
+      },
+    })
+    .eq("transaction_id", reservationTxId);
+
+  if (promoteError) {
     throw new Error(
-      `Withdrawal transfer succeeded but recording it failed: ${insertError.message}`,
+      `Withdrawal transfer succeeded but recording it failed: ${promoteError.message}`,
     );
   }
 
@@ -304,8 +327,18 @@ export async function requestFundingWithdrawal(
 
   return {
     ...snapshot,
-    transactionId: transfer.transaction_id,
+    transactionId: transferTxId,
   };
+}
+
+async function releaseWithdrawalReservation(
+  supabase: ReturnType<typeof getSupabaseServiceClient>,
+  reservationTxId: string,
+) {
+  await supabase
+    .from("transfers")
+    .update({ status: "failed" })
+    .eq("transaction_id", reservationTxId);
 }
 
 export async function finalizeFundingWithdrawal(
