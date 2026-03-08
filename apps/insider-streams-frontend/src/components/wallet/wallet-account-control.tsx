@@ -36,7 +36,7 @@ export function WalletAccountControl() {
     ? getDisplayFundingBalance(fundingSnapshot.balance)
     : null;
   const shouldShowHiddenBalance = !isRevealed;
-  const balanceLabel = displayBalance ?? "Fund wallet";
+  const balanceLabel = displayBalance ?? "Wallet";
 
   if (!walletSession.isConnected || !walletSession.address) {
     return <ConnectWalletButton size="sm" variant="outline" />;
@@ -47,12 +47,12 @@ export function WalletAccountControl() {
       {isRevealed ? (
         <Badge asChild variant="secondary">
           <Link
-            href="/funding"
+            href="/dashboard#wallet"
             className="border border-border/70 bg-secondary/70 px-3 py-1 text-[10px] tracking-[0.18em] text-secondary-foreground transition-colors hover:border-accent/40 hover:bg-secondary"
             aria-label={
               displayBalance
-                ? `Open funding page, current balance ${displayBalance}`
-                : "Open funding page to fund wallet"
+                ? `Open wallet controls on the dashboard, current balance ${displayBalance}`
+                : "Open wallet controls on the dashboard"
             }
           >
             <CirclePlus className="size-3.5" />
@@ -65,9 +65,9 @@ export function WalletAccountControl() {
           <TooltipTrigger asChild>
             <Badge asChild variant="secondary">
               <Link
-                href="/funding"
+                href="/dashboard#wallet"
                 className="border border-border/70 bg-secondary/70 px-3 py-1 text-[10px] tracking-[0.18em] text-muted-foreground transition-colors hover:border-accent/40 hover:bg-secondary hover:text-secondary-foreground"
-                aria-label="Open funding page. Reveal secret data to see balance."
+                aria-label="Open wallet controls on the dashboard. Reveal secret data to see balance."
               >
                 <CirclePlus className="size-3.5" />
                 ••• USDC
@@ -75,7 +75,7 @@ export function WalletAccountControl() {
             </Badge>
           </TooltipTrigger>
           <TooltipContent side="bottom">
-            Reveal secret data to see balance
+            Open wallet controls
           </TooltipContent>
         </Tooltip>
       ) : null}

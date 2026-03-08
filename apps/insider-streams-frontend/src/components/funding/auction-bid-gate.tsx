@@ -41,7 +41,12 @@ export function AuctionBidGate({
   currentBidUsdc,
 }: AuctionBidGateProps) {
   const [modalOpen, setModalOpen] = useState(false);
-  const { seller, isRevealed } = usePrivateData();
+  const {
+    seller,
+    isRevealed,
+    isLoading: isRevealingPrivateData,
+    revealForAuctions,
+  } = usePrivateData();
   const fundingSnapshot = useFundingSnapshot({ enabled: isRevealed });
 
   const isOwnAuction =
@@ -123,10 +128,30 @@ export function AuctionBidGate({
         ) : null}
 
         {fundingSnapshot.status === "private_data_hidden" ? (
-          <p className="text-sm leading-7 text-muted-foreground">
-            Reveal private data above to check your funding status and enable
-            bidding.
-          </p>
+          <div className="space-y-3">
+            <Button
+              className="w-full"
+              onClick={() => {
+                void revealForAuctions([auctionId]);
+              }}
+              disabled={isRevealingPrivateData}
+            >
+              {isRevealingPrivateData ? (
+                <>
+                  <RefreshCw className="size-4 animate-spin" />
+                  Unlocking...
+                </>
+              ) : (
+                <>
+                  Unlock wallet
+                  <ArrowRight className="size-4" />
+                </>
+              )}
+            </Button>
+            <p className="text-xs leading-6 text-muted-foreground/70">
+              Reveal private wallet access right here to check available bidding balance and any pending withdrawal before placing a bid.
+            </p>
+          </div>
         ) : null}
 
         {fundingSnapshot.status === "funding_unavailable" ? (
@@ -152,34 +177,33 @@ export function AuctionBidGate({
         {fundingSnapshot.status === "not_funded_yet" ? (
           <div className="space-y-3">
             <Button asChild className="w-full">
-              <Link href="/funding">
-                Open wallet status
+              <Link href="/dashboard#wallet">
+                Deposit funds to bid
                 <ArrowRight className="size-4" />
               </Link>
             </Button>
             <Button asChild variant="outline" className="w-full">
-              <Link href="/funding">
-                Check wallet status
+              <Link href="/dashboard#wallet">
+                Manage wallet
                 <RefreshCw className="size-4" />
               </Link>
             </Button>
             <p className="text-xs leading-6 text-muted-foreground/70">
-              This wallet does not have private balance yet. Start from the
-              funding page with the vault flow, then come back once private
-              funds appear.
+              This wallet cannot bid yet. Deposit and activate funds from the dashboard wallet section, then come back here.
             </p>
           </div>
         ) : null}
 
         {fundingSnapshot.status === "reconciling_transfer" ? (
           <div className="space-y-3">
-            <Button type="button" className="w-full" disabled>
-              <RefreshCw className="size-4 animate-spin" />
-              Updating private wallet
+            <Button asChild className="w-full">
+              <Link href="/dashboard#wallet">
+                Resume withdrawal
+                <RefreshCw className="size-4" />
+              </Link>
             </Button>
             <p className="text-xs leading-6 text-muted-foreground/70">
-              A private transfer was submitted. Insider Streams is refreshing
-              the private wallet balance for this auction.
+              A wallet transfer is still in progress. Finish it from the dashboard wallet section before placing another bid.
             </p>
           </div>
         ) : null}

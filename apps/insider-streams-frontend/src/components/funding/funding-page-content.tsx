@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import stringify from "fast-json-stable-stringify";
 import {
   CONFIDENTIAL_USDC_DECIMALS,
   PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
@@ -19,9 +20,10 @@ import {
   erc20Abi,
   parseUnits,
   type Address,
+  type Hex,
   zeroAddress,
 } from "viem";
-import { useReadContract } from "wagmi";
+import { useReadContract, useSignMessage } from "wagmi";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,10 +40,16 @@ import {
   formatFundingBalance,
   getDisplayFundingBalance,
 } from "@/lib/funding/format-funding-balance";
+import {
+  finalizeFundingWithdrawal,
+  requestFundingWithdrawal,
+} from "@/lib/funding/api";
 import { useFundingSnapshot } from "@/lib/funding/use-funding-snapshot";
 import {
   usePrivateBalancesMutation,
+  useRedeemWithdrawalTicketMutation,
   usePrivateTransferFundingMutation,
+  usePrivateWithdrawMutation,
   useVaultFunding,
 } from "@/lib/private-token/hooks";
 import { findUsdcBalance } from "@/lib/private-token/find-usdc-balance";
@@ -113,8 +121,15 @@ function BalancePanel({
   );
 }
 
+function sleep(milliseconds: number) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, milliseconds);
+  });
+}
+
 export function FundingPageContent() {
   const walletSession = useWalletSession();
+  const { signMessageAsync } = useSignMessage();
   const [hasRequestedFundingCheck, setHasRequestedFundingCheck] =
     useState(false);
   const fundingSnapshot = useFundingSnapshot({
@@ -143,9 +158,18 @@ export function FundingPageContent() {
   const privateTransferMutation = usePrivateTransferFundingMutation(
     walletSession.address,
   );
+  const privateWithdrawMutation = usePrivateWithdrawMutation(
+    walletSession.address,
+  );
+  const redeemWithdrawalTicketMutation = useRedeemWithdrawalTicketMutation();
 
   const [amount, setAmount] = useState("");
   const [step, setStep] = useState<FundingStep>("idle");
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const [withdrawSuccessMessage, setWithdrawSuccessMessage] = useState<
+    string | null
+  >(null);
   const [error, setError] = useState<string | null>(null);
   const [depositMore, setDepositMore] = useState(false);
   const [balanceCheckEmpty, setBalanceCheckEmpty] = useState(false);
@@ -161,6 +185,17 @@ export function FundingPageContent() {
     }
   }, [amount]);
 
+  const parsedWithdrawAmount = useMemo(() => {
+    const trimmed = withdrawAmount.trim();
+    if (!trimmed) return null;
+    try {
+      const wei = parseUnits(trimmed, CONFIDENTIAL_USDC_DECIMALS);
+      return wei > BigInt(0) ? wei : null;
+    } catch {
+      return null;
+    }
+  }, [withdrawAmount]);
+
   const vaultFunding = useVaultFunding(walletSession.address, parsedAmount);
   const platformRecipientAddress = fundingSnapshot.platformRecipientAddress;
   const privateUsdcBalance = useMemo(
@@ -173,16 +208,20 @@ export function FundingPageContent() {
     [privateBalanceLookup],
   );
   const availableBalance = fundingSnapshot.balance?.available_balance ?? null;
+  const availableBalanceRaw = availableBalance
+    ? BigInt(availableBalance)
+    : BigInt(0);
+  const canWithdraw = availableBalanceRaw > BigInt(0);
 
   const alreadyFunded =
     fundingSnapshot.status === "funded" ||
     fundingSnapshot.status === "withdrawal_available";
 
   useEffect(() => {
-    if (alreadyFunded && !availableBalance && !privateBalanceLookup) {
+    if (alreadyFunded && !privateBalanceLookup) {
       void loadPrivateBalances({});
     }
-  }, [alreadyFunded, availableBalance, privateBalanceLookup, loadPrivateBalances]);
+  }, [alreadyFunded, privateBalanceLookup, loadPrivateBalances]);
 
   const displayBalance =
     getDisplayFundingBalance(fundingSnapshot.balance) ??
@@ -196,6 +235,14 @@ export function FundingPageContent() {
         ? "Loading..."
         : "Connect wallet";
   const latestTransfer = fundingSnapshot.transfers[0];
+  const pendingWithdrawalTransfer = useMemo(
+    () =>
+      fundingSnapshot.transfers.find(
+        (transfer) =>
+          transfer.status === "requested" || transfer.status === "transferring",
+      ) ?? null,
+    [fundingSnapshot.transfers],
+  );
   const hasRecordedSnapshot =
     fundingSnapshot.balance !== undefined || fundingSnapshot.transfers.length > 0;
   const privateBalanceState =
@@ -213,7 +260,75 @@ export function FundingPageContent() {
         : fundingSnapshot.status === "funding_unavailable"
           ? "The funding snapshot request failed. The wallet may be connected correctly, but the app could not read the balance or transfer history."
           : null
-      : null;
+          : null;
+
+  const withdrawValidationMessage = useMemo(() => {
+    if (!withdrawAmount.trim()) return null;
+    if (!parsedWithdrawAmount) {
+      return "Enter a valid withdrawal amount.";
+    }
+    if (parsedWithdrawAmount > availableBalanceRaw) {
+      return "Withdrawal amount exceeds available balance.";
+    }
+    return null;
+  }, [availableBalanceRaw, parsedWithdrawAmount, withdrawAmount]);
+
+  async function finalizePublicWithdrawal(input: {
+    amount: string;
+    transactionId: string;
+  }) {
+    let withdrawalResponse:
+      | Awaited<ReturnType<typeof privateWithdrawMutation.mutateAsync>>
+      | undefined;
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        withdrawalResponse = await privateWithdrawMutation.mutateAsync({
+          amount: input.amount,
+        });
+        break;
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message.toLowerCase() : "";
+        const shouldRetry =
+          message.includes("insufficient") ||
+          message.includes("not find a funded account");
+
+        if (!shouldRetry || attempt === 2) {
+          throw error;
+        }
+
+        await sleep(1500 * (attempt + 1));
+      }
+    }
+
+    if (!withdrawalResponse) {
+      throw new Error("Failed to submit the public withdrawal.");
+    }
+
+    await redeemWithdrawalTicketMutation.mutateAsync({
+      amount: input.amount,
+      ticket: withdrawalResponse.ticket as Hex,
+    });
+
+    const timestamp = Math.floor(Date.now() / 1000);
+    const payload = {
+      amount: input.amount,
+      transactionId: input.transactionId,
+      withdrawalId: withdrawalResponse.id,
+      ticket: withdrawalResponse.ticket,
+      deadline: withdrawalResponse.deadline,
+      timestamp,
+    };
+    const signature = await signMessageAsync({
+      message: stringify(payload),
+    });
+
+    await finalizeFundingWithdrawal({
+      ...payload,
+      signature,
+    });
+  }
 
   async function handleFund() {
     if (!parsedAmount) return;
@@ -270,6 +385,119 @@ export function FundingPageContent() {
       if (err instanceof Error) {
         setError(err.message);
       }
+    }
+  }
+
+  async function handleWithdraw() {
+    if (!parsedWithdrawAmount) {
+      setError("Enter a valid withdrawal amount.");
+      return;
+    }
+
+    if (parsedWithdrawAmount > availableBalanceRaw) {
+      setError("Withdrawal amount exceeds available balance.");
+      return;
+    }
+
+    setIsWithdrawing(true);
+    setError(null);
+    setWithdrawSuccessMessage(null);
+
+    try {
+      const timestamp = Math.floor(Date.now() / 1000);
+      const payload = {
+        amount: parsedWithdrawAmount.toString(),
+        timestamp,
+      };
+      const signature = await signMessageAsync({
+        message: stringify(payload),
+      });
+
+      const response = await requestFundingWithdrawal({
+        ...payload,
+        signature,
+      });
+
+      await fundingSnapshot.refresh();
+      await finalizePublicWithdrawal({
+        amount: parsedWithdrawAmount.toString(),
+        transactionId: response.transactionId,
+      });
+
+      await fundingSnapshot.refresh();
+      await publicWalletBalanceQuery.refetch();
+      setWithdrawAmount("");
+      setWithdrawSuccessMessage(
+        `Withdrawal completed to your public wallet. Transfer ID: ${response.transactionId}`,
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to submit withdrawal.",
+      );
+    } finally {
+      setIsWithdrawing(false);
+    }
+  }
+
+  async function handleFinalizePendingWithdrawal() {
+    if (!pendingWithdrawalTransfer) {
+      return;
+    }
+
+    setIsWithdrawing(true);
+    setError(null);
+    setWithdrawSuccessMessage(null);
+
+    try {
+      await finalizePublicWithdrawal({
+        amount: pendingWithdrawalTransfer.amount,
+        transactionId: pendingWithdrawalTransfer.transaction_id,
+      });
+
+      await fundingSnapshot.refresh();
+      await publicWalletBalanceQuery.refetch();
+      setWithdrawSuccessMessage(
+        `Pending withdrawal completed to your public wallet. Transfer ID: ${pendingWithdrawalTransfer.transaction_id}`,
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to finalize withdrawal.",
+      );
+    } finally {
+      setIsWithdrawing(false);
+    }
+  }
+
+  async function handleWithdrawDetectedPrivateBalance() {
+    if (!privateUsdcBalance) {
+      return;
+    }
+
+    setIsWithdrawing(true);
+    setError(null);
+    setWithdrawSuccessMessage(null);
+
+    try {
+      const withdrawalResponse = await privateWithdrawMutation.mutateAsync({
+        amount: privateUsdcBalance.amount,
+      });
+      await redeemWithdrawalTicketMutation.mutateAsync({
+        amount: privateUsdcBalance.amount,
+        ticket: withdrawalResponse.ticket as Hex,
+      });
+      await publicWalletBalanceQuery.refetch();
+      await loadPrivateBalances({ forceFresh: true });
+      setWithdrawSuccessMessage(
+        `Detected private balance completed to your public wallet: ${formatFundingBalance(privateUsdcBalance.amount)}`,
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to withdraw the detected private balance.",
+      );
+    } finally {
+      setIsWithdrawing(false);
     }
   }
 
@@ -397,9 +625,149 @@ export function FundingPageContent() {
                       setError(null);
                     }}
                   >
-                    Deposit more
-                  </Button>
+                      Deposit more
+                    </Button>
                 </div>
+                {pendingWithdrawalTransfer ? (
+                  <>
+                    <Separator />
+                    <div className="space-y-4">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-foreground">
+                          Pending public withdrawal
+                        </p>
+                        <p className="text-sm leading-7 text-muted-foreground">
+                          The platform already transferred funds privately to
+                          this wallet. Sign once to complete the public wallet
+                          withdrawal.
+                        </p>
+                      </div>
+                      <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                        <span>Pending amount</span>
+                        <span className="font-medium text-foreground">
+                          {formatFundingBalance(pendingWithdrawalTransfer.amount)}
+                        </span>
+                      </div>
+                      <Button
+                        className="w-full"
+                        disabled={isWithdrawing}
+                        onClick={() => {
+                          void handleFinalizePendingWithdrawal();
+                        }}
+                      >
+                        {isWithdrawing ? (
+                          <>
+                            <Loader2 className="size-4 animate-spin" />
+                            Finalizing...
+                          </>
+                        ) : (
+                          "Finalize withdrawal"
+                        )}
+                      </Button>
+                    </div>
+                  </>
+                ) : null}
+                {!pendingWithdrawalTransfer &&
+                privateUsdcBalance &&
+                BigInt(privateUsdcBalance.amount) > BigInt(0) ? (
+                  <>
+                    <Separator />
+                    <div className="space-y-4">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-foreground">
+                          Detected private wallet balance
+                        </p>
+                        <p className="text-sm leading-7 text-muted-foreground">
+                          This balance is already held by your connected wallet
+                          privately. Sign to move it into your public wallet.
+                        </p>
+                      </div>
+                      <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                        <span>Detected amount</span>
+                        <span className="font-medium text-foreground">
+                          {formatFundingBalance(privateUsdcBalance.amount)}
+                        </span>
+                      </div>
+                      <Button
+                        className="w-full"
+                        disabled={isWithdrawing}
+                        onClick={() => {
+                          void handleWithdrawDetectedPrivateBalance();
+                        }}
+                      >
+                        {isWithdrawing ? (
+                          <>
+                            <Loader2 className="size-4 animate-spin" />
+                            Withdrawing...
+                          </>
+                        ) : (
+                          "Withdraw detected private balance"
+                        )}
+                      </Button>
+                    </div>
+                  </>
+                ) : null}
+                {canWithdraw ? (
+                  <>
+                    <Separator />
+                    <div className="space-y-4">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-foreground">
+                          Withdraw to connected wallet
+                        </p>
+                        <p className="text-sm leading-7 text-muted-foreground">
+                          This sends funds privately to your connected wallet
+                          first, then asks you to sign a public withdrawal.
+                        </p>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="withdraw-amount">Withdrawal amount (USDC)</Label>
+                        <Input
+                          id="withdraw-amount"
+                          inputMode="decimal"
+                          placeholder="5"
+                          value={withdrawAmount}
+                          onChange={(event) => {
+                            setWithdrawAmount(event.target.value);
+                            setError(null);
+                            setWithdrawSuccessMessage(null);
+                          }}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                        <span>Available to withdraw</span>
+                        <span className="font-medium text-foreground">
+                          {formatFundingBalance(availableBalanceRaw.toString())}
+                        </span>
+                      </div>
+                      {withdrawValidationMessage ? (
+                        <p className="text-sm text-destructive">
+                          {withdrawValidationMessage}
+                        </p>
+                      ) : null}
+                      <Button
+                        className="w-full"
+                        disabled={
+                          isWithdrawing ||
+                          !parsedWithdrawAmount ||
+                          parsedWithdrawAmount > availableBalanceRaw
+                        }
+                        onClick={() => {
+                          void handleWithdraw();
+                        }}
+                      >
+                        {isWithdrawing ? (
+                          <>
+                            <Loader2 className="size-4 animate-spin" />
+                            Withdrawing...
+                          </>
+                        ) : (
+                          "Withdraw funds"
+                        )}
+                      </Button>
+                    </div>
+                  </>
+                ) : null}
               </div>
             ) : (
               <div className="space-y-6">
@@ -662,6 +1030,13 @@ export function FundingPageContent() {
                 <AlertCircle />
                 <AlertTitle>Something went wrong</AlertTitle>
                 <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            ) : null}
+            {withdrawSuccessMessage ? (
+              <Alert>
+                <CheckCircle2 />
+                <AlertTitle>Withdrawal submitted</AlertTitle>
+                <AlertDescription>{withdrawSuccessMessage}</AlertDescription>
               </Alert>
             ) : null}
           </CardContent>
