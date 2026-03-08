@@ -58,9 +58,9 @@ export default async function RootLayout({
         <Providers cookies={cookies}>
           <TooltipProvider>
             <AppNavbar />
-            <main className="pt-16">
+            <div className="pt-16">
               {children}
-            </main>
+            </div>
             <Toaster />
           </TooltipProvider>
         </Providers>
