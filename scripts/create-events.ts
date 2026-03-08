@@ -15,7 +15,7 @@
  *
  * Optional:
  *   ENABLE_NTFY=true          — send notifications via ntfy
- *   NTFY_URL                  — ntfy server URL (default: http://localhost:8090)
+ *   NTFY_HOST                 — ntfy server URL (default: http://localhost:8090)
  *   NTFY_TOPIC                — ntfy topic (default: event-creator)
  *   NTFY_USER                 — user tag in notifications (default: unknown)
  *
@@ -91,9 +91,9 @@ const VENICE_API_KEY = envRequired("VENICE_API_KEY");
 // ─── ntfy (optional) ─────────────────────────────────────────────────────────
 
 const ENABLE_NTFY = process.env.ENABLE_NTFY === "true";
-const NTFY_URL = process.env.NTFY_URL ?? "http://localhost:8090";
+const NTFY_HOST = process.env.NTFY_HOST ?? "http://localhost:8090";
 const NTFY_TOPIC = process.env.NTFY_TOPIC ?? "event-creator";
-const NTFY_USER = process.env.NTFY_USER || "unknown";
+const NTFY_USER = process.env.NTFY_USER ?? "UNKNOWN";
 
 async function ntfy(
   title: string,
@@ -102,7 +102,7 @@ async function ntfy(
 ) {
   if (!ENABLE_NTFY) return;
   try {
-    await fetch(`${NTFY_URL}/${NTFY_TOPIC}`, {
+    await fetch(`${NTFY_HOST}/${NTFY_TOPIC}`, {
       method: "POST",
       headers: {
         Title: title,
