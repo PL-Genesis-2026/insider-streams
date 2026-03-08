@@ -54,8 +54,6 @@ export default function EventDetailPage({ params }: { params: Params }) {
     Number(event.eventClose) > 0 &&
     (adminJustClosed || Date.now() > Number(event.eventClose) * 1000);
 
-  const isSettled = !!settlement;
-
   const handleAdminClose = useCallback(async () => {
     setAdminClosing(true);
     setAdminCloseError(null);
@@ -376,7 +374,7 @@ export default function EventDetailPage({ params }: { params: Params }) {
 
           <div className="space-y-6">
             {isOpen && <BuySharesPanel eventId={eventId} />}
-            {isSettled && settlement.outcome !== 3 && (
+            {settlement && settlement.outcome !== 3 && (
               <RedeemSharesPanel
                 eventId={eventId}
                 outcome={settlement.outcome}

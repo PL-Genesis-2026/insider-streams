@@ -1,6 +1,9 @@
 import type { CodegenConfig } from "@graphql-codegen/cli";
 
-const schema = ["./graphql.schema.json"];
+const STUDIO_URL =
+  "https://api.studio.thegraph.com/query/1743303/insider-streams-2/version/latest";
+const shouldRefreshSchema = process.env.CODEGEN_REFRESH_SCHEMA === "1";
+const schema = [shouldRefreshSchema ? STUDIO_URL : "./graphql.schema.json"];
 
 const sharedConfig = {
   scalars: {
@@ -26,6 +29,13 @@ const config: CodegenConfig = {
       },
       plugins: ["typescript", "typescript-operations", "typed-document-node"],
     },
+    ...(shouldRefreshSchema
+      ? {
+          "./graphql.schema.json": {
+            plugins: ["introspection"],
+          },
+        }
+      : {}),
   },
 };
 

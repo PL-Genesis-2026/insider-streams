@@ -11,6 +11,7 @@ export const env = createEnv({
   },
   client: {
     NEXT_PUBLIC_PROJECT_ID: z.string().min(1).optional(),
+    NEXT_PUBLIC_RPC_URL: z.string().url().optional(),
     NEXT_PUBLIC_SUBGRAPH_URL: z.string().url(),
     NEXT_PUBLIC_SUBGRAPH_API_KEY: z.string().min(1).optional(),
     NEXT_PUBLIC_FIREBASE_API_KEY: z.string().min(1).optional(),
@@ -22,6 +23,7 @@ export const env = createEnv({
     OWNER_PK: process.env.OWNER_PK,
     RPC_URL: process.env.RPC_URL,
     NEXT_PUBLIC_PROJECT_ID: process.env.NEXT_PUBLIC_PROJECT_ID,
+    NEXT_PUBLIC_RPC_URL: process.env.NEXT_PUBLIC_RPC_URL,
     NEXT_PUBLIC_SUBGRAPH_URL: process.env.NEXT_PUBLIC_SUBGRAPH_URL,
     NEXT_PUBLIC_SUBGRAPH_API_KEY: process.env.NEXT_PUBLIC_SUBGRAPH_API_KEY,
     NEXT_PUBLIC_FIREBASE_API_KEY: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
