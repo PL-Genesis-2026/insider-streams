@@ -2,6 +2,7 @@ import {
   AuctionClosed as AuctionClosedEvent,
   AuctionCreated as AuctionCreatedEvent,
   AuctionCancelled as AuctionCancelledEvent,
+  AuctionAdminExpired as AuctionAdminExpiredEvent,
   BidPlaced as BidPlacedEvent,
   ExpectedAuthorUpdated as ExpectedAuthorUpdatedEvent,
   ExpectedWorkflowIdUpdated as ExpectedWorkflowIdUpdatedEvent,
@@ -18,6 +19,7 @@ import {
   AuctionClosed,
   AuctionCreated,
   AuctionCancelled,
+  AuctionAdminExpired,
   BidPlaced,
   ExpectedAuthorUpdated,
   ExpectedWorkflowIdUpdated,
@@ -372,4 +374,24 @@ export function handleMarketplaceUpdated(event: MarketplaceUpdatedEvent): void {
   entity.transactionHash = event.transaction.hash
 
   entity.save()
+}
+
+export function handleAuctionAdminExpired(event: AuctionAdminExpiredEvent): void {
+  let entity = new AuctionAdminExpired(
+    event.transaction.hash.concatI32(event.logIndex.toI32())
+  )
+  entity.auctionId = event.params.auctionId
+
+  entity.blockNumber = event.block.number
+  entity.blockTimestamp = event.block.timestamp
+  entity.transactionHash = event.transaction.hash
+
+  entity.save()
+
+  // Update Auction.endTime to reflect the forced expiry (set to block.timestamp by contract)
+  let auction = Auction.load(event.params.auctionId.toString())
+  if (auction != null) {
+    auction.endTime = event.block.timestamp
+    auction.save()
+  }
 }

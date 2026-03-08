@@ -111,10 +111,15 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
         address indexed newMarketplace
     );
 
+    event AuctionAdminExpired(
+        uint256 indexed auctionId
+    );
+
     // ===========================
     // ======== ERRORS ===========
     // ===========================
 
+    error SellerAlreadyRegistered(string sellerId);
     error AuctionNotActive();
     error AuctionNotEnded();
     error AuctionAlreadySettled();
@@ -179,6 +184,15 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
         paymentToken.safeTransfer(to, amount);
     }
 
+    /// @notice Debug only: immediately expire an open auction so the CRE closer can close it on its next poll.
+    function adminExpireAuction(uint256 auctionId) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        Auction storage a = _auctions[auctionId];
+        if (a.endTime == 0) revert AuctionDoesNotExist();
+        if (a.status != AuctionStatus.Open) revert AuctionAlreadySettled();
+        a.endTime = block.timestamp;
+        emit AuctionAdminExpired(auctionId);
+    }
+
     // ===========================
     // ======== MODIFIERS ========
     // ===========================
@@ -194,13 +208,12 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
     // ======== SELLER ===========
     // ===========================
 
-    /// @notice Register a seller by ID. Admin only.
+    /// @notice Register a seller by ID. Admin only. Reverts if already registered.
     function registerSeller(string calldata sellerId) external onlyRole(DEFAULT_ADMIN_ROLE) {
         Seller storage s = _sellers[sellerId];
-        if (!s.registered) {
-            s.registered = true;
-            s.reputationScore = 0;
-        }
+        if (s.registered) revert SellerAlreadyRegistered(sellerId);
+        s.registered = true;
+        s.reputationScore = 0;
         emit SellerRegistered(sellerId);
     }
 

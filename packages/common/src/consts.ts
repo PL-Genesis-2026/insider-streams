@@ -16,7 +16,7 @@ export const EXAMPLE_PREDICTION_MARKET_ADDRESS =
   "0x83B1F9d683b1a760569C237Bfb89C50112c05e24" as const;
 export const EXAMPLE_PREDICTION_MARKET_NAME = "Bollymarket" as const;
 export const SECRET_MARKETPLACE_ADDRESS =
-  "0x6420943F07c8427C4E6f27BDa09cB711e8BB2A93" as const;
+  "0x1f903548234b15C4d955Cce79beaaC853A98C514" as const;
 
 // Vault for private transfers, owned by chainlink, this address will not change through the entire hackaton
 export const VAULT_ADDRESS =

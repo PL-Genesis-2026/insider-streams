@@ -8,9 +8,9 @@ dataSources:
     name: SecretMarketplace
     network: sepolia
     source:
-      address: "0x6420943F07c8427C4E6f27BDa09cB711e8BB2A93"
+      address: "0x1f903548234b15C4d955Cce79beaaC853A98C514"
       abi: SecretMarketplace
-      startBlock: 10403122
+      startBlock: 10405764
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -19,6 +19,7 @@ dataSources:
         - AuctionClosed
         - AuctionCreated
         - AuctionCancelled
+        - AuctionAdminExpired
         - BidPlaced
         - ExpectedAuthorUpdated
         - ExpectedWorkflowIdUpdated
@@ -64,6 +65,8 @@ dataSources:
           handler: handleSellerRegistered
         - event: MarketplaceUpdated(indexed address,indexed address)
           handler: handleMarketplaceUpdated
+        - event: AuctionAdminExpired(indexed uint256)
+          handler: handleAuctionAdminExpired
       file: ./src/secret-marketplace.ts
   - kind: ethereum
     name: ExamplePredictionMarket
