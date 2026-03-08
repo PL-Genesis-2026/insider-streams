@@ -514,13 +514,17 @@ export function WalletActionCenter({
 
   const actionState = !isRevealed
     ? "unlock"
-    : pendingWithdrawalTransfer
-      ? "resume_withdrawal"
-      : canWithdraw
-        ? "withdraw"
-        : fundingSnapshot.status === "not_funded_yet"
-          ? "deposit"
-          : "ready";
+    : fundingSnapshot.status === "funding_unavailable"
+      ? "unavailable"
+      : fundingSnapshot.status === "reconciling_transfer"
+        ? "reconciling"
+        : pendingWithdrawalTransfer
+          ? "resume_withdrawal"
+          : canWithdraw
+            ? "withdraw"
+            : fundingSnapshot.status === "not_funded_yet"
+              ? "deposit"
+              : "ready";
 
   const actionCopy = {
     unlock: {
@@ -528,6 +532,20 @@ export function WalletActionCenter({
       title: "Unlock your wallet",
       description:
         "Sign once to load your balances and see what you can do next.",
+      helper: null,
+    },
+    unavailable: {
+      badge: "Wallet error",
+      title: "Wallet data unavailable",
+      description:
+        "Your wallet data could not be loaded right now. Refresh and try again.",
+      helper: null,
+    },
+    reconciling: {
+      badge: "Transfer settling",
+      title: "Your transfer is processing",
+      description:
+        "A deposit transfer is still settling. Your balance will update automatically once it lands.",
       helper: null,
     },
     deposit: {
@@ -725,6 +743,53 @@ export function WalletActionCenter({
 
           {isRevealed ? (
             <div className="space-y-5">
+              {actionState === "unavailable" ? (
+                <div className="flex flex-col gap-4 rounded-[calc(var(--radius)-2px)] border border-destructive/30 bg-destructive/6 p-5 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-foreground">
+                      Could not load wallet data
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Something went wrong fetching your balances. Hit refresh
+                      to try again.
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    className="w-full sm:w-auto"
+                    onClick={refreshWallet}
+                  >
+                    <RefreshCw className="size-4" />
+                    Refresh
+                  </Button>
+                </div>
+              ) : null}
+
+              {actionState === "reconciling" ? (
+                <div className="flex flex-col gap-4 rounded-[calc(var(--radius)-2px)] border border-accent/30 bg-accent/6 p-5 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="size-4 animate-spin text-accent" />
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-foreground">
+                        Transfer is settling
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Your deposit is being recorded. This usually takes a few
+                        moments.
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    className="w-full sm:w-auto"
+                    onClick={refreshWallet}
+                  >
+                    <RefreshCw className="size-4" />
+                    Check now
+                  </Button>
+                </div>
+              ) : null}
+
               {actionState === "resume_withdrawal" ? (
                 <div className="flex flex-col gap-4 rounded-[calc(var(--radius)-2px)] border border-accent/30 bg-accent/6 p-5 sm:flex-row sm:items-center sm:justify-between">
                   <div className="space-y-1">
@@ -796,7 +861,8 @@ export function WalletActionCenter({
                         disabled={
                           !privateUsdcBalance ||
                           !fundingSnapshot.platformRecipientAddress ||
-                          step === "activating"
+                          step === "activating" ||
+                          isWithdrawing
                         }
                         onClick={() => {
                           void handleActivate();
@@ -917,7 +983,9 @@ export function WalletActionCenter({
                           <Button
                             size="sm"
                             className="w-full sm:w-auto"
-                            disabled={isWithdrawing}
+                            disabled={
+                              isWithdrawing || step === "activating"
+                            }
                             onClick={() => {
                               void handleWithdrawDetectedPrivateBalance();
                             }}
