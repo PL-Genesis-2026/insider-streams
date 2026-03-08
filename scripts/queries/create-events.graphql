@@ -1,0 +1,6 @@
+query ExistingEvents($limit: Int!) {
+  eventCreateds(first: $limit, orderBy: blockTimestamp, orderDirection: desc) {
+    eventId
+    question
+  }
+}
