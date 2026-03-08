@@ -108,13 +108,13 @@ function BuySharesPanelWithWallet({ eventId }: BuySharesPanelProps) {
     const account = walletSession.address;
 
     try {
+      setPurchaseState({ step: "approving" });
+
       const usdcAddress = await publicClient.readContract({
         address: contractAddress,
         abi: examplePredictionMarketAbi,
         functionName: "paymentToken",
       });
-
-      setPurchaseState({ step: "approving" });
 
       const approveGas = await publicClient.estimateContractGas({
         account,
