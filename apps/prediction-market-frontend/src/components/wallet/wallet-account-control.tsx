@@ -1,17 +1,16 @@
 "use client";
 
-import { useAppKit } from "@reown/appkit/react";
-import { useDisconnect } from "wagmi";
+import { useDisconnect } from "@reown/appkit/react";
 import { LogOut, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useWalletSession } from "@/lib/wallet/use-wallet-session";
 import { formatAddress } from "@/lib/wallet/format-address";
+import { ensureAppKit } from "@/lib/wallet/config";
 import { ConnectWalletButton } from "./connect-wallet-button";
 import { SwitchNetworkButton } from "./switch-network-button";
 
 export function WalletAccountControl() {
   const walletSession = useWalletSession();
-  const { open } = useAppKit();
   const { disconnect } = useDisconnect();
 
   if (!walletSession.isConnected || !walletSession.address) {
@@ -28,7 +27,8 @@ export function WalletAccountControl() {
         variant="outline"
         size="sm"
         onClick={() => {
-          void open({ view: "Account" });
+          const appKit = ensureAppKit();
+          void appKit.open({ view: "Account" });
         }}
       >
         <Wallet className="size-3.5" />
@@ -37,7 +37,7 @@ export function WalletAccountControl() {
       <Button
         variant="ghost"
         size="icon-xs"
-        onClick={() => disconnect()}
+        onClick={() => void disconnect({ namespace: "eip155" })}
         title="Disconnect wallet"
       >
         <LogOut className="size-3.5" />

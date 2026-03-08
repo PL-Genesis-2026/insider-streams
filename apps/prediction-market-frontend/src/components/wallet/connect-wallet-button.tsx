@@ -1,9 +1,9 @@
 "use client";
 
-import { useAppKit } from "@reown/appkit/react";
 import { Wallet } from "lucide-react";
 import type { ComponentProps } from "react";
 import { Button } from "@/components/ui/button";
+import { ensureAppKit } from "@/lib/wallet/config";
 import { cn } from "@/lib/utils";
 
 type ConnectWalletButtonProps = {
@@ -17,8 +17,6 @@ export function ConnectWalletButton({
   size = "default",
   variant = "default",
 }: ConnectWalletButtonProps) {
-  const { open } = useAppKit();
-
   return (
     <div className={cn("space-y-2", className)}>
       <Button
@@ -26,7 +24,8 @@ export function ConnectWalletButton({
         size={size}
         variant={variant}
         onClick={() => {
-          void open({ view: "Connect" });
+          const appKit = ensureAppKit();
+          void appKit.open({ view: "Connect" });
         }}
       >
         <Wallet className="size-4" />
