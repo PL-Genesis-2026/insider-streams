@@ -67,10 +67,10 @@ export async function pollExpiredAuctions(
         broadcast: true,
       });
       log("auction-expiry", "CRE secret-marketplace-auction-closer completed");
-      await notify("Auction expired — CRE done", `Expired auction detected, auction-closer broadcast`, ["white_check_mark"]);
+      await notify("Auction expired - CRE done", `Expired auction detected, auction-closer broadcast`, ["white_check_mark"]);
     } catch (err) {
       log("auction-expiry", `CRE secret-marketplace-auction-closer FAILED: ${err}`);
-      await notify("Auction expired — CRE FAILED", `${err}`, ["x"]);
+      await notify("Auction expired - CRE FAILED", `${err}`, ["x"]);
     }
   } finally {
     isRunning = false;

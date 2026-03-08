@@ -57,10 +57,10 @@ async function handleEvent(
       broadcast: true,
     });
     log("settlement", `CRE completed for event ${eventId}`);
-    await notify("SettlementRequested — CRE done", `Event ${eventId} settlement broadcast\nBlock ${blockNumber}\ntx ${txHash.slice(0, 16)}…`, ["white_check_mark"]);
+    await notify("SettlementRequested - CRE done", `Event ${eventId} settlement broadcast\nBlock ${blockNumber}\ntx ${txHash.slice(0, 16)}...`, ["white_check_mark"]);
   } catch (err) {
     log("settlement", `CRE FAILED for event ${eventId}: ${err}`);
-    await notify("SettlementRequested — CRE FAILED", `Event ${eventId}\n${err}`, ["x"]);
+    await notify("SettlementRequested - CRE FAILED", `Event ${eventId}\n${err}`, ["x"]);
   }
 
   processed.add(key);
