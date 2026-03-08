@@ -16,7 +16,7 @@ export const env = createEnv({
       .string()
       .url()
       .optional()
-      .default("https://ethereum-sepolia-rpc.publicnode.com"),
+      .default("https://eth-sepolia.g.alchemy.com/v2/59LCREaM5uGpTVXZgR8A7z6IiULWjwG6"),
     SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
   },
   client: {

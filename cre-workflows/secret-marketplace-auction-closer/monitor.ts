@@ -1,13 +1,22 @@
+// monitor.ts
+// Finds expired auctions via The Graph subgraph (1 HTTP call, 0 chain reads).
+//
+// Why subgraph instead of on-chain reads:
+// - getOpenAuctions() returns only open (unclosed) auction IDs, but not endTime.
+// - We need endTime to filter expired auctions client-side (to avoid wasting
+//   CRE chain writes on auctions the contract will revert).
+// - Reading endTime requires getAuction(id) per auction = N extra chain reads.
+// - CRE caps chain reads at 15 per execution, so N+1 reads fails when N > 14.
+// - The subgraph returns pre-filtered expired auctions in 1 HTTP call.
+
 import {
   cre,
+  ok,
   type Runtime,
-  getNetwork,
-  encodeCallMsg,
-  LATEST_BLOCK_NUMBER,
-  bytesToHex,
+  type HTTPSendRequester,
+  consensusIdenticalAggregation,
 } from "@chainlink/cre-sdk";
-import { encodeFunctionData, decodeFunctionResult } from "viem";
-import { type Config, secretMarketplaceAbi } from "./types";
+import type { Config } from "./types";
 
 export interface ExpiredAuction {
   auctionId: bigint;
@@ -16,106 +25,109 @@ export interface ExpiredAuction {
   eventId: bigint;
 }
 
+// Base64 encoding (QuickJS WASM-safe, no Buffer)
+const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+function base64Encode(bytes: Uint8Array): string {
+  let r = "";
+  const len = bytes.length;
+  for (let i = 0; i < len; i += 3) {
+    const b0 = bytes[i];
+    const b1 = i + 1 < len ? bytes[i + 1] : 0;
+    const b2 = i + 2 < len ? bytes[i + 2] : 0;
+    r += B64[(b0 >> 2) & 0x3f];
+    r += B64[((b0 << 4) | (b1 >> 4)) & 0x3f];
+    r += i + 1 < len ? B64[((b1 << 2) | (b2 >> 6)) & 0x3f] : "=";
+    r += i + 2 < len ? B64[b2 & 0x3f] : "=";
+  }
+  return r;
+}
+
 /**
- * Reads on-chain state to find expired auctions that need closing.
- * 1. Calls getOpenAuctions() to get all open auction IDs
- * 2. For each, calls getAuction(id) and checks if endTime has passed
- * 3. Returns the list of expired auctions
+ * Queries the subgraph for open auctions whose endTime has passed.
+ * Uses 1 HTTP call and 0 chain reads.
  */
 export function findExpiredAuctions(
   runtime: Runtime<Config>,
   nowSeconds: number
 ): ExpiredAuction[] {
-  const cfg = runtime.config.evms[0];
+  const httpClient = new cre.capabilities.HTTPClient();
 
-  const network = getNetwork({
-    chainFamily: "evm",
-    chainSelectorName: cfg.chainSelectorName,
-    isTestnet: true,
-  });
-  if (!network) throw new Error(`Unknown chain: ${cfg.chainSelectorName}`);
-
-  const evmClient = new cre.capabilities.EVMClient(network.chainSelector.selector);
-
-  // Step 1: Get open auction IDs
-  const openAuctionsCallData = encodeFunctionData({
-    abi: secretMarketplaceAbi,
-    functionName: "getOpenAuctions",
-  });
-
-  const openAuctionsResult = evmClient
-    .callContract(runtime, {
-      call: encodeCallMsg({
-        from: "0x0000000000000000000000000000000000000000",
-        to: cfg.secretMarketplaceAddress as `0x${string}`,
-        data: openAuctionsCallData,
-      }),
-      blockNumber: LATEST_BLOCK_NUMBER,
-    })
+  const auctions: ExpiredAuction[] = httpClient
+    .sendRequest(
+      runtime,
+      queryExpiredAuctions(runtime.config.subgraphUrl, nowSeconds),
+      consensusIdenticalAggregation<ExpiredAuction[]>(),
+    )(runtime.config)
     .result();
 
-  const openIds = decodeFunctionResult({
-    abi: secretMarketplaceAbi,
-    functionName: "getOpenAuctions",
-    data: bytesToHex(openAuctionsResult.data),
-  }) as bigint[];
+  runtime.log(`Subgraph returned ${auctions.length} expired auction(s)`);
+  return auctions;
+}
 
-  runtime.log(`Open auctions: ${openIds.length}`);
+interface SubgraphAuction {
+  auctionId: string;
+  sellerId: string;
+  currentBid: string;
+  eventId: string;
+  endTime: string;
+}
 
-  if (openIds.length === 0) return [];
-
-  // Step 2: Check each auction's endTime
-  const expired: ExpiredAuction[] = [];
-
-  for (const auctionId of openIds) {
-    const auctionCallData = encodeFunctionData({
-      abi: secretMarketplaceAbi,
-      functionName: "getAuction",
-      args: [auctionId],
+const queryExpiredAuctions =
+  (subgraphUrl: string, nowSeconds: number) =>
+  (sendRequester: HTTPSendRequester, config: Config): ExpiredAuction[] => {
+    const query = JSON.stringify({
+      query: `{
+        auctions(
+          where: { status: "Open", endTime_lt: "${nowSeconds}" }
+          first: 100
+          orderBy: endTime
+          orderDirection: asc
+        ) {
+          auctionId
+          sellerId
+          currentBid
+          eventId
+          endTime
+        }
+      }`,
     });
 
-    const auctionResult = evmClient
-      .callContract(runtime, {
-        call: encodeCallMsg({
-          from: "0x0000000000000000000000000000000000000000",
-          to: cfg.secretMarketplaceAddress as `0x${string}`,
-          data: auctionCallData,
-        }),
-        blockNumber: LATEST_BLOCK_NUMBER,
+    const encodedBody = base64Encode(new TextEncoder().encode(query));
+
+    const resp = sendRequester
+      .sendRequest({
+        url: subgraphUrl,
+        method: "POST" as const,
+        body: encodedBody,
+        headers: { "Content-Type": "application/json" },
+        cacheSettings: { readFromCache: false, maxAgeMs: 0 },
       })
       .result();
 
-    const auction = decodeFunctionResult({
-      abi: secretMarketplaceAbi,
-      functionName: "getAuction",
-      data: bytesToHex(auctionResult.data),
-    }) as {
-      sellerId: string;
-      endTime: bigint;
-      currentBid: bigint;
-      eventId: bigint;
-      eventTitle: string;
-      status: number;
-      reputationResolved: boolean;
+    if (!ok(resp)) {
+      const bodyText = new TextDecoder().decode(resp.body);
+      throw new Error(`Subgraph query failed (${resp.statusCode}): ${bodyText}`);
+    }
+
+    const bodyText = new TextDecoder().decode(resp.body);
+    const parsed = JSON.parse(bodyText) as {
+      data?: { auctions: SubgraphAuction[] };
+      errors?: { message: string }[];
     };
 
-    const endTime = Number(auction.endTime);
-    if (nowSeconds >= endTime) {
-      runtime.log(
-        `Auction ${auctionId} expired (endTime=${endTime}, now=${nowSeconds})`
-      );
-      expired.push({
-        auctionId,
-        sellerId: auction.sellerId,
-        currentBid: auction.currentBid,
-        eventId: auction.eventId,
-      });
-    } else {
-      runtime.log(
-        `Auction ${auctionId} still active (endTime=${endTime}, now=${nowSeconds})`
-      );
+    if (parsed.errors?.length) {
+      throw new Error(`Subgraph error: ${parsed.errors[0].message}`);
     }
-  }
 
-  return expired;
-}
+    if (!parsed.data?.auctions) {
+      return [];
+    }
+
+    return parsed.data.auctions.map((a) => ({
+      auctionId: BigInt(a.auctionId),
+      sellerId: a.sellerId,
+      currentBid: BigInt(a.currentBid),
+      eventId: BigInt(a.eventId),
+    }));
+  };
