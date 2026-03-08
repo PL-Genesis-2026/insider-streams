@@ -11,6 +11,8 @@ import { writeToFirestore } from "./firebase";
 import { settleEvent } from "./evm";
 import { sendNotification } from "./notify";
 
+const ETHERSCAN_URL = "https://sepolia.etherscan.io/tx";
+
 /** ABI for the SettlementRequested event CRE listens for. */
 const eventAbi = parseAbi(["event SettlementRequested(uint256 indexed eventId, string question)"]);
 const eventSignature = "SettlementRequested(uint256,string)";
@@ -75,8 +77,8 @@ const onLogTrigger = (runtime: Runtime<Config>, log: EVMLog): string => {
     const firestoreResult: FirestoreWriteResponse = writeToFirestore(runtime, question, result, txHash);
     runtime.log(`Firestore Document: ${firestoreResult.name}`);
 
-    const msg = `Event ${eventId}: "${question}"\nOutcome: ${result.geminiResponse}\ntx: ${txHash}`;
-    sendNotification(runtime, `Market Settled: Event ${eventId}`, msg, `https://sepolia.etherscan.io/tx/${txHash}`);
+    const msg = `Event ${eventId}: "${question}"\nOutcome: ${result.geminiResponse}\ntx: ${ETHERSCAN_URL}/${txHash}`;
+    sendNotification(runtime, `Market Settled: Event ${eventId}`, msg, `${ETHERSCAN_URL}/${txHash}`);
 
     return "Settlement Request Processed";
   } catch (err) {
