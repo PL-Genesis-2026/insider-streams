@@ -66,8 +66,7 @@ type FundingStep =
   | "depositing"
   | "waiting_for_credit"
   | "ready_to_activate"
-  | "activating"
-  | "complete";
+  | "activating";
 
 type WalletActionCenterProps = {
   id?: string;
@@ -387,7 +386,8 @@ export function WalletActionCenter({
         fundingSnapshot.refresh(),
         loadPrivateBalances({ forceFresh: true }),
       ]);
-      setStep("complete");
+      setStep("idle");
+      setAmount("");
     } catch (activateError) {
       setStep("ready_to_activate");
       if (activateError instanceof Error) {
