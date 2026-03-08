@@ -1100,6 +1100,13 @@ export const secretMarketplaceAbi = [
   },
   {
     type: 'function',
+    inputs: [{ name: 'auctionId', internalType: 'uint256', type: 'uint256' }],
+    name: 'adminExpireAuction',
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
     inputs: [
       { name: 'auctionId', internalType: 'uint256', type: 'uint256' },
       {
@@ -1470,6 +1477,19 @@ export const secretMarketplaceAbi = [
     name: 'withdrawFunds',
     outputs: [],
     stateMutability: 'nonpayable',
+  },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      {
+        name: 'auctionId',
+        internalType: 'uint256',
+        type: 'uint256',
+        indexed: true,
+      },
+    ],
+    name: 'AuctionAdminExpired',
   },
   {
     type: 'event',
@@ -1929,6 +1949,11 @@ export const secretMarketplaceAbi = [
     type: 'error',
     inputs: [{ name: 'token', internalType: 'address', type: 'address' }],
     name: 'SafeERC20FailedOperation',
+  },
+  {
+    type: 'error',
+    inputs: [{ name: 'sellerId', internalType: 'string', type: 'string' }],
+    name: 'SellerAlreadyRegistered',
   },
   {
     type: 'error',
