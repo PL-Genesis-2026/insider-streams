@@ -33,8 +33,12 @@
  *   SUPABASE_SERVICE_ROLE_KEY — Supabase service role key (bypasses RLS, for reading private bid/seller data)
  *
  * Optional:
- *   BASE_URL     — frontend origin (default: http://localhost:3000)
- *   INTERVAL_MS  — cycle interval in ms (default: 300000 / 5 min)
+ *   BASE_URL                  — frontend origin (default: http://localhost:3000)
+ *   INTERVAL_MS               — cycle interval in ms (default: 300000 / 5 min)
+ *   ENABLE_NTFY=true          — send notifications via ntfy
+ *   NTFY_HOST                 — ntfy server URL (default: http://localhost:8090)
+ *   NTFY_TOPIC                — ntfy topic (default: place-bids)
+ *   NTFY_USER                 — user tag in notifications (default: unknown)
  */
 
 import stringify from "fast-json-stable-stringify";
@@ -69,6 +73,29 @@ const MAX_BID_INCREMENT = 50_000_000n;  // 50 USDC
 // Auto-funding thresholds (real private CUSDC transfers via Chainlink REST API)
 const LOW_BALANCE_THRESHOLD = 100_000_000n;   // 100 USDC — top up below this
 const TOP_UP_AMOUNT = 10_000_000_000n;         // 10,000 USDC per top-up
+
+// ntfy (optional push notifications)
+const ENABLE_NTFY = process.env.ENABLE_NTFY === "true";
+const NTFY_HOST = process.env.NTFY_HOST ?? "http://localhost:8090";
+const NTFY_TOPIC = process.env.NTFY_TOPIC ?? "place-bids";
+const NTFY_USER = process.env.NTFY_USER ?? "unknown";
+
+async function ntfy(title: string, message: string, tags?: string[]): Promise<void> {
+  if (!ENABLE_NTFY) return;
+  try {
+    await fetch(`${NTFY_HOST}/${NTFY_TOPIC}`, {
+      method: "POST",
+      headers: {
+        Title: title,
+        ...(tags?.length ? { Tags: tags.join(",") } : {}),
+      },
+      body: `[${NTFY_USER}] ${message}`,
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch (err) {
+    console.error(`[place-bids] [ntfy] Failed to send notification: ${err}`);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -212,13 +239,13 @@ async function topUpAccount(
       token: PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
       amount: TOP_UP_AMOUNT.toString(),
     });
-    console.log(
-      `[place-bids] topped up ${address} (+${TOP_UP_AMOUNT / 1_000_000n} USDC private transfer, tx: ${result.transaction_id})`,
-    );
+    const msg = `+${TOP_UP_AMOUNT / 1_000_000n} USDC → ${address} (tx: ${result.transaction_id})`;
+    console.log(`[place-bids] topped up ${msg}`);
+    await ntfy("Account topped up", msg, ["money_with_wings"]);
   } catch (err) {
-    console.error(
-      `[place-bids] top-up failed for ${address}: ${err instanceof Error ? err.message : err}`,
-    );
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error(`[place-bids] top-up failed for ${address}: ${errMsg}`);
+    await ntfy("Top-up failed", `${address}: ${errMsg}`, ["rotating_light"]);
   }
 }
 
@@ -386,6 +413,11 @@ async function runCycle(
             ? (result.body as Record<string, unknown>).bidId
             : "(unknown)";
         console.log(`[place-bids] bid placed — id: ${bidId}`);
+        await ntfy(
+          "Bid placed",
+          `Auction ${auction.auctionId} — ${bidAmount / 1_000_000n} USDC by ${chosenAccount.address} (bid ${bidId})`,
+          ["moneybag"],
+        );
         return; // one bid per cycle
       }
 
@@ -403,13 +435,18 @@ async function runCycle(
         continue;
       }
 
-      console.error(
-        `[place-bids] bid failed (HTTP ${result.status}):`,
-        result.body,
+      const errBody = JSON.stringify(result.body);
+      console.error(`[place-bids] bid failed (HTTP ${result.status}):`, result.body);
+      await ntfy(
+        "Bid failed",
+        `HTTP ${result.status} on auction ${auction.auctionId}: ${errBody}`,
+        ["rotating_light"],
       );
       return;
     } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
       console.error("[place-bids] bid request threw:", err);
+      await ntfy("Bid error", errMsg, ["rotating_light"]);
       return;
     }
   }
