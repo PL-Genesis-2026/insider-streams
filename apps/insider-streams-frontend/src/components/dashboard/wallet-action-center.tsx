@@ -674,7 +674,7 @@ export function WalletActionCenter({
               <CompactMetric label="Locked in bids" value={displayLocked} />
               <CompactMetric label="Public wallet" value={displayPublicWallet} />
             </div>
-            {isRevealed && !privateBalanceLookup ? (
+            {isRevealed && !hasDetectedPrivateBalance ? (
               <button
                 type="button"
                 className="text-xs text-accent underline-offset-2 transition-colors hover:underline disabled:opacity-50"
@@ -837,21 +837,50 @@ export function WalletActionCenter({
                         />
                       </div>
 
-                      <Button
-                        className="w-full sm:w-auto"
-                        disabled={!parsedAmount || step !== "idle"}
-                        onClick={() => {
-                          void handleFund();
-                        }}
-                      >
-                        {step === "approving"
-                          ? "Approving..."
-                          : step === "depositing"
-                            ? "Depositing..."
-                            : step === "waiting_for_credit"
-                              ? "Waiting for credit..."
-                              : "Deposit"}
-                      </Button>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <Button
+                          className="w-full sm:w-auto"
+                          disabled={!parsedAmount || step !== "idle"}
+                          onClick={() => {
+                            void handleFund();
+                          }}
+                        >
+                          {step === "approving"
+                            ? "Approving..."
+                            : step === "depositing"
+                              ? "Depositing..."
+                              : step === "waiting_for_credit"
+                                ? "Waiting for credit..."
+                                : "Deposit"}
+                        </Button>
+                        {step === "waiting_for_credit" ? (
+                          <Button
+                            variant="outline"
+                            className="w-full sm:w-auto"
+                            disabled={isCheckingPrivateBalances}
+                            onClick={() => {
+                              void handleCheckBalance();
+                            }}
+                          >
+                            {isCheckingPrivateBalances ? (
+                              <>
+                                <Loader2 className="size-4 animate-spin" />
+                                Checking...
+                              </>
+                            ) : (
+                              <>
+                                <RefreshCw className="size-4" />
+                                Check balance
+                              </>
+                            )}
+                          </Button>
+                        ) : null}
+                      </div>
+                      {step === "waiting_for_credit" && balanceCheckEmpty ? (
+                        <p className="text-xs text-muted-foreground">
+                          Deposit is still processing. Wait a moment, then check again.
+                        </p>
+                      ) : null}
                     </div>
 
                     <div className="rounded-[calc(var(--radius)-4px)] border border-border/40 bg-muted/8 p-4">
