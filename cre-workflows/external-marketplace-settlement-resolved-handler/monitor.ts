@@ -1,159 +1,111 @@
+// monitor.ts
+// Fetches auction IDs for a given eventId from the subgraph (1 HTTP call, 0 chain reads).
+//
+// Previously this module scanned getUnresolvedEvents() + getEvent() on-chain
+// for each event, consuming N+1 chain reads and hitting CRE's 15-read limit.
+// Now the workflow is log-triggered on SettlementResponse events, so it already
+// knows which eventId was settled. We just need the auction IDs for that event,
+// which the subgraph provides in a single HTTP call.
+
 import {
   cre,
+  ok,
   type Runtime,
-  getNetwork,
-  encodeCallMsg,
-  LATEST_BLOCK_NUMBER,
-  bytesToHex,
+  type HTTPSendRequester,
+  consensusIdenticalAggregation,
 } from "@chainlink/cre-sdk";
-import { encodeFunctionData, decodeFunctionResult } from "viem";
-import { type Config, secretMarketplaceAbi, examplePredictionMarketAbi, STATUS_SETTLED, STATUS_NEEDS_MANUAL, OUTCOME_NO, OUTCOME_YES, OUTCOME_INCONCLUSIVE } from "./types";
+import type { Config } from "./types";
 
-export interface SettledEvent {
-  eventId: bigint;
-  outcome: number; // 1=No, 2=Yes, 3=Inconclusive
-  auctionIds: bigint[];
+// Base64 encoding (QuickJS WASM-safe, no Buffer)
+const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+function base64Encode(bytes: Uint8Array): string {
+  let r = "";
+  const len = bytes.length;
+  for (let i = 0; i < len; i += 3) {
+    const b0 = bytes[i];
+    const b1 = i + 1 < len ? bytes[i + 1] : 0;
+    const b2 = i + 2 < len ? bytes[i + 2] : 0;
+    r += B64[(b0 >> 2) & 0x3f];
+    r += B64[((b0 << 4) | (b1 >> 4)) & 0x3f];
+    r += i + 1 < len ? B64[((b1 << 2) | (b2 >> 6)) & 0x3f] : "=";
+    r += i + 2 < len ? B64[b2 & 0x3f] : "=";
+  }
+  return r;
 }
 
-export function findSettledUnresolvedEvents(
+/**
+ * Queries the subgraph for all auction IDs belonging to a given eventId.
+ * Returns auction IDs as bigints. Uses 1 HTTP call, 0 chain reads.
+ */
+export function fetchAuctionIdsForEvent(
   runtime: Runtime<Config>,
-): SettledEvent[] {
-  const cfg = runtime.config.evms[0];
+  eventId: bigint,
+): bigint[] {
+  const httpClient = new cre.capabilities.HTTPClient();
 
-  const network = getNetwork({
-    chainFamily: "evm",
-    chainSelectorName: cfg.chainSelectorName,
-    isTestnet: true,
-  });
-  if (!network) throw new Error(`Unknown chain: ${cfg.chainSelectorName}`);
-
-  const evmClient = new cre.capabilities.EVMClient(network.chainSelector.selector);
-
-  // Step 1: Get unresolved event IDs from SecretMarketplace
-  const unresolvedCallData = encodeFunctionData({
-    abi: secretMarketplaceAbi,
-    functionName: "getUnresolvedEvents",
-  });
-
-  const unresolvedResult = evmClient
-    .callContract(runtime, {
-      call: encodeCallMsg({
-        from: "0x0000000000000000000000000000000000000000",
-        to: cfg.secretMarketplaceAddress as `0x${string}`,
-        data: unresolvedCallData,
-      }),
-      blockNumber: LATEST_BLOCK_NUMBER,
-    })
+  const auctionIds: bigint[] = httpClient
+    .sendRequest(
+      runtime,
+      queryAuctionsByEvent(runtime.config.subgraphUrl, eventId.toString()),
+      consensusIdenticalAggregation<bigint[]>(),
+    )(runtime.config)
     .result();
 
-  const unresolvedIds = decodeFunctionResult({
-    abi: secretMarketplaceAbi,
-    functionName: "getUnresolvedEvents",
-    data: bytesToHex(unresolvedResult.data),
-  }) as bigint[];
+  runtime.log(`Subgraph returned ${auctionIds.length} auction(s) for event ${eventId}`);
+  return auctionIds;
+}
 
-  runtime.log(`Unresolved events: ${unresolvedIds.length}`);
+interface SubgraphAuction {
+  auctionId: string;
+}
 
-  if (unresolvedIds.length === 0) return [];
-
-  // CRE enforces a 15 ChainRead call limit per workflow invocation.
-  // Each event costs 1 read (getEvent) + 1 read if settled (getEventAuctions).
-  // Cap at 7 events per invocation: 1 (getUnresolvedEvents) + 7*2 = 15 max.
-  // Process newest events first — they're most likely to be recently settled.
-  const MAX_EVENTS = 7;
-  const reversed = [...unresolvedIds].reverse();
-  const eventsToCheck = reversed.slice(0, MAX_EVENTS);
-  if (unresolvedIds.length > MAX_EVENTS) {
-    runtime.log(`Processing newest ${MAX_EVENTS} of ${unresolvedIds.length} events (ChainRead limit)`);
-  }
-
-  // Step 2: Check each event on ExamplePredictionMarket
-  const settledEvents: SettledEvent[] = [];
-
-  for (const eventId of eventsToCheck) {
-    const getEventCallData = encodeFunctionData({
-      abi: examplePredictionMarketAbi,
-      functionName: "getEvent",
-      args: [eventId],
+const queryAuctionsByEvent =
+  (subgraphUrl: string, eventId: string) =>
+  (sendRequester: HTTPSendRequester, config: Config): bigint[] => {
+    const query = JSON.stringify({
+      query: `{
+        auctions(
+          where: { eventId: "${eventId}" }
+          first: 100
+          orderBy: auctionId
+          orderDirection: asc
+        ) {
+          auctionId
+        }
+      }`,
     });
 
-    const eventResult = evmClient
-      .callContract(runtime, {
-        call: encodeCallMsg({
-          from: "0x0000000000000000000000000000000000000000",
-          to: cfg.examplePredictionMarketAddress as `0x${string}`,
-          data: getEventCallData,
-        }),
-        blockNumber: LATEST_BLOCK_NUMBER,
+    const encodedBody = base64Encode(new TextEncoder().encode(query));
+
+    const resp = sendRequester
+      .sendRequest({
+        url: subgraphUrl,
+        method: "POST" as const,
+        body: encodedBody,
+        headers: { "Content-Type": "application/json" },
+        cacheSettings: { readFromCache: false, maxAgeMs: 0 },
       })
       .result();
 
-    const eventData = decodeFunctionResult({
-      abi: examplePredictionMarketAbi,
-      functionName: "getEvent",
-      data: bytesToHex(eventResult.data),
-    }) as {
-      question: string;
-      creator: string;
-      eventOpen: bigint;
-      eventClose: bigint;
-      status: number;
-      outcome: number;
-      settledAt: bigint;
-      evidenceURI: string;
-      confidenceBps: number;
-      yesToken: string;
-      noToken: string;
-      yesReserve: bigint;
-      noReserve: bigint;
-      liquidityWithdrawn: boolean;
+    if (!ok(resp)) {
+      const bodyText = new TextDecoder().decode(resp.body);
+      throw new Error(`Subgraph query failed (${resp.statusCode}): ${bodyText}`);
+    }
+
+    const bodyText = new TextDecoder().decode(resp.body);
+    const parsed = JSON.parse(bodyText) as {
+      data?: { auctions: SubgraphAuction[] };
+      errors?: { message: string }[];
     };
 
-    const isSettled = eventData.status === STATUS_SETTLED;
-    const isInconclusive = eventData.status === STATUS_NEEDS_MANUAL && eventData.outcome === OUTCOME_INCONCLUSIVE;
-
-    if (!isSettled && !isInconclusive) {
-      runtime.log(`Event ${eventId}: not settled (status=${eventData.status}), skipping`);
-      continue;
+    if (parsed.errors?.length) {
+      throw new Error(`Subgraph error: ${parsed.errors[0].message}`);
     }
 
-    if (!isInconclusive && eventData.outcome !== OUTCOME_YES && eventData.outcome !== OUTCOME_NO) {
-      runtime.log(`Event ${eventId}: outcome=${eventData.outcome} (not Yes/No/Inconclusive), skipping`);
-      continue;
+    if (!parsed.data?.auctions) {
+      return [];
     }
 
-    // Step 3: Get auction IDs for this event
-    const getAuctionsCallData = encodeFunctionData({
-      abi: secretMarketplaceAbi,
-      functionName: "getEventAuctions",
-      args: [eventId],
-    });
-
-    const auctionsResult = evmClient
-      .callContract(runtime, {
-        call: encodeCallMsg({
-          from: "0x0000000000000000000000000000000000000000",
-          to: cfg.secretMarketplaceAddress as `0x${string}`,
-          data: getAuctionsCallData,
-        }),
-        blockNumber: LATEST_BLOCK_NUMBER,
-      })
-      .result();
-
-    const auctionIds = decodeFunctionResult({
-      abi: secretMarketplaceAbi,
-      functionName: "getEventAuctions",
-      data: bytesToHex(auctionsResult.data),
-    }) as bigint[];
-
-    runtime.log(`Event ${eventId}: settled (outcome=${eventData.outcome}), ${auctionIds.length} auction(s)`);
-
-    settledEvents.push({
-      eventId,
-      outcome: eventData.outcome,
-      auctionIds,
-    });
-  }
-
-  return settledEvents;
-}
+    return parsed.data.auctions.map((a) => BigInt(a.auctionId));
+  };

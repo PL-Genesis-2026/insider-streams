@@ -1,5 +1,6 @@
 {
   "supabaseUrl": "https://jeyudbkttazpifxvzqvq.supabase.co",
+  "subgraphUrl": "https://gateway.thegraph.com/api/a075bc6e2e48577d2588bb458b939bdc/subgraphs/id/2vVUkMCH5m48s8Qj1ChgR2z3c98vAX3raBoJoYZ9RrBW",
   "evms": [
     {
       "secretMarketplaceAddress": "0x1f903548234b15C4d955Cce79beaaC853A98C514",
@@ -9,7 +10,7 @@
     }
   ],
   "ntfyEnabled": true,
-  "ntfyHost": "https://api.insider-streams.com",
+  "ntfyHost": "http://195.201.8.147:8090",
   "ntfyTopic": "external-marketplace-settlement-resolved-handler-cre",
   "ntfyUser": "vps"
 }
