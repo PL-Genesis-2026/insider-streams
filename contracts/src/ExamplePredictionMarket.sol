@@ -59,6 +59,8 @@ contract ExamplePredictionMarket is ReceiverTemplate {
         Outcome indexed outcome
     );
 
+    event EventAdminClosed(uint256 indexed eventId);
+
     // ===========================
     // ======== ENUMS ============
     // ===========================
@@ -326,6 +328,15 @@ contract ExamplePredictionMarket is ReceiverTemplate {
         e.status = Status.Settled;
 
         emit SettlementResponse(eventId, e.status, e.outcome);
+    }
+
+    /// @notice Debug-only: immediately close an event so requestSettlement can proceed.
+    /// @dev Sets eventClose to block.timestamp. For testing only — restricted to owner.
+    function adminCloseEvent(uint256 eventId) external onlyOwner {
+        Event storage e = events[eventId];
+        if (e.status != Status.Open) revert StatusNotOpen(e.status);
+        e.eventClose = block.timestamp;
+        emit EventAdminClosed(eventId);
     }
 
     /// @notice Debug-only: force-settle an event regardless of timestamps or status.

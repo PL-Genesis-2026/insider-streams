@@ -4,7 +4,7 @@
  * Full lifecycle test on Eth Sepolia:
  *   1. Owner creates an event with a question
  *   2. Bidder approves USDC + buys YES shares
- *   3. Waits for event closure (3 minutes)
+ *   3. Admin-closes event immediately via adminCloseEvent
  *   4. Owner requests settlement
  *   5. CRE external-prediction-market-settler simulation (dry run)
  *   6. CRE external-prediction-market-settler broadcast (on-chain settlement)
@@ -41,7 +41,6 @@ import {
   parseFirstEventLog,
   runCRE,
   step,
-  waitForTimestamp,
   waitForTx,
 } from "./e2e-helpers.js";
 
@@ -61,7 +60,7 @@ const { publicClient, ownerClient, ownerAccount, bidderClient, bidderAccount } =
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const PREDICTION_AMOUNT = 1_000_000n; // 1 USDC
-const EVENT_DURATION = BigInt(60); // 60 seconds
+const EVENT_DURATION = BigInt(3600); // 1 hour — will be admin-closed immediately
 const QUESTION = "The New York Yankees won the 2009 World Series.";
 // SimpleMarket.Outcome: 0=Unresolved, 1=No, 2=Yes
 const OUTCOME_YES = 2;
@@ -136,16 +135,15 @@ async function main() {
     `Bought YES shares (${PREDICTION_AMOUNT} USDC)`,
   );
 
-  // ── Step 5: Wait for event closure ─────────────────────────────────────────
-  step("Waiting for event to close...");
-  const event = await publicClient.readContract({
+  // ── Step 5: Admin-close event immediately ───────────────────────────────────
+  step("Admin-closing event immediately...");
+  const closeHash = await ownerClient.writeContract({
     address: EXAMPLE_PREDICTION_MARKET_ADDRESS,
     abi: examplePredictionMarketAbi,
-    functionName: "getEvent",
+    functionName: "adminCloseEvent",
     args: [eventId],
   });
-  console.log(`  Event closes at: ${event.eventClose}`);
-  await waitForTimestamp(publicClient, event.eventClose, "Event closure");
+  await waitForTx(publicClient, closeHash, "Event admin-closed");
 
   // ── Step 6: Request settlement ──────────────────────────────────────────────
   step("Owner requesting settlement...");
