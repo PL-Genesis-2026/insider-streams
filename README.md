@@ -12,11 +12,11 @@ pnpm dev:insider-streams
 
 ## Deployed Contracts (Eth Sepolia)
 
-| Contract | Address |
-|----------|---------|
-| ConfidentialUSDC | `0xee3A0Cccb31fF816615C18E1d1DB480df8a0f9F1` |
+| Contract                | Address                                      |
+| ----------------------- | -------------------------------------------- |
+| ConfidentialUSDC        | `0xee3A0Cccb31fF816615C18E1d1DB480df8a0f9F1` |
 | ExamplePredictionMarket | `0x83B1F9d683b1a760569C237Bfb89C50112c05e24` |
-| SecretMarketplace | `0x1f903548234b15C4d955Cce79beaaC853A98C514` |
+| SecretMarketplace       | `0x1f903548234b15C4d955Cce79beaaC853A98C514` |
 
 ## Create a Prediction Market
 

@@ -72,6 +72,8 @@ export function AuctionList({ className }: AuctionListProps) {
   );
   const { loading, error } = activeQuery;
 
+  const normalizedSellerId = seller?.id?.toLowerCase();
+
   const cards: AuctionCardData[] = useMemo(() => {
     return auctions.map((a): AuctionCardData => {
       const currentBidBigInt = BigInt(String(a.currentBid));
@@ -95,6 +97,22 @@ export function AuctionList({ className }: AuctionListProps) {
       };
     });
   }, [auctions]);
+
+  const { otherCards, ownCards } = useMemo(() => {
+    if (!normalizedSellerId) {
+      return { otherCards: cards, ownCards: [] };
+    }
+    const other: AuctionCardData[] = [];
+    const own: AuctionCardData[] = [];
+    for (const c of cards) {
+      if (c.sellerAddress.toLowerCase() === normalizedSellerId) {
+        own.push(c);
+      } else {
+        other.push(c);
+      }
+    }
+    return { otherCards: other, ownCards: own };
+  }, [cards, normalizedSellerId]);
 
   useEffect(() => {
     const auctionIds = cards.map((c) => c.auctionId);
@@ -178,21 +196,39 @@ export function AuctionList({ className }: AuctionListProps) {
         </div>
       ) : null}
 
-      {cards.length > 0 ? (
-        <div className="grid gap-5">
-          {cards.map((auction) => (
-            <AuctionCard
-              key={auction.auctionId}
-              auction={auction}
-              href={`/auction/${auction.auctionId}`}
-              privateBid={getBid(auction.auctionId)}
-              isOwnAuction={
-                !!seller?.id &&
-                seller.id.toLowerCase() ===
-                  auction.sellerAddress.toLowerCase()
-              }
-            />
-          ))}
+      {(otherCards.length > 0 || ownCards.length > 0) ? (
+        <div className="flex flex-col gap-10">
+          {otherCards.length > 0 ? (
+            <div className="grid gap-5">
+              {otherCards.map((auction) => (
+                <AuctionCard
+                  key={auction.auctionId}
+                  auction={auction}
+                  href={`/auction/${auction.auctionId}`}
+                  privateBid={getBid(auction.auctionId)}
+                  isOwnAuction={false}
+                />
+              ))}
+            </div>
+          ) : null}
+          {ownCards.length > 0 ? (
+            <div>
+              <p className="mb-4 text-xs font-medium uppercase tracking-[0.28em] text-muted-foreground">
+                Your auctions
+              </p>
+              <div className="grid gap-5">
+                {ownCards.map((auction) => (
+                  <AuctionCard
+                    key={auction.auctionId}
+                    auction={auction}
+                    href={`/auction/${auction.auctionId}`}
+                    privateBid={getBid(auction.auctionId)}
+                    isOwnAuction
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : (
         <div className="rounded-[calc(var(--radius)+6px)] border border-border bg-muted/30 p-6 text-sm leading-7 text-muted-foreground">

@@ -2,9 +2,7 @@ import { NextResponse } from "next/server";
 import { parseEventLogs, recoverTypedDataAddress, type Address } from "viem";
 import {
   secretMarketplaceAbi,
-  SECRET_MARKETPLACE_ADDRESS,
   examplePredictionMarketAbi,
-  EXAMPLE_PREDICTION_MARKET_ADDRESS,
 } from "@private-streams/common";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
 import { getPublicClient, getAdminWalletClient } from "@/lib/viem";
@@ -17,6 +15,10 @@ import {
   type CreateAuctionSuccessResponse,
 } from "@/lib/create-auction/shared";
 import { generateSellerId } from "@/lib/seller/generate-seller-id";
+import {
+  EXAMPLE_PREDICTION_MARKET_ADDRESS,
+  SECRET_MARKETPLACE_ADDRESS,
+} from "@/lib/contract-addresses";
 
 const SIGNATURE_MAX_AGE_SECONDS = 120;
 
