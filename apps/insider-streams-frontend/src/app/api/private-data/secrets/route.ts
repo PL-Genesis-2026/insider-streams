@@ -72,14 +72,19 @@ export async function POST(request: Request) {
     .in("auction_id", auctionIds);
 
   if (secretsError) {
-    console.error("[private-data/secrets] Supabase secrets error:", secretsError);
+    console.error(
+      "[private-data/secrets] Supabase secrets error:",
+      secretsError,
+    );
     return NextResponse.json(
       { error: "Internal server error", code: "DB_ERROR" },
       { status: 500 },
     );
   }
 
-  const winningBidAuctionIds = new Set(winningBids.map((bid) => bid.auction_id));
+  const winningBidAuctionIds = new Set(
+    winningBids.map((bid) => bid.auction_id),
+  );
   const secretsByAuctionId = new Map(
     secrets.map((secret) => [secret.auction_id, secret]),
   );

@@ -14,6 +14,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { FundingStatusBadge } from "@/components/funding/funding-status-badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { getDisplayFundingBalance } from "@/lib/funding/format-funding-balance";
 import { ConnectWalletButton } from "@/components/wallet/connect-wallet-button";
 import { SwitchNetworkButton } from "@/components/wallet/switch-network-button";
@@ -30,6 +35,8 @@ export function WalletAccountControl() {
   const displayBalance = isRevealed
     ? getDisplayFundingBalance(fundingSnapshot.balance)
     : null;
+  const shouldShowHiddenBalance = !isRevealed;
+  const balanceLabel = displayBalance ?? "Fund wallet";
 
   if (!walletSession.isConnected || !walletSession.address) {
     return <ConnectWalletButton size="sm" variant="outline" />;
@@ -37,17 +44,40 @@ export function WalletAccountControl() {
 
   return (
     <div className="flex items-center gap-2">
-      {displayBalance ? (
+      {isRevealed ? (
         <Badge asChild variant="secondary">
           <Link
             href="/funding"
             className="border border-border/70 bg-secondary/70 px-3 py-1 text-[10px] tracking-[0.18em] text-secondary-foreground transition-colors hover:border-accent/40 hover:bg-secondary"
-            aria-label={`Open funding page, current balance ${displayBalance}`}
+            aria-label={
+              displayBalance
+                ? `Open funding page, current balance ${displayBalance}`
+                : "Open funding page to fund wallet"
+            }
           >
             <CirclePlus className="size-3.5" />
-            {displayBalance}
+            {balanceLabel}
           </Link>
         </Badge>
+      ) : null}
+      {shouldShowHiddenBalance ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge asChild variant="secondary">
+              <Link
+                href="/funding"
+                className="border border-border/70 bg-secondary/70 px-3 py-1 text-[10px] tracking-[0.18em] text-muted-foreground transition-colors hover:border-accent/40 hover:bg-secondary hover:text-secondary-foreground"
+                aria-label="Open funding page. Reveal secret data to see balance."
+              >
+                <CirclePlus className="size-3.5" />
+                ••• USDC
+              </Link>
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            Reveal secret data to see balance
+          </TooltipContent>
+        </Tooltip>
       ) : null}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

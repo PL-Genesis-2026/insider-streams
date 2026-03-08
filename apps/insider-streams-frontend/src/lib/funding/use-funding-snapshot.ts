@@ -36,14 +36,19 @@ export function useFundingSnapshot(options?: UseFundingSnapshotOptions) {
       ? fundingSnapshotQuery.error.message
       : undefined;
 
+  const fundingNotYetChecked =
+    fundingSnapshotQuery.data === undefined && !fundingSnapshotQuery.isError;
+
   const fundingSnapshot = useMemo(
     () =>
       getFundingSnapshot(walletSession, fundingSnapshotQuery.data, {
         isReconcilePending: reconcileFundingMutation.isPending,
         errorMessage,
+        fundingNotYetChecked,
       }),
     [
       errorMessage,
+      fundingNotYetChecked,
       fundingSnapshotQuery.data,
       reconcileFundingMutation.isPending,
       walletSession,

@@ -24,6 +24,11 @@ const fundingStatusCopy: Record<FundingStatus, FundingStatusCopy> = {
     description:
       "Your Insider Streams private wallet is temporarily unavailable. Try again in a moment.",
   },
+  private_data_hidden: {
+    title: "Funding status unknown",
+    description:
+      "Reveal private data to check your funding status. Your wallet balance is only visible after you reveal.",
+  },
   not_funded_yet: {
     title: "Private wallet not funded yet",
     description:
@@ -47,12 +52,16 @@ const fundingStatusCopy: Record<FundingStatus, FundingStatusCopy> = {
 };
 
 export function getFundingStatusCopy(status: FundingStatus): FundingStatusCopy {
-  return fundingStatusCopy[status];
+  const copy = fundingStatusCopy[status];
+  if (copy) return copy;
+  return fundingStatusCopy.private_data_hidden;
 }
 
 type FundingSnapshotOptions = {
   isReconcilePending?: boolean;
   errorMessage?: string;
+  /** When true, server has not been queried yet (e.g. private data not revealed) */
+  fundingNotYetChecked?: boolean;
 };
 
 function hasPositiveValue(value?: string | null) {
@@ -99,6 +108,19 @@ export function getFundingSnapshot(
       isReconciling: false,
       transfers: serverSnapshot?.transfers ?? [],
       balance: serverSnapshot?.balance,
+    };
+  }
+
+  if (options?.fundingNotYetChecked || serverSnapshot === undefined) {
+    return {
+      status: "private_data_hidden",
+      address: session.address,
+      currentChainName: session.currentChainName,
+      requiredChainName: session.requiredChainName,
+      platformRecipientAddress: serverSnapshot?.platformRecipientAddress,
+      canPlaceBid: false,
+      isReconciling: false,
+      transfers: [],
     };
   }
 

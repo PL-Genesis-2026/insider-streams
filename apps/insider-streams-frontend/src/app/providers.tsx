@@ -7,13 +7,17 @@ import {
   ApolloClient,
   InMemoryCache,
 } from "@apollo/client-integration-nextjs";
+import { AppKitProvider } from "@reown/appkit/react";
 import { useState } from "react";
 import { cookieToInitialState, WagmiProvider } from "wagmi";
-import { ensureAppKit, walletConfig } from "@/lib/wallet/config";
+import {
+  walletConfig,
+  wagmiAdapter,
+  walletProjectId,
+  requiredChain,
+} from "@/lib/wallet/config";
 import { SUBGRAPH_URL, SUBGRAPH_REQUEST_HEADERS } from "@/lib/subgraph-config";
 import { PrivateDataProvider } from "@/lib/private-data/private-data-provider";
-
-ensureAppKit();
 
 function makeClient() {
   return new ApolloClient({
@@ -21,6 +25,24 @@ function makeClient() {
     link: new HttpLink({ uri: SUBGRAPH_URL, headers: SUBGRAPH_REQUEST_HEADERS }),
   });
 }
+
+const appKitConfig = {
+  adapters: [wagmiAdapter],
+  projectId: walletProjectId,
+  networks: [requiredChain] as [typeof requiredChain, ...typeof requiredChain[]],
+  defaultNetwork: requiredChain,
+  features: {
+    analytics: false,
+    email: false,
+    history: false,
+    onramp: false,
+    pay: false,
+    receive: false,
+    send: false,
+    socials: false as const,
+    swaps: false,
+  },
+};
 
 export function Providers({
   children,
@@ -33,14 +55,16 @@ export function Providers({
   const initialState = cookieToInitialState(walletConfig, cookies ?? undefined);
 
   return (
-    <ApolloNextAppProvider makeClient={makeClient}>
-      <WagmiProvider config={walletConfig} initialState={initialState}>
-        <QueryClientProvider client={queryClient}>
-          <PrivateDataProvider>
-            {children}
-          </PrivateDataProvider>
-        </QueryClientProvider>
-      </WagmiProvider>
-    </ApolloNextAppProvider>
+    <AppKitProvider {...appKitConfig}>
+      <ApolloNextAppProvider makeClient={makeClient}>
+        <WagmiProvider config={walletConfig} initialState={initialState}>
+          <QueryClientProvider client={queryClient}>
+            <PrivateDataProvider>
+              {children}
+            </PrivateDataProvider>
+          </QueryClientProvider>
+        </WagmiProvider>
+      </ApolloNextAppProvider>
+    </AppKitProvider>
   );
 }

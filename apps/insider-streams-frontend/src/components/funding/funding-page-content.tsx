@@ -11,6 +11,7 @@ import {
   ArrowRight,
   CheckCircle2,
   ChevronDown,
+  Eye,
   Loader2,
   RefreshCw,
 } from "lucide-react";
@@ -130,7 +131,14 @@ function BalancePanel({
 
 export function FundingPageContent() {
   const walletSession = useWalletSession();
-  const fundingSnapshot = useFundingSnapshot();
+  const [hasRequestedFundingCheck, setHasRequestedFundingCheck] =
+    useState(false);
+  const fundingSnapshot = useFundingSnapshot({
+    enabled:
+      hasRequestedFundingCheck &&
+      walletSession.isConnected &&
+      walletSession.isSupportedChain,
+  });
   const publicWalletBalanceQuery = useReadContract({
     address: PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
     abi: erc20Abi,
@@ -321,7 +329,13 @@ export function FundingPageContent() {
             label="Private bidding balance"
             value={
               displayBalance ??
-              (walletSession.isConnected ? "Not funded yet" : "Connect wallet")
+              (fundingSnapshot.status === "private_data_hidden"
+                ? fundingSnapshot.isLoading
+                  ? "Checking..."
+                  : "—"
+                : walletSession.isConnected
+                  ? "Not funded yet"
+                  : "Connect wallet")
             }
             description="This lives in the private system and is the balance used for bids."
           />
@@ -342,6 +356,29 @@ export function FundingPageContent() {
                   Switch to {walletSession.requiredChainName} to continue.
                 </p>
                 <SwitchNetworkButton showError />
+              </div>
+            ) : fundingSnapshot.status === "private_data_hidden" ? (
+              <div className="space-y-4">
+                <p className="text-sm leading-7 text-muted-foreground">
+                  Check your private bidding balance and funding status. This
+                  requires a one-time signature.
+                </p>
+                <Button
+                  onClick={() => setHasRequestedFundingCheck(true)}
+                  disabled={fundingSnapshot.isLoading}
+                >
+                  {fundingSnapshot.isLoading ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" />
+                      Checking...
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="size-4" />
+                      Check funding status
+                    </>
+                  )}
+                </Button>
               </div>
             ) : alreadyFunded && step === "idle" && !depositMore ? (
               <div className="space-y-5">

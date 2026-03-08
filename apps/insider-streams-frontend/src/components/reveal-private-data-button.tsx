@@ -2,7 +2,7 @@
 
 import { useAccount } from "wagmi";
 import { Button } from "@/components/ui/button";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { Eye, Loader2 } from "lucide-react";
 import { usePrivateData } from "@/lib/private-data/use-private-data";
 
 export function RevealPrivateDataButton() {
@@ -20,6 +20,8 @@ export function RevealPrivateDataButton() {
   const handleClick = () => {
     void revealForAuctions(getVisibleAuctionIds());
   };
+
+  if (isRevealed) return null;
 
   if (isLoading) {
     return (
@@ -40,20 +42,6 @@ export function RevealPrivateDataButton() {
       >
         <Eye />
         Retry
-      </Button>
-    );
-  }
-
-  if (isRevealed) {
-    return (
-      <Button
-        variant="ghost"
-        size="sm"
-        className="text-muted-foreground"
-        onClick={handleClick}
-      >
-        <EyeOff />
-        Secret data visible
       </Button>
     );
   }

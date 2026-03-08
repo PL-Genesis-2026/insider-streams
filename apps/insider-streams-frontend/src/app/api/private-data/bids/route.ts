@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { verifyPrivateDataRequest } from "@/lib/signed-request";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
-import type { PrivateBidRecord, PrivateBidStatus } from "@/lib/private-data/types";
+import type {
+  PrivateBidRecord,
+  PrivateBidStatus,
+} from "@/lib/private-data/types";
 
 const MAX_AUCTION_IDS = 100;
 const auctionIdsSchema = z.array(z.string().min(1)).min(1).max(MAX_AUCTION_IDS);

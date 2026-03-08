@@ -4,11 +4,7 @@ import { useCallback, useState } from "react";
 import Link from "next/link";
 import { CONFIDENTIAL_USDC_DECIMALS } from "@private-streams/common";
 import { formatUnits } from "viem";
-import {
-  ArrowRight,
-  Gavel,
-  RefreshCw,
-} from "lucide-react";
+import { ArrowRight, Gavel, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CardContent, CardHeader } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -39,14 +35,18 @@ interface AuctionBidGateProps {
   currentBidUsdc?: number;
 }
 
-export function AuctionBidGate({ auctionId, sellerAddress, currentBidUsdc }: AuctionBidGateProps) {
+export function AuctionBidGate({
+  auctionId,
+  sellerAddress,
+  currentBidUsdc,
+}: AuctionBidGateProps) {
   const [modalOpen, setModalOpen] = useState(false);
-  const fundingSnapshot = useFundingSnapshot();
-  const { seller } = usePrivateData();
+  const { seller, isRevealed } = usePrivateData();
+  const fundingSnapshot = useFundingSnapshot({ enabled: isRevealed });
 
   const isOwnAuction =
-    !!seller?.address &&
-    seller.address.toLowerCase() === sellerAddress.toLowerCase();
+    !!seller?.id &&
+    seller.id.toLowerCase() === sellerAddress.toLowerCase();
 
   const handleBidSuccess = useCallback(() => {
     void fundingSnapshot.refresh();
@@ -80,9 +80,20 @@ export function AuctionBidGate({ auctionId, sellerAddress, currentBidUsdc }: Auc
         {fundingSnapshot.balance?.available_balance &&
           BigInt(fundingSnapshot.balance.available_balance) > BigInt(0) && (
             <div className="flex items-center justify-between rounded-lg border border-border/50 bg-muted/30 px-4 py-2.5">
-              <span className="text-xs text-muted-foreground">Available balance</span>
+              <span className="text-xs text-muted-foreground">
+                Available balance
+              </span>
               <span className="text-sm font-medium text-foreground">
-                {Number(formatUnits(BigInt(fundingSnapshot.balance.available_balance), CONFIDENTIAL_USDC_DECIMALS)).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 })}
+                {Number(
+                  formatUnits(
+                    BigInt(fundingSnapshot.balance.available_balance),
+                    CONFIDENTIAL_USDC_DECIMALS,
+                  ),
+                ).toLocaleString("en-US", {
+                  style: "currency",
+                  currency: "USD",
+                  maximumFractionDigits: 2,
+                })}
               </span>
             </div>
           )}
@@ -105,10 +116,17 @@ export function AuctionBidGate({ auctionId, sellerAddress, currentBidUsdc }: Auc
           <div className="space-y-3">
             <SwitchNetworkButton className="w-full" showError />
             <p className="text-xs leading-6 text-muted-foreground/70">
-              Switch to {fundingSnapshot.requiredChainName} to enter the
-              funding flow for this auction.
+              Switch to {fundingSnapshot.requiredChainName} to enter the funding
+              flow for this auction.
             </p>
           </div>
+        ) : null}
+
+        {fundingSnapshot.status === "private_data_hidden" ? (
+          <p className="text-sm leading-7 text-muted-foreground">
+            Reveal private data above to check your funding status and enable
+            bidding.
+          </p>
         ) : null}
 
         {fundingSnapshot.status === "funding_unavailable" ? (
@@ -192,7 +210,9 @@ export function AuctionBidGate({ auctionId, sellerAddress, currentBidUsdc }: Auc
               onOpenChange={setModalOpen}
               auctionId={auctionId}
               currentBidUsdc={currentBidUsdc}
-              availableBalance={fundingSnapshot.balance?.available_balance ?? null}
+              availableBalance={
+                fundingSnapshot.balance?.available_balance ?? null
+              }
               onBidSuccess={handleBidSuccess}
             />
           </>
@@ -203,7 +223,6 @@ export function AuctionBidGate({ auctionId, sellerAddress, currentBidUsdc }: Auc
           </p>
         ) : null}
       </CardContent>
-
     </>
   );
 }

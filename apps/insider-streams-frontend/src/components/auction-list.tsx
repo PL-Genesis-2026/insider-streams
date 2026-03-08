@@ -31,7 +31,8 @@ type AuctionFilterMode = "auto" | "open" | "all";
 export function AuctionList({ className }: AuctionListProps) {
   const [page, setPage] = useState(0);
   const [filterMode, setFilterMode] = useState<AuctionFilterMode>("auto");
-  const { seller, getBid, registerVisibleAuctions, unregisterVisibleAuctions } = usePrivateData();
+  const { seller, getBid, registerVisibleAuctions, unregisterVisibleAuctions } =
+    usePrivateData();
 
   const openAuctionsQuery = useQuery(HomepageAuctionsDocument, {
     variables: {
@@ -62,8 +63,13 @@ export function AuctionList({ className }: AuctionListProps) {
 
   const displayingClosedAuctions =
     filterMode === "all" || shouldAutoShowClosedAuctions;
-  const activeQuery = displayingClosedAuctions ? allAuctionsQuery : openAuctionsQuery;
-  const auctions = useMemo(() => activeQuery.data?.auctions ?? [], [activeQuery.data]);
+  const activeQuery = displayingClosedAuctions
+    ? allAuctionsQuery
+    : openAuctionsQuery;
+  const auctions = useMemo(
+    () => activeQuery.data?.auctions ?? [],
+    [activeQuery.data],
+  );
   const { loading, error } = activeQuery;
 
   const cards: AuctionCardData[] = useMemo(() => {
@@ -84,10 +90,8 @@ export function AuctionList({ className }: AuctionListProps) {
         title: a.eventTitle,
         sellerReputationScore: Number(a.seller.reputationScore),
         sellerTotalAuctions: a.seller.totalAuctionCount,
-        sellerCorrectPredictions:
-          a.seller.auctionsWithCorrectPredictionsCount,
-        sellerWrongPredictions:
-          a.seller.auctionsWithWrongPredictionsCount,
+        sellerCorrectPredictions: a.seller.auctionsWithCorrectPredictionsCount,
+        sellerWrongPredictions: a.seller.auctionsWithWrongPredictionsCount,
       };
     });
   }, [auctions]);
@@ -183,8 +187,8 @@ export function AuctionList({ className }: AuctionListProps) {
               href={`/auction/${auction.auctionId}`}
               privateBid={getBid(auction.auctionId)}
               isOwnAuction={
-                !!seller?.address &&
-                seller.address.toLowerCase() ===
+                !!seller?.id &&
+                seller.id.toLowerCase() ===
                   auction.sellerAddress.toLowerCase()
               }
             />
@@ -207,9 +211,7 @@ export function AuctionList({ className }: AuctionListProps) {
                 onClick={handlePrevious}
                 aria-disabled={page === 0}
                 className={
-                  page === 0
-                    ? "pointer-events-none opacity-50"
-                    : undefined
+                  page === 0 ? "pointer-events-none opacity-50" : undefined
                 }
               />
             </PaginationItem>
