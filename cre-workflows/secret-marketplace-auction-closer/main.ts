@@ -5,6 +5,9 @@ import { closeAuction } from "./close";
 import { settleWinningBids } from "./supabase";
 import { sendNotification } from "./notify";
 
+const FRONTEND_URL = "https://insider-streams-insider-streams-fro.vercel.app";
+const ETHERSCAN_URL = "https://sepolia.etherscan.io/tx";
+
 /**
  * Cron handler — fires on schedule, checks for expired auctions, closes them,
  * then settles winning bids in Supabase.
@@ -37,7 +40,7 @@ const onCronTrigger = (runtime: Runtime<Config>, payload: CronPayload): string =
         closedAuctionIds.push(auction.auctionId.toString());
         lastTxHash = txHash;
         const bidUsdc = (Number(auction.currentBid) / 1e6).toFixed(2);
-        results.push(`Auction ${auction.auctionId} (event ${auction.eventId}, bid ${bidUsdc} USDC): closed`);
+        results.push(`Auction ${auction.auctionId} (event ${auction.eventId}, bid ${bidUsdc} USDC): closed\n  ${FRONTEND_URL}/auction/${auction.auctionId}`);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         runtime.log(`Failed to close auction ${auction.auctionId}: ${msg}`);
@@ -60,7 +63,7 @@ const onCronTrigger = (runtime: Runtime<Config>, payload: CronPayload): string =
 
     const summary = results.join("\n");
     runtime.log(summary);
-    const etherscanUrl = lastTxHash ? `https://sepolia.etherscan.io/tx/${lastTxHash}` : undefined;
+    const etherscanUrl = lastTxHash ? `${ETHERSCAN_URL}/${lastTxHash}` : undefined;
     sendNotification(runtime, `Auctions Closed: ${closedAuctionIds.length}`, summary, etherscanUrl);
     return summary;
   } catch (err) {

@@ -5,6 +5,9 @@ import { fetchSecretsForAuctions, type SecretWithPrediction } from "./supabase";
 import { submitResolveReport, type AuctionResultTuple } from "./resolve";
 import { sendNotification } from "./notify";
 
+const FRONTEND_URL = "https://insider-streams-insider-streams-fro.vercel.app";
+const ETHERSCAN_URL = "https://sepolia.etherscan.io/tx";
+
 /**
  * Handler — checks for settled but unresolved events, fetches secrets from
  * Supabase, compares predictions to actual outcomes, and submits per-auction
@@ -69,7 +72,7 @@ const onTrigger = (runtime: Runtime<Config>): string => {
         runtime.log(
           `Auction ${auctionId}: predicted=${sellerPrediction}, actual=${actualLabel}, outcome=${outcomeLabel}`,
         );
-        auctionDetails.push(`  Auction ${auctionId}: predicted=${sellerPrediction}, actual=${actualLabel} → ${outcomeLabel}`);
+        auctionDetails.push(`  Auction ${auctionId}: predicted=${sellerPrediction}, actual=${actualLabel} → ${outcomeLabel}\n    ${FRONTEND_URL}/auction/${auctionId}`);
 
         results.push({ auctionId, predictionOutcome });
       }
@@ -90,7 +93,7 @@ const onTrigger = (runtime: Runtime<Config>): string => {
 
     const summary = resultMessages.join("\n");
     runtime.log(summary);
-    const etherscanUrl = lastTxHash ? `https://sepolia.etherscan.io/tx/${lastTxHash}` : undefined;
+    const etherscanUrl = lastTxHash ? `${ETHERSCAN_URL}/${lastTxHash}` : undefined;
     sendNotification(runtime, `Reputation Resolved: ${settledEvents.length} event(s)`, summary, etherscanUrl);
     return summary;
   } catch (err) {
