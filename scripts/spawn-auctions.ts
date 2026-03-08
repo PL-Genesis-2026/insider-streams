@@ -261,7 +261,7 @@ async function runCycle(client: GraphQLClient, accounts: Hex[]): Promise<void> {
 const accounts = getTestAccounts();
 if (accounts.length === 0) {
   console.error(
-    "[spawn-auctions] no test accounts found — set TESTER_PK_1 through TESTER_PK_10 in scripts/.env",
+    "[spawn-auctions] no test accounts found — set TEST_ACCOUNT_1 through TEST_ACCOUNT_25 in scripts/.env",
   );
   process.exit(1);
 }
