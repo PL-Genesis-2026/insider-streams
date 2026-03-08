@@ -23,12 +23,55 @@ export default function EventDetailPage({ params }: { params: Params }) {
   const [settleError, setSettleError] = useState<string | null>(null);
   const [settleTxHash, setSettleTxHash] = useState<string | null>(null);
 
+  const [adminClosing, setAdminClosing] = useState(false);
+  const [adminCloseError, setAdminCloseError] = useState<string | null>(null);
+  const [adminCloseTxHash, setAdminCloseTxHash] = useState<string | null>(null);
+  // Track when we've just admin-closed so the settle button appears immediately
+  // (subgraph eventClose is immutable and won't reflect the on-chain change)
+  const [adminJustClosed, setAdminJustClosed] = useState(false);
+
+  const eventStillOpen =
+    Number(event?.eventClose) > 0 &&
+    Date.now() < Number(event?.eventClose) * 1000;
+
+  const canAdminClose =
+    event &&
+    !settlement &&
+    !settlementRequest &&
+    !adminJustClosed &&
+    eventStillOpen;
+
   const canSettle =
     event &&
     !settlement &&
     !settlementRequest &&
     Number(event.eventClose) > 0 &&
-    Date.now() > Number(event.eventClose) * 1000;
+    (adminJustClosed || Date.now() > Number(event.eventClose) * 1000);
+
+  const handleAdminClose = useCallback(async () => {
+    setAdminClosing(true);
+    setAdminCloseError(null);
+    setAdminCloseTxHash(null);
+    try {
+      const res = await fetch("/api/admin-close-event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ eventId }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setAdminCloseError(json.error ?? "Request failed");
+      } else {
+        setAdminCloseTxHash(json.hash);
+        setAdminJustClosed(true);
+        refetch();
+      }
+    } catch {
+      setAdminCloseError("Network error");
+    } finally {
+      setAdminClosing(false);
+    }
+  }, [eventId, refetch]);
 
   const handleSettle = useCallback(async () => {
     setSettling(true);
@@ -86,6 +129,36 @@ export default function EventDetailPage({ params }: { params: Params }) {
       {event && (
         <div className="space-y-6">
           <EventCard event={event} settlement={settlement} />
+
+          {/* Admin close action (debug) */}
+          {canAdminClose && (
+            <div className="rounded-lg border border-orange-500/30 bg-orange-500/10 p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-medium text-orange-300">Debug: Admin Close Event</div>
+                  <div className="text-xs text-orange-400/70 mt-0.5">
+                    Sets eventClose to now so settlement can proceed immediately.
+                  </div>
+                </div>
+                <button
+                  onClick={handleAdminClose}
+                  disabled={adminClosing}
+                  className="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {adminClosing ? "Closing..." : "Admin Close"}
+                </button>
+              </div>
+              {adminCloseError && (
+                <div className="mt-2 text-xs text-red-400">{adminCloseError}</div>
+              )}
+              {adminCloseTxHash && (
+                <div className="mt-2 text-xs text-green-400">
+                  Event closed! Tx:{" "}
+                  <span className="font-mono">{adminCloseTxHash}</span>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Settle action */}
           {canSettle && (
