@@ -19,13 +19,17 @@ import { ConnectWalletButton } from "@/components/wallet/connect-wallet-button";
 import { SwitchNetworkButton } from "@/components/wallet/switch-network-button";
 import { formatAddress } from "@/lib/wallet/format-address";
 import { useFundingSnapshot } from "@/lib/funding/use-funding-snapshot";
+import { usePrivateData } from "@/lib/private-data/use-private-data";
 import { useWalletSession } from "@/lib/wallet/use-wallet-session";
 
 export function WalletAccountControl() {
   const fundingSnapshot = useFundingSnapshot();
   const walletSession = useWalletSession();
   const { disconnect } = useDisconnect();
-  const displayBalance = getDisplayFundingBalance(fundingSnapshot.balance);
+  const { isRevealed } = usePrivateData();
+  const displayBalance = isRevealed
+    ? getDisplayFundingBalance(fundingSnapshot.balance)
+    : null;
 
   if (!walletSession.isConnected || !walletSession.address) {
     return <ConnectWalletButton size="sm" variant="outline" />;
