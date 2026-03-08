@@ -21,6 +21,13 @@ type ReconcileFundingResult = FundingServerSnapshot & {
   reconciledCount: number;
   scannedCount: number;
 };
+type WithdrawFundingResult = FundingServerSnapshot & {
+  transactionId: string;
+};
+type FinalizeWithdrawFundingResult = FundingServerSnapshot & {
+  transactionId: string;
+  withdrawalId: string;
+};
 
 function toRawTransactionJson(transaction: PrivateTokenTransaction) {
   return {
@@ -71,6 +78,19 @@ function getPlatformRecipientAddress() {
   }
 
   return privateKeyToAccount(privateKey).address;
+}
+
+function validateRawAmount(amount: string) {
+  if (!/^\d+$/.test(amount)) {
+    throw new Error("Withdrawal amount must be a base-unit integer string.");
+  }
+
+  const parsed = BigInt(amount);
+  if (parsed <= BigInt(0)) {
+    throw new Error("Withdrawal amount must be greater than zero.");
+  }
+
+  return parsed;
 }
 
 function mapTransactionToTransferInsert(
@@ -201,5 +221,166 @@ export async function reconcileFundingServerSnapshot(
     ...snapshot,
     reconciledCount,
     scannedCount: transactions.length,
+  };
+}
+
+export async function requestFundingWithdrawal(
+  address: string,
+  amount: string,
+): Promise<WithdrawFundingResult> {
+  const normalizedAddress = toCanonicalAddress(address);
+  const amountRaw = validateRawAmount(amount);
+  const ownerPrivateKey = getOwnerPrivateKey();
+  const ownerAddress = privateKeyToAccount(ownerPrivateKey).address;
+  const supabase = getSupabaseServiceClient();
+
+  const { data: balanceRow, error: balanceError } = await supabase
+    .from("balances")
+    .select(
+      "available_balance, locked_balance, pending_withdrawal, total_from_won_bids, user_address",
+    )
+    .eq("user_address", normalizedAddress)
+    .maybeSingle();
+
+  if (balanceError) {
+    throw new Error(
+      `Failed to read funding balance for ${normalizedAddress}: ${balanceError.message}`,
+    );
+  }
+
+  const availableBalance = balanceRow?.available_balance
+    ? BigInt(balanceRow.available_balance)
+    : BigInt(0);
+
+  if (availableBalance < amountRaw) {
+    throw new Error("Withdrawal amount exceeds available balance.");
+  }
+
+  const privateTokenClient = new PrivateTokenApiClient(ownerPrivateKey);
+  const transfer = await privateTokenClient.privateTransfer({
+    recipient: normalizedAddress,
+    token: PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
+    amount,
+  });
+
+  const completedAt = new Date().toISOString();
+  const transferRow: TransferInsert = {
+    transaction_id: transfer.transaction_id,
+    user_address: normalizedAddress,
+    sender_address: toCanonicalAddress(ownerAddress),
+    recipient_address: normalizedAddress,
+    token_address: toCanonicalAddress(PRIVATE_CONFIDENTIAL_USDC_ADDRESS),
+    amount,
+    status: "transferring",
+    raw_data: {
+      id: transfer.transaction_id,
+      type: "transfer",
+      account: ownerAddress,
+      sender: ownerAddress,
+      recipient: normalizedAddress,
+      token: PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
+      amount,
+      is_incoming: false,
+      private_transfer_completed_at: completedAt,
+      public_withdrawal_state: "awaiting_wallet_signature",
+      source: "nextjs-withdraw-route",
+    },
+  };
+
+  const { error: insertError } = await supabase
+    .from("transfers")
+    .upsert(transferRow, {
+      onConflict: "transaction_id",
+      ignoreDuplicates: false,
+    });
+
+  if (insertError) {
+    throw new Error(
+      `Withdrawal transfer succeeded but recording it failed: ${insertError.message}`,
+    );
+  }
+
+  const snapshot = await getFundingServerSnapshot(normalizedAddress);
+
+  return {
+    ...snapshot,
+    transactionId: transfer.transaction_id,
+  };
+}
+
+export async function finalizeFundingWithdrawal(
+  address: string,
+  input: {
+    amount: string;
+    transactionId: string;
+    withdrawalId: string;
+    ticket: string;
+    deadline: number;
+  },
+): Promise<FinalizeWithdrawFundingResult> {
+  const normalizedAddress = toCanonicalAddress(address);
+  const amountRaw = validateRawAmount(input.amount);
+  const supabase = getSupabaseServiceClient();
+
+  const { data: transferRow, error: transferError } = await supabase
+    .from("transfers")
+    .select("amount, raw_data, status, transaction_id, user_address")
+    .eq("transaction_id", input.transactionId)
+    .eq("user_address", normalizedAddress)
+    .maybeSingle();
+
+  if (transferError) {
+    throw new Error(
+      `Failed to read withdrawal transfer for ${normalizedAddress}: ${transferError.message}`,
+    );
+  }
+
+  if (!transferRow) {
+    throw new Error("Withdrawal transfer could not be found.");
+  }
+
+  if (BigInt(transferRow.amount) !== amountRaw) {
+    throw new Error("Withdrawal amount does not match the recorded transfer.");
+  }
+
+  const completedAt = new Date().toISOString();
+  const rawData =
+    transferRow.raw_data &&
+    typeof transferRow.raw_data === "object" &&
+    !Array.isArray(transferRow.raw_data)
+      ? transferRow.raw_data
+      : {};
+
+  const { error: updateError } = await supabase
+    .from("transfers")
+    .update({
+      status: "completed",
+      completed_at: completedAt,
+      raw_data: {
+        ...rawData,
+        public_withdrawal_state: "submitted",
+        withdrawal: {
+          id: input.withdrawalId,
+          ticket: input.ticket,
+          deadline: input.deadline,
+          submitted_at: completedAt,
+        },
+      },
+    })
+    .eq("transaction_id", input.transactionId)
+    .eq("user_address", normalizedAddress);
+
+  if (updateError) {
+    throw new Error(
+      `Private withdrawal succeeded but recording completion failed: ${updateError.message}`,
+    );
+  }
+
+  const snapshot = await getFundingServerSnapshot(normalizedAddress);
+
+  return {
+    ...snapshot,
+    transactionId: input.transactionId,
+    withdrawalId: input.withdrawalId,
   };
 }
