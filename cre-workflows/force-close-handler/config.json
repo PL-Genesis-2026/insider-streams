@@ -2,7 +2,7 @@
   "supabaseUrl": "https://jeyudbkttazpifxvzqvq.supabase.co",
   "evms": [
     {
-      "secretMarketplaceAddress": "0x6420943F07c8427C4E6f27BDa09cB711e8BB2A93",
+      "secretMarketplaceAddress": "0x1f903548234b15C4d955Cce79beaaC853A98C514",
       "chainSelectorName": "ethereum-testnet-sepolia"
     }
   ]
