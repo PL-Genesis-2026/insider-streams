@@ -1,5 +1,5 @@
 /**
- * Shared CRE CLI runner — used by both the event watcher and E2E tests.
+ * CRE CLI runner — invokes `cre workflow simulate` for a given workflow.
  */
 
 import { execSync } from "child_process";
@@ -9,7 +9,7 @@ import type { Hex } from "viem";
 
 const __filename_ = fileURLToPath(import.meta.url);
 const __dirname_ = dirname(__filename_);
-const PROJECT_ROOT = resolve(__dirname_, "../..");
+const PROJECT_ROOT = resolve(__dirname_, "../../..");
 const CRE_BIN = `${process.env.HOME}/.cre/bin/cre`;
 
 export function runCRE(opts: {

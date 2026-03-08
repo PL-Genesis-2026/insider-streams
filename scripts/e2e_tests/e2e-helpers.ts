@@ -414,4 +414,4 @@ export async function setupSupabaseAuctionBid(
 
 // ─── CRE CLI helper ─────────────────────────────────────────────────────────
 
-export { runCRE } from "../event-watcher/cre-runner.js";
+export { runCRE } from "../cre-runner.js";

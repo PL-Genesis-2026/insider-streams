@@ -1,6 +1,6 @@
 /**
  * Auction-expiry watcher — polls getOpenAuctions() for expired auctions
- * and triggers the secret-marketplace-auction-closer CRE workflow.
+ * and triggers the secret-marketplace-auction-closer CRE workflow to update the status when detected
  */
 
 import type { PublicClient } from "viem";
@@ -10,6 +10,7 @@ import {
 } from "@private-streams/common";
 import { runCRE } from "./cre-runner.js";
 import { log } from "./index.js";
+import { notify } from "./notify.js";
 
 let isRunning = false;
 
@@ -66,8 +67,10 @@ export async function pollExpiredAuctions(
         broadcast: true,
       });
       log("auction-expiry", "CRE secret-marketplace-auction-closer completed");
+      await notify("Auction expired — CRE done", `Expired auction detected, auction-closer broadcast`, ["white_check_mark"]);
     } catch (err) {
       log("auction-expiry", `CRE secret-marketplace-auction-closer FAILED: ${err}`);
+      await notify("Auction expired — CRE FAILED", `${err}`, ["x"]);
     }
   } finally {
     isRunning = false;
