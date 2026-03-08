@@ -1,5 +1,10 @@
 import { z } from "zod";
-import type { FundingReconcileResponse, FundingServerSnapshot } from "./types";
+import type {
+  FundingFinalizeWithdrawalResponse,
+  FundingReconcileResponse,
+  FundingServerSnapshot,
+  FundingWithdrawResponse,
+} from "./types";
 import type { SignedWalletSession } from "@/lib/wallet/use-signed-wallet-session";
 
 type JsonValue =
@@ -61,6 +66,17 @@ const fundingReconcileResponseSchema = z.object({
   scannedCount: z.number(),
 });
 
+const fundingWithdrawResponseSchema = z.object({
+  data: fundingServerSnapshotSchema,
+  transactionId: z.string(),
+});
+
+const fundingFinalizeWithdrawalResponseSchema = z.object({
+  data: fundingServerSnapshotSchema,
+  transactionId: z.string(),
+  withdrawalId: z.string(),
+});
+
 const apiErrorSchema = z.object({
   error: z.string(),
   error_details: z.string().optional(),
@@ -115,4 +131,48 @@ export async function reconcileFunding(
   }
 
   return fundingReconcileResponseSchema.parse(await response.json());
+}
+
+export async function requestFundingWithdrawal(payload: {
+  amount: string;
+  timestamp: number;
+  signature: string;
+}): Promise<FundingWithdrawResponse> {
+  const response = await fetch("/api/funding/withdraw", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response));
+  }
+
+  return fundingWithdrawResponseSchema.parse(await response.json());
+}
+
+export async function finalizeFundingWithdrawal(payload: {
+  amount: string;
+  transactionId: string;
+  withdrawalId: string;
+  ticket: string;
+  deadline: number;
+  timestamp: number;
+  signature: string;
+}): Promise<FundingFinalizeWithdrawalResponse> {
+  const response = await fetch("/api/funding/withdraw/finalize", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response));
+  }
+
+  return fundingFinalizeWithdrawalResponseSchema.parse(await response.json());
 }

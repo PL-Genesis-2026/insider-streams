@@ -1,5 +1,5 @@
-import { FundingPageContent } from "@/components/funding/funding-page-content";
+import { redirect } from "next/navigation";
 
 export default function FundingPage() {
-  return <FundingPageContent />;
+  redirect("/dashboard#wallet");
 }
