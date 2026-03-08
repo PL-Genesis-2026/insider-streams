@@ -21,7 +21,7 @@ export async function notify(
       body: message,
       signal: AbortSignal.timeout(5000),
     });
-  } catch {
-    // Intentionally ignored — notifications are best-effort
+  } catch (err) {
+    console.error(`[ntfy] Failed to send notification: ${err}`);
   }
 }
