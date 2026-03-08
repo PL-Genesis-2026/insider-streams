@@ -17,8 +17,8 @@ private-streams/
 ├── cre-workflows/                   # CRE TypeScript workflows (Bun-managed)
 │   ├── external-prediction-market-settler/      # Gemini AI settlement workflow
 │   ├── secret-marketplace-auction-closer/             # Cron-based auction closer workflow
-│   ├── reputation-resolver/       # Cron-based per-auction reputation resolution workflow
-│   ├── force-close-handler/       # Log-triggered bid refund on AuctionCancelled
+│   ├── external-marketplace-settlement-resolved-handler/  # Cron-based per-auction reputation resolution workflow
+│   ├── auction-cancelled-handler/ # Log-triggered bid refund on AuctionCancelled
 │   └── user-balance-recording-fallback/         # Cron-based private token deposit/withdrawal reconciler
 ├── subgraphs/secrets-marketplace/   # The Graph subgraph
 ├── scripts/                         # E2E test scripts and utilities
@@ -26,8 +26,8 @@ private-streams/
 │   │   ├── simple-market-e2e.ts         # ExamplePredictionMarket + CRE settlement E2E
 │   │   ├── secret-marketplace-auction-closer-e2e.ts        # Auction closer CRE workflow E2E
 │   │   ├── secret-marketplace-e2e.ts    # SecretMarketplace full event lifecycle E2E
-│   │   ├── reputation-resolver-e2e.ts   # Reputation resolver CRE workflow E2E
-│   │   ├── force-close-handler-e2e.ts   # Force close handler CRE workflow E2E
+│   │   ├── external-marketplace-settlement-resolved-handler-e2e.ts  # Settlement resolved handler CRE workflow E2E
+│   │   ├── auction-cancelled-handler-e2e.ts   # Auction cancelled handler CRE workflow E2E
 │   │   └── user-balance-recording-fallback-e2e.ts    # Deposit reconciler workflow E2E
 │   ├── cre-runner.ts                # Shared runCRE helper (used by E2E tests)
 │   ├── generate-contract-types.sh   # Compile contracts + regenerate types/ABIs
@@ -123,12 +123,12 @@ cre workflow simulate external-prediction-market-settler --target local-simulati
 cre workflow simulate secret-marketplace-auction-closer --target local-simulation --non-interactive --trigger-index 0
 cre workflow simulate secret-marketplace-auction-closer --target local-simulation --non-interactive --trigger-index 0 --broadcast
 
-# Reputation Resolver (cron-triggered, non-interactive)
-cre workflow simulate reputation-resolver --target local-simulation --non-interactive --trigger-index 0
-cre workflow simulate reputation-resolver --target local-simulation --non-interactive --trigger-index 0 --broadcast
+# Settlement Resolved Handler (cron-triggered, non-interactive)
+cre workflow simulate external-marketplace-settlement-resolved-handler --target local-simulation --non-interactive --trigger-index 0
+cre workflow simulate external-marketplace-settlement-resolved-handler --target local-simulation --non-interactive --trigger-index 0 --broadcast
 
-# Force Close Handler (log-triggered, non-interactive)
-cre workflow simulate force-close-handler --target local-simulation --non-interactive --trigger-index 0 \
+# Auction Cancelled Handler (log-triggered, non-interactive)
+cre workflow simulate auction-cancelled-handler --target local-simulation --non-interactive --trigger-index 0 \
   --evm-tx-hash <TX_HASH> --evm-event-index <EVENT_INDEX>
 
 # Deposit Reconciler (cron-triggered, non-interactive)
@@ -145,8 +145,9 @@ pnpm start                           # from apps/event-watcher/
 ```
 
 Watches for:
-- `AuctionCancelled` events → triggers `force-close-handler`
+- `AuctionCancelled` events → triggers `auction-cancelled-handler`
 - `SettlementRequested` events → triggers `external-prediction-market-settler`
+- `SettlementResponse` events → triggers `external-marketplace-settlement-resolved-handler`
 - Expired auctions (via `getOpenAuctions()`) → triggers `secret-marketplace-auction-closer`
 
 Deployed as a systemd service (`event-watcher.service`) on the remote server.
@@ -159,8 +160,8 @@ All E2E scripts are TypeScript and run via `tsx` with `--env-file=.env` from the
 pnpm e2e:secret-marketplace                      # SecretMarketplace full event lifecycle
 pnpm e2e:external-prediction-market-settler                # ExamplePredictionMarket + CRE settlement lifecycle
 pnpm e2e:secret-marketplace-auction-closer       # Auction create → bid → expire → CRE close
-pnpm e2e:reputation-resolver                     # Reputation resolver — per-auction reputation after event settlement
-pnpm e2e:force-close-handler                     # Force close handler — bid refund on AuctionCancelled
+pnpm e2e:external-marketplace-settlement-resolved-handler  # Settlement resolved handler — per-auction reputation after event settlement
+pnpm e2e:auction-cancelled-handler               # Auction cancelled handler — bid refund on AuctionCancelled
 pnpm e2e:user-balance-recording-fallback         # Deposit reconciler workflow
 ```
 
@@ -294,8 +295,8 @@ The deploy script replaces addresses automatically, but you should verify no sta
 | File                                               | Fields                               |
 | -------------------------------------------------- | ------------------------------------ |
 | `cre-workflows/secret-marketplace-auction-closer/config.json`         | `secretMarketplaceAddress`           |
-| `cre-workflows/reputation-resolver/config.json`    | `secretMarketplaceAddress`, `examplePredictionMarketAddress` |
-| `cre-workflows/force-close-handler/config.json`    | `secretMarketplaceAddress`           |
+| `cre-workflows/external-marketplace-settlement-resolved-handler/config.json` | `secretMarketplaceAddress`, `examplePredictionMarketAddress` |
+| `cre-workflows/auction-cancelled-handler/config.json` | `secretMarketplaceAddress`           |
 | `cre-workflows/external-prediction-market-settler/config.json` | `simpleMarketAddress`                |
 | `cre-workflows/user-balance-recording-fallback/config.json`     | `tokenAddress`, `platformEoaAddress` |
 
@@ -355,7 +356,7 @@ This updates the generated GraphQL types in the frontend, scripts, and CRE workf
 | `contracts/.env`                             | `PRIVATE_KEY`, `RPC_URL` for Foundry scripts            |
 | `cre-workflows/.env`                         | CRE private key, Gemini key, Firebase keys              |
 | `scripts/.env`                               | `OWNER_PK`, `BIDDER_PK`, `RPC_URL` for E2E test scripts |
-| `apps/event-watcher/.env`                    | `RPC_URL` for the event watcher                         |
+| `apps/event-watcher/.env`                    | `RPC_URL`, `NTFY_USER`, `NTFY_HOST` for the event watcher |
 | `apps/prediction-market-frontend/.env.local` | `NEXT_PUBLIC_FIREBASE_*` vars                           |
 | `apps/insider-streams-frontend/.env.local`   | `NEXT_PUBLIC_SUBGRAPH_URL`                              |
 
@@ -381,11 +382,11 @@ After deploying, follow the full procedure in **"After a Contract Deployment"** 
 - Settlement data is also written to Firestore for the frontend
 - **Secret-marketplace-auction-closer CRE workflow** runs on a 30-second cron, reads `getOpenAuctions()` and `getAuction(id)` to find expired auctions, then submits a signed report with `ACTION_CLOSE_AUCTION` (0x00) to close them
 - `closeAuction()` keeps funds in contract; admin withdraws via `withdrawFunds()`
-- **Reputation-resolver CRE workflow** runs on a 60-second cron (also supports REST trigger for E2E), reads `getUnresolvedEvents()` from SecretMarketplace, checks if each event is settled on ExamplePredictionMarket, fetches seller predictions from Supabase `secrets.event_data`, compares predictions to actual outcomes, and submits per-auction reputation results via `ACTION_RECORD_EVENT_OUTCOME` (0x02). Each `AuctionResult` contains a `PredictionOutcome` enum (NoPrediction=0, PredictionCorrect=1, PredictionWrong=2). Correct predictions get +1 rep, incorrect get -1, omitted get 0 (still marked resolved). Uses 1 HTTP call (Supabase GET) + EVM reads (free).
-- **Force-close-handler CRE workflow** is log-triggered on `AuctionCancelled` events. When an auction is cancelled, it finds active private bids in Supabase for that auction and refunds them (sets `status="refunded"`, `refunded_at=now`). Uses 2 HTTP calls (Supabase GET + PATCH). No on-chain writes.
+- **External-marketplace-settlement-resolved-handler CRE workflow** runs on a 60-second cron (also supports REST trigger for E2E), reads `getUnresolvedEvents()` from SecretMarketplace, checks if each event is settled on ExamplePredictionMarket, fetches seller predictions from Supabase `secrets.event_data`, compares predictions to actual outcomes, and submits per-auction reputation results via `ACTION_RECORD_EVENT_OUTCOME` (0x02). Each `AuctionResult` contains a `PredictionOutcome` enum (NoPrediction=0, PredictionCorrect=1, PredictionWrong=2). Correct predictions get +1 rep, incorrect get -1, omitted get 0 (still marked resolved). Uses 1 HTTP call (Supabase GET) + EVM reads (free).
+- **Auction-cancelled-handler CRE workflow** is log-triggered on `AuctionCancelled` events. When an auction is cancelled, it finds active private bids in Supabase for that auction and refunds them (sets `status="refunded"`, `refunded_at=now`). Uses 2 HTTP calls (Supabase GET + PATCH). No on-chain writes.
 - **User-balance-recording-fallback CRE workflow** runs on a 60-second cron, polls the Private Token API for transfers to/from the platform EOA, and records them as deposits or withdrawals in the Supabase `transfers` table
 - `recordEventOutcomeAndUpdateRepScore(eventId, AuctionResult[])` accepts per-auction prediction outcomes — each `AuctionResult` has `{auctionId, predictionOutcome}` where `predictionOutcome` is a `PredictionOutcome` enum (NoPrediction=0, PredictionCorrect=1, PredictionWrong=2). Auctions not in the results array get NoPrediction (0 score change, still marked resolved).
-- **Event watcher** (`apps/event-watcher/`) is a long-running Node.js process that subscribes to `AuctionCancelled` and `SettlementRequested` events via WebSocket, and polls for expired auctions every 30s via HTTP. On startup, catches up missed blocks using `getLogs`. Triggers the appropriate CRE workflows via `cre workflow simulate`. Only needed for simulation — deployed CRE workflows on the Chainlink DON handle event monitoring automatically. Deployed as a systemd service on the remote server. Persists last-processed block to `.watcher-state.json`.
+- **Event watcher** (`apps/event-watcher/`) is a long-running Node.js process that subscribes to `AuctionCancelled`, `SettlementRequested`, and `SettlementResponse` events via WebSocket, and polls for expired auctions every 30s via HTTP. On startup, catches up missed blocks using `getLogs`. Triggers the appropriate CRE workflows via `cre workflow simulate`. Only needed for simulation — deployed CRE workflows on the Chainlink DON handle event monitoring automatically. Deployed as a systemd service on the remote server. Persists last-processed block to `.watcher-state.json`.
 - CRE CLI installed at `~/.cre/bin/cre` (add to PATH: `export PATH="$HOME/.cre/bin:$PATH"`)
 
 ## Reference Docs

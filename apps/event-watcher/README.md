@@ -12,14 +12,15 @@ However, **simulated CRE workflows (`cre workflow simulate`) are one-shot proces
 
 | Watcher | Trigger | CRE Workflow | Transport |
 |---------|---------|-------------|-----------|
-| Force close | `AuctionCancelled` event on SecretMarketplace | `force-close-handler` | WebSocket |
-| Settlement | `SettlementRequested` event on ExamplePredictionMarket | `external-prediction-market-settler` | WebSocket |
-| Auction expiry | `getOpenAuctions()` contract read (no event emitted for expiry) | `secret-marketplace-auction-closer` | HTTP poll (30s) |
+| Auction cancelled | `AuctionCancelled` event on SecretMarketplace | `auction-cancelled-handler` | WebSocket |
+| Settlement requested | `SettlementRequested` event on ExamplePredictionMarket | `external-prediction-market-settler` | WebSocket |
+| Settlement response | `SettlementResponse` event on ExamplePredictionMarket | `external-marketplace-settlement-resolved-handler` | WebSocket |
+| Auction closed | `getOpenAuctions()` contract read (no event emitted for expiry) | `secret-marketplace-auction-closer` | HTTP poll (30s) |
 
 ## How it works
 
 1. **Startup catch-up**: Loads last-processed block from `.watcher-state.json`, replays any missed events using `getLogs` over HTTP
-2. **Real-time subscriptions**: Opens WebSocket connections for `AuctionCancelled` and `SettlementRequested` events
+2. **Real-time subscriptions**: Opens WebSocket connections for `AuctionCancelled`, `SettlementRequested`, and `SettlementResponse` events
 3. **Polling**: Checks for expired auctions every 30 seconds via HTTP (`getOpenAuctions()` + `getAuction()`)
 4. **CRE invocation**: When an event is detected, runs `cre workflow simulate` with the relevant tx hash and event index
 
@@ -40,12 +41,12 @@ Reads from `.env` in this directory (or inherits from parent).
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `RPC_URL` | `https://ethereum-sepolia-rpc.publicnode.com` | Ethereum Sepolia RPC endpoint |
-| `NTFY_URL` | `http://localhost:8090` | [ntfy](https://ntfy.sh) server URL for push notifications |
-| `NTFY_TOPIC` | `event-watcher` | ntfy topic to publish to |
+| `NTFY_USER` | `UNKNOWN` | Identifier for the sender (e.g. `ad0ll`, `vps`). Prefixed to all notifications so recipients know which instance sent them. |
+| `NTFY_HOST` | `http://localhost:8090` | [ntfy](https://ntfy.sh) server base URL for push notifications |
 
 ## Notifications
 
-Sends best-effort push notifications to an [ntfy](https://ntfy.sh) server when events are received and CRE workflows complete (or fail). Notification failures are silently ignored. Subscribe at `http://<server>:8090/event-watcher` or via the ntfy app.
+Sends best-effort push notifications to an [ntfy](https://ntfy.sh) server when events are received and CRE workflows complete (or fail). All messages are prefixed with `[NTFY_USER]` so you can tell which instance (local dev vs VPS) triggered the notification. Notification failures are silently ignored. Subscribe at `http://195.201.8.147:8090/event-watcher` or via the ntfy app.
 
 ## Deployment
 

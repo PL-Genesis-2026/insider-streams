@@ -1,7 +1,11 @@
 /**
- * Settlement watcher — subscribes to SettlementRequested events via WebSocket
- * and triggers the external-prediction-market-settler CRE workflow.
- * Note: The external-prediction-market-scheduler CRE is also invoked directly by cron on the VPS in case this misses something
+ * Settlement-response watcher — subscribes to SettlementResponse events via
+ * WebSocket and triggers the external-marketplace-settlement-resolved-handler
+ * CRE workflow to resolve per-auction reputation immediately instead of
+ * waiting for its 60s cron.
+ *
+ * The CRE workflow is cron-triggered, so we invoke it without a tx hash
+ * (same pattern as auction-closed triggering auction-closer).
  *
  * On startup, catches up from lastProcessedBlock using getLogs, then switches
  * to real-time WebSocket subscription.
@@ -31,7 +35,6 @@ function trimDedup(): void {
 }
 
 async function handleEvent(
-  publicClient: PublicClient,
   txHash: `0x${string}`,
   logIndex: number,
   eventId: bigint | undefined,
@@ -40,27 +43,22 @@ async function handleEvent(
   const key = dedupKey(txHash, logIndex);
   if (processed.has(key)) return;
 
-  const receipt = await publicClient.getTransactionReceipt({ hash: txHash });
-  const eventIndex = receipt.logs.findIndex((l) => l.logIndex === logIndex);
-
   log(
-    "settlement",
-    `SettlementRequested eventId=${eventId} in block ${blockNumber} — txHash=${txHash.slice(0, 12)}... eventIndex=${eventIndex}`,
+    "settlement-response",
+    `SettlementResponse eventId=${eventId} in block ${blockNumber} — txHash=${txHash.slice(0, 12)}...`,
   );
 
   try {
     runCRE({
-      workflow: "external-prediction-market-settler",
+      workflow: "external-marketplace-settlement-resolved-handler",
       triggerIndex: 0,
-      evmTxHash: txHash,
-      evmEventIndex: eventIndex,
       broadcast: true,
     });
-    log("settlement", `CRE completed for event ${eventId}`);
-    await notify("SettlementRequested - CRE done", `Event ${eventId} settlement broadcast\nBlock ${blockNumber}\ntx ${txHash.slice(0, 16)}...`, ["white_check_mark"]);
+    log("settlement-response", `CRE completed for event ${eventId}`);
+    await notify("SettlementResponse - CRE done", `Event ${eventId} reputation resolution broadcast\nBlock ${blockNumber}\ntx ${txHash.slice(0, 16)}...`, ["white_check_mark"]);
   } catch (err) {
-    log("settlement", `CRE FAILED for event ${eventId}: ${err}`);
-    await notify("SettlementRequested - CRE FAILED", `Event ${eventId}\n${err}`, ["x"]);
+    log("settlement-response", `CRE FAILED for event ${eventId}: ${err}`);
+    await notify("SettlementResponse - CRE FAILED", `Event ${eventId}\n${err}`, ["x"]);
   }
 
   processed.add(key);
@@ -68,7 +66,7 @@ async function handleEvent(
 }
 
 /** Catch up on missed events since lastProcessedBlock using getLogs. */
-export async function catchUpSettlement(
+export async function catchUpSettlementResponse(
   publicClient: PublicClient,
   fromBlock: bigint,
   toBlock: bigint,
@@ -76,8 +74,8 @@ export async function catchUpSettlement(
   const logs = await publicClient.getLogs({
     address: EXAMPLE_PREDICTION_MARKET_ADDRESS,
     event: examplePredictionMarketAbi.find(
-      (e): e is Extract<typeof e, { type: "event"; name: "SettlementRequested" }> =>
-        e.type === "event" && e.name === "SettlementRequested",
+      (e): e is Extract<typeof e, { type: "event"; name: "SettlementResponse" }> =>
+        e.type === "event" && e.name === "SettlementResponse",
     )!,
     fromBlock,
     toBlock,
@@ -85,10 +83,9 @@ export async function catchUpSettlement(
 
   if (logs.length === 0) return;
 
-  log("settlement", `Catching up: ${logs.length} SettlementRequested event(s) in blocks ${fromBlock}-${toBlock}`);
+  log("settlement-response", `Catching up: ${logs.length} SettlementResponse event(s) in blocks ${fromBlock}-${toBlock}`);
   for (const entry of logs) {
     await handleEvent(
-      publicClient,
       entry.transactionHash,
       entry.logIndex,
       entry.args.eventId,
@@ -97,30 +94,29 @@ export async function catchUpSettlement(
   }
 }
 
-/** Subscribe to real-time SettlementRequested events via WebSocket. */
-export function watchSettlement(
+/** Subscribe to real-time SettlementResponse events via WebSocket. */
+export function watchSettlementResponse(
   wsClient: PublicClient,
   httpClient: PublicClient,
 ): WatchContractEventReturnType {
   return wsClient.watchContractEvent({
     address: EXAMPLE_PREDICTION_MARKET_ADDRESS,
     abi: examplePredictionMarketAbi,
-    eventName: "SettlementRequested",
+    eventName: "SettlementResponse",
     onLogs: (logs) => {
       for (const entry of logs) {
         handleEvent(
-          httpClient,
           entry.transactionHash,
           entry.logIndex,
           entry.args.eventId,
           entry.blockNumber,
         ).catch((err) => {
-          log("settlement", `Error handling event: ${err}`);
+          log("settlement-response", `Error handling event: ${err}`);
         });
       }
     },
     onError: (err) => {
-      log("settlement", `WebSocket subscription error: ${err.message}`);
+      log("settlement-response", `WebSocket subscription error: ${err.message}`);
     },
   });
 }

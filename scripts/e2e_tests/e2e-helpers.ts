@@ -6,8 +6,8 @@
  *   - user-balance-recording-fallback-e2e.ts
  *   - secret-marketplace-auction-closer-e2e.ts
  *   - simple-market-e2e.ts
- *   - reputation-resolver-e2e.ts
- *   - force-close-handler-e2e.ts
+ *   - external-marketplace-settlement-resolved-handler-e2e.ts
+ *   - auction-cancelled-handler-e2e.ts
  */
 
 import {
@@ -348,7 +348,7 @@ export async function readSimpleMarketAddress(
  * seller, secret, deposit transfer, and private bid.
  *
  * Use `skipDeposit: true` when the bidder already has a deposit from a prior call
- * (e.g., reputation-resolver's second auction).
+ * (e.g., settlement-resolved-handler's second auction).
  */
 export async function setupSupabaseAuctionBid(
   supabase: SupabaseClient<Database>,
