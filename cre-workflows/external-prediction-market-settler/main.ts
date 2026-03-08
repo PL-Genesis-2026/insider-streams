@@ -75,7 +75,8 @@ const onLogTrigger = (runtime: Runtime<Config>, log: EVMLog): string => {
     const firestoreResult: FirestoreWriteResponse = writeToFirestore(runtime, question, result, txHash);
     runtime.log(`Firestore Document: ${firestoreResult.name}`);
 
-    sendNotification(runtime, `Market Settled: Event ${eventId}`, `Outcome: ${result.geminiResponse}, tx: ${txHash.slice(0, 10)}...`);
+    const msg = `Event ${eventId}: "${question}"\nOutcome: ${result.geminiResponse}\ntx: ${txHash}`;
+    sendNotification(runtime, `Market Settled: Event ${eventId}`, msg, `https://sepolia.etherscan.io/tx/${txHash}`);
 
     return "Settlement Request Processed";
   } catch (err) {
