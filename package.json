@@ -14,6 +14,8 @@
     "dev:insider-streams": "turbo run dev --filter=insider-streams-frontend",
     "build:prediction-market": "turbo run build --filter=prediction-market-frontend",
     "build:insider-streams": "turbo run build --filter=insider-streams-frontend",
+    "frontend-api": "pnpm --dir scripts run frontend-api",
+    "private-token-api": "pnpm --dir scripts run private-token-api",
     "build:contracts": "cd contracts && forge build --via-ir --skip SetupAll DeployPolicyEngine",
     "test:contracts": "cd contracts && forge test --via-ir --skip SetupAll DeployPolicyEngine",
     "generate:supabase-types": "./scripts/generate-supabase-types.sh"
