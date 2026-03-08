@@ -215,7 +215,8 @@ export function BuyerDashboard() {
       !isRevealed ||
       !walletSession.address ||
       privateBalanceLookup !== undefined ||
-      isCheckingPrivateBalances
+      isCheckingPrivateBalances ||
+      privateBalancesError
     ) {
       return;
     }
@@ -225,6 +226,7 @@ export function BuyerDashboard() {
     isCheckingPrivateBalances,
     isRevealed,
     loadPrivateBalances,
+    privateBalancesError,
     privateBalanceLookup,
     walletSession.address,
   ]);
@@ -322,9 +324,9 @@ export function BuyerDashboard() {
 
   const activeAuction = useMemo(
     () =>
-      filteredAuctions.find((auction) => auction.auctionId === activeBidAuctionId) ??
+      auctions.find((auction) => auction.auctionId === activeBidAuctionId) ??
       null,
-    [activeBidAuctionId, filteredAuctions],
+    [activeBidAuctionId, auctions],
   );
 
   const walletAmounts = useMemo(
