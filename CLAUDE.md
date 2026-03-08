@@ -154,19 +154,28 @@ Deployed as a systemd service (`event-watcher.service`) on the remote server.
 
 ### Local Testing Helpers
 
-Two scripts for populating the marketplace with test data during development:
+Four scripts for populating the marketplace with test data during development. Run them all at once with the orchestrator:
 
 ```bash
-# Generate AI prediction market events + place random bets from test accounts
-pnpm create-events   # from scripts/
-
-# Long-running daemon — creates one auction per cycle (default 5 min) via /api/create-auction
-pnpm spawn-auctions  # from scripts/
+# Run everything together (recommended)
+pnpm run-demo    # from scripts/ — seeds events, then runs spawn-auctions + place-bids concurrently
 ```
 
-`create-events` requires `OWNER_PK`, `TEST_ACCOUNT_1..25`, `RPC_URL`, `VENICE_API_KEY` in `scripts/.env`. Reads the actual `paymentToken()` from the deployed contract at startup to avoid token address mismatches.
+Or run individually:
 
-`spawn-auctions` requires `TEST_ACCOUNT_1..25` and the frontend dev server running. Skips settled/expired events automatically. Override cycle frequency with `INTERVAL_MS` env var.
+```bash
+pnpm create-events   # one-shot: generate AI events + place random bets on the prediction market
+pnpm spawn-auctions  # daemon: create one auction per cycle (default 5 min) via /api/create-auction
+pnpm place-bids      # daemon: place one bid per cycle on open auctions (debug only — reads private Supabase data)
+```
+
+**`create-events`** — requires `OWNER_PK`, `TEST_ACCOUNT_1..25`, `RPC_URL`, `VENICE_API_KEY` in `scripts/.env`. Reads `paymentToken()` from the deployed contract at startup to avoid token address mismatches.
+
+**`spawn-auctions`** — requires `TEST_ACCOUNT_1..25` and the frontend dev server running. Skips settled/expired events automatically. Override cycle frequency with `INTERVAL_MS`.
+
+**`place-bids`** — requires `TEST_ACCOUNT_1..25`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`. Queries `private_bids` and `sellers` tables directly (debug only — this data is normally secret). Auto-tops up test accounts with synthetic Supabase deposits when balance drops below 100 USDC.
+
+**`run-demo`** — runs `create-events` once at startup, starts `spawn-auctions` and `place-bids` as daemons, then re-runs `create-events` every 30 min (override with `CREATE_EVENTS_INTERVAL_MS`). Ctrl+C kills all child processes cleanly.
 
 ### E2E Tests
 

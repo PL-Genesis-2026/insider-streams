@@ -1,0 +1,458 @@
+#!/usr/bin/env tsx
+/**
+ * place-bids.ts — Debug-only daemon that places bids on open auctions.
+ *
+ * ⚠️  DEBUG / DEMO USE ONLY ⚠️
+ * This script queries the Supabase `private_bids` and `sellers` tables directly
+ * to determine who created each auction and who the current highest bidder is.
+ * In production that information is intentionally secret. Only use this script
+ * to populate the app with test activity.
+ *
+ * Auto-funding: accounts with no balance or balance below LOW_BALANCE_THRESHOLD
+ * are automatically topped up by inserting a synthetic deposit directly into the
+ * Supabase `transfers` table (service role, bypasses RLS). No on-chain txs needed.
+ * This is intentionally fake — debug only.
+ *
+ * Flow (each cycle):
+ *   1. Top up any test accounts below the low-balance threshold.
+ *   2. Query subgraph for open auctions.
+ *   3. For each open auction, query Supabase for:
+ *        - Seller address (to exclude from bidding)
+ *        - Active bid (to determine current highest bidder + current bid amount)
+ *   4. Shuffle the open auctions and, for each one, try to find a test account
+ *      that is neither the seller nor the current highest bidder and has
+ *      sufficient Supabase balance. Place a bid on the first viable pairing.
+ *   5. Wait INTERVAL_MS and repeat.
+ *
+ * Env vars required (scripts/.env):
+ *   TEST_ACCOUNT_1..25        — private keys for bidding accounts
+ *   SUPABASE_URL              — Supabase project URL
+ *   SUPABASE_SERVICE_ROLE_KEY — Supabase service role key (bypasses RLS)
+ *
+ * Optional:
+ *   BASE_URL     — frontend origin (default: http://localhost:3000)
+ *   INTERVAL_MS  — cycle interval in ms (default: 300000 / 5 min)
+ */
+
+import stringify from "fast-json-stable-stringify";
+import { GraphQLClient, gql } from "graphql-request";
+import { createClient } from "@supabase/supabase-js";
+import { privateKeyToAccount } from "viem/accounts";
+import { createWalletClient, http, type Hex } from "viem";
+import { sepolia } from "viem/chains";
+import type { Database } from "@private-streams/common";
+
+// ---------------------------------------------------------------------------
+// Config
+// ---------------------------------------------------------------------------
+
+const SUBGRAPH_URL =
+  "https://api.studio.thegraph.com/query/1743303/insider-streams-2/version/latest";
+
+const BASE_URL =
+  process.env.FRONTEND_BASE_URL ??
+  process.env.BASE_URL ??
+  "http://localhost:3000";
+
+const INTERVAL_MS = process.env.INTERVAL_MS
+  ? parseInt(process.env.INTERVAL_MS, 10)
+  : 5 * 60 * 1000;
+
+const MIN_BID_INCREMENT = 10_000_000n;  // 10 USDC (6 decimals)
+const MAX_BID_INCREMENT = 50_000_000n;  // 50 USDC
+
+// Auto-funding thresholds (synthetic Supabase deposits, debug only)
+const LOW_BALANCE_THRESHOLD = 100_000_000n;   // 100 USDC — top up below this
+const TOP_UP_AMOUNT = 10_000_000_000n;         // 10,000 USDC per top-up
+const PRIVATE_CUSDC_ADDRESS = "0x38eda3f7b7649ce3f8534c59a40132be347e750a";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function pickRandom<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function shuffle<T>(arr: T[]): T[] {
+  const out = [...arr];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j]!, out[i]!];
+  }
+  return out;
+}
+
+function randomBigIntBetween(min: bigint, max: bigint): bigint {
+  const range = max - min + 1n;
+  return min + BigInt(Math.floor(Math.random() * Number(range)));
+}
+
+function normalizePrivateKey(value: string): Hex {
+  const normalized = value.startsWith("0x") ? value : `0x${value}`;
+  if (!/^0x[a-fA-F0-9]{64}$/.test(normalized)) {
+    throw new Error(`Invalid private key: ${value.slice(0, 10)}...`);
+  }
+  return normalized as Hex;
+}
+
+function getTestAccounts(): { pk: Hex; address: string }[] {
+  const accounts: { pk: Hex; address: string }[] = [];
+  for (let i = 1; i <= 25; i++) {
+    const raw = process.env[`TEST_ACCOUNT_${i}`];
+    if (raw) {
+      try {
+        const pk = normalizePrivateKey(raw);
+        const address = privateKeyToAccount(pk).address.toLowerCase();
+        accounts.push({ pk, address });
+      } catch {
+        console.warn(`[place-bids] TEST_ACCOUNT_${i} is invalid, skipping`);
+      }
+    }
+  }
+  return accounts;
+}
+
+function timestamp(): number {
+  return Math.floor(Date.now() / 1000);
+}
+
+// ---------------------------------------------------------------------------
+// GraphQL
+// ---------------------------------------------------------------------------
+
+const OPEN_AUCTIONS_QUERY = gql`
+  {
+    auctions(first: 100, where: { status: Open }, orderBy: auctionId, orderDirection: desc) {
+      auctionId
+      sellerId
+      endTime
+    }
+  }
+`;
+
+type OpenAuctionsResponse = {
+  auctions: { auctionId: string; sellerId: string; endTime: string }[];
+};
+
+async function fetchOpenAuctions(
+  client: GraphQLClient,
+): Promise<{ auctionId: string; sellerId: string }[]> {
+  const now = Math.floor(Date.now() / 1000);
+  const data = await client.request<OpenAuctionsResponse>(OPEN_AUCTIONS_QUERY);
+  // Also filter by endTime client-side in case the subgraph lags
+  return data.auctions.filter((a) => Number(a.endTime) > now);
+}
+
+// ---------------------------------------------------------------------------
+// Supabase helpers
+// ---------------------------------------------------------------------------
+
+type SupabaseClient = ReturnType<typeof createClient<Database>>;
+
+async function getSellerAddress(
+  supabase: SupabaseClient,
+  sellerId: string,
+): Promise<string | null> {
+  const { data } = await supabase
+    .from("sellers")
+    .select("address")
+    .eq("id", sellerId)
+    .maybeSingle();
+  return data?.address?.toLowerCase() ?? null;
+}
+
+async function getActiveBid(
+  supabase: SupabaseClient,
+  auctionId: string,
+): Promise<{ bidder_address: string; amount: string } | null> {
+  const { data } = await supabase
+    .from("private_bids")
+    .select("bidder_address, amount")
+    .eq("auction_id", auctionId)
+    .eq("status", "active")
+    .maybeSingle();
+  return data ?? null;
+}
+
+async function getAvailableBalance(
+  supabase: SupabaseClient,
+  address: string,
+): Promise<bigint> {
+  const { data } = await supabase
+    .from("balances")
+    .select("available_balance")
+    .eq("user_address", address)
+    .maybeSingle();
+  if (!data?.available_balance) return 0n;
+  try {
+    return BigInt(data.available_balance);
+  } catch {
+    return 0n;
+  }
+}
+
+/**
+ * Insert a synthetic deposit into Supabase so the account has bidding balance.
+ * ⚠️ Debug only — no real tokens are moved. Uses service role to bypass RLS.
+ */
+async function topUpAccount(
+  supabase: SupabaseClient,
+  address: string,
+): Promise<void> {
+  const txId = `place-bids-topup-${address}-${Date.now()}`;
+  const { error } = await supabase.from("transfers").insert({
+    transaction_id: txId,
+    user_address: address,
+    token_address: PRIVATE_CUSDC_ADDRESS,
+    amount: TOP_UP_AMOUNT.toString(),
+    status: "confirmed",
+    credited_at: new Date().toISOString(),
+  });
+  if (error) {
+    console.error(`[place-bids] top-up failed for ${address}: ${error.message}`);
+  } else {
+    console.log(
+      `[place-bids] topped up ${address} (+${TOP_UP_AMOUNT / 1_000_000n} USDC synthetic deposit)`,
+    );
+  }
+}
+
+/**
+ * Check every test account and top up those below LOW_BALANCE_THRESHOLD.
+ * Called at the start of each cycle so accounts are always ready to bid.
+ */
+async function topUpLowAccounts(
+  supabase: SupabaseClient,
+  accounts: { pk: Hex; address: string }[],
+): Promise<void> {
+  for (const account of accounts) {
+    const balance = await getAvailableBalance(supabase, account.address);
+    if (balance < LOW_BALANCE_THRESHOLD) {
+      await topUpAccount(supabase, account.address);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Bid placement
+// ---------------------------------------------------------------------------
+
+async function placeBid(
+  pk: Hex,
+  auctionId: string,
+  amount: bigint,
+): Promise<{ ok: boolean; status: number; body: unknown }> {
+  const account = privateKeyToAccount(pk);
+  const walletClient = createWalletClient({
+    account,
+    chain: sepolia,
+    transport: http(),
+  });
+
+  const ts = timestamp();
+  const payload = { auctionId, amount: amount.toString(), timestamp: ts };
+  const signature = await walletClient.signMessage({
+    account,
+    message: stringify(payload),
+  });
+
+  const body = { ...payload, signature };
+
+  const response = await fetch(`${BASE_URL}/api/bid`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  const text = await response.text();
+  let parsed: unknown = text;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    // keep raw text
+  }
+
+  return { ok: response.ok, status: response.status, body: parsed };
+}
+
+// ---------------------------------------------------------------------------
+// Skippable response codes (move on to next auction rather than bailing)
+// ---------------------------------------------------------------------------
+
+const SKIPPABLE_CODES = new Set([
+  "AUCTION_NOT_FOUND",
+  "AUCTION_NOT_OPEN",
+  "ALREADY_HIGHEST",
+  "SELF_BID_NOT_ALLOWED",
+  "NO_BALANCE",
+  "INSUFFICIENT_BALANCE",
+  "BID_TOO_LOW",
+]);
+
+// ---------------------------------------------------------------------------
+// Main cycle
+// ---------------------------------------------------------------------------
+
+async function runCycle(
+  graphqlClient: GraphQLClient,
+  supabase: SupabaseClient,
+  accounts: { pk: Hex; address: string }[],
+): Promise<void> {
+  const label = new Date().toISOString();
+  console.log(`[place-bids] ${label} — starting cycle`);
+
+  // ── Top up any accounts running low before doing anything else ───────────
+  await topUpLowAccounts(supabase, accounts);
+
+  let openAuctions: { auctionId: string; sellerId: string }[];
+  try {
+    openAuctions = await fetchOpenAuctions(graphqlClient);
+  } catch (err) {
+    console.error("[place-bids] subgraph query failed:", err);
+    return;
+  }
+
+  if (openAuctions.length === 0) {
+    console.log("[place-bids] no open auctions, skipping");
+    return;
+  }
+
+  console.log(`[place-bids] ${openAuctions.length} open auction(s)`);
+
+  for (const auction of shuffle(openAuctions)) {
+    // ── Get seller address so we can exclude them ─────────────────────────
+    const sellerAddress = await getSellerAddress(supabase, auction.sellerId);
+
+    // ── Get current active bid (debug: this data is normally private) ─────
+    const activeBid = await getActiveBid(supabase, auction.auctionId);
+    const currentBidAmount = activeBid ? BigInt(activeBid.amount) : 0n;
+    const currentHighestBidder = activeBid?.bidder_address ?? null;
+
+    const bidAmount =
+      currentBidAmount + randomBigIntBetween(MIN_BID_INCREMENT, MAX_BID_INCREMENT);
+
+    // ── Find a viable test account ────────────────────────────────────────
+    const candidates = shuffle(accounts).filter(
+      (a) =>
+        a.address !== sellerAddress &&
+        a.address !== currentHighestBidder,
+    );
+
+    if (candidates.length === 0) {
+      console.log(
+        `[place-bids] auction ${auction.auctionId}: no eligible accounts (all are seller or highest bidder), skipping`,
+      );
+      continue;
+    }
+
+    // Pick first candidate with sufficient balance (all should be topped up)
+    let chosenAccount: { pk: Hex; address: string } | null = null;
+    for (const candidate of candidates) {
+      const balance = await getAvailableBalance(supabase, candidate.address);
+      if (balance >= bidAmount) {
+        chosenAccount = candidate;
+        break;
+      }
+    }
+
+    if (!chosenAccount) {
+      // Shouldn't happen after top-up, but fall back gracefully
+      chosenAccount = pickRandom(candidates);
+      console.log(
+        `[place-bids] auction ${auction.auctionId}: no account with sufficient balance after top-up, trying anyway`,
+      );
+    }
+
+    console.log(`[place-bids] auction ${auction.auctionId} — bidder: ${chosenAccount.address}`);
+    console.log(
+      `[place-bids]   current bid: ${currentBidAmount} | new bid: ${bidAmount}`,
+    );
+
+    try {
+      const result = await placeBid(chosenAccount.pk, auction.auctionId, bidAmount);
+
+      if (result.ok) {
+        const bidId =
+          result.body != null &&
+          typeof result.body === "object" &&
+          "bidId" in result.body
+            ? (result.body as Record<string, unknown>).bidId
+            : "(unknown)";
+        console.log(`[place-bids] bid placed — id: ${bidId}`);
+        return; // one bid per cycle
+      }
+
+      const code =
+        result.body != null &&
+        typeof result.body === "object" &&
+        "code" in result.body
+          ? String((result.body as Record<string, unknown>).code)
+          : undefined;
+
+      if (result.status < 500 && code && SKIPPABLE_CODES.has(code)) {
+        console.log(
+          `[place-bids] auction ${auction.auctionId} skipped (${code}), trying next`,
+        );
+        continue;
+      }
+
+      console.error(
+        `[place-bids] bid failed (HTTP ${result.status}):`,
+        result.body,
+      );
+      return;
+    } catch (err) {
+      console.error("[place-bids] bid request threw:", err);
+      return;
+    }
+  }
+
+  console.log("[place-bids] all auctions skipped this cycle");
+}
+
+// ---------------------------------------------------------------------------
+// Entry point
+// ---------------------------------------------------------------------------
+
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error(
+    "[place-bids] SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required in scripts/.env",
+  );
+  process.exit(1);
+}
+
+const accounts = getTestAccounts();
+if (accounts.length === 0) {
+  console.error(
+    "[place-bids] no test accounts found — set TEST_ACCOUNT_1 through TEST_ACCOUNT_25 in scripts/.env",
+  );
+  process.exit(1);
+}
+
+console.log(`[place-bids] loaded ${accounts.length} test account(s)`);
+console.log(`[place-bids] base URL: ${BASE_URL}`);
+console.log(`[place-bids] interval: ${INTERVAL_MS / 1000}s`);
+console.log(`[place-bids] subgraph: ${SUBGRAPH_URL}`);
+console.warn(`[place-bids] ⚠️  DEBUG MODE: querying private bid/seller data directly from Supabase`);
+
+const supabase = createClient<Database>(supabaseUrl, supabaseKey);
+const graphqlClient = new GraphQLClient(SUBGRAPH_URL);
+
+runCycle(graphqlClient, supabase, accounts);
+const timer = setInterval(
+  () => runCycle(graphqlClient, supabase, accounts),
+  INTERVAL_MS,
+);
+
+function shutdown(): void {
+  console.log("\n[place-bids] shutting down");
+  clearInterval(timer);
+  process.exit(0);
+}
+
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
