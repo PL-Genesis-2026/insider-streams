@@ -122,6 +122,24 @@ contract SecretMarketplaceTest is Test {
         sm.registerSeller("Alice");
     }
 
+    function test_registerSeller_revert_alreadyRegistered() public {
+        sm.registerSeller("Alice");
+        vm.expectRevert(
+            abi.encodeWithSelector(SecretMarketplace.SellerAlreadyRegistered.selector, "Alice")
+        );
+        sm.registerSeller("Alice");
+    }
+
+    function test_registerSeller_doesNotWipeReputation() public {
+        sm.registerSeller("Alice");
+        // Re-registering should revert, not silently reset score
+        vm.expectRevert(
+            abi.encodeWithSelector(SecretMarketplace.SellerAlreadyRegistered.selector, "Alice")
+        );
+        sm.registerSeller("Alice");
+        assertEq(sm.getSeller("Alice").reputationScore, 0);
+    }
+
     function test_createAuction_autoRegistersSeller() public {
         uint256 id = _createDefaultAuction();
         assertEq(id, 0);

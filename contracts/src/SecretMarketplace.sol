@@ -115,6 +115,7 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
     // ======== ERRORS ===========
     // ===========================
 
+    error SellerAlreadyRegistered(string sellerId);
     error AuctionNotActive();
     error AuctionNotEnded();
     error AuctionAlreadySettled();
@@ -194,13 +195,12 @@ contract SecretMarketplace is ReceiverTemplate, AccessControl {
     // ======== SELLER ===========
     // ===========================
 
-    /// @notice Register a seller by ID. Admin only.
+    /// @notice Register a seller by ID. Admin only. Reverts if already registered.
     function registerSeller(string calldata sellerId) external onlyRole(DEFAULT_ADMIN_ROLE) {
         Seller storage s = _sellers[sellerId];
-        if (!s.registered) {
-            s.registered = true;
-            s.reputationScore = 0;
-        }
+        if (s.registered) revert SellerAlreadyRegistered(sellerId);
+        s.registered = true;
+        s.reputationScore = 0;
         emit SellerRegistered(sellerId);
     }
 
