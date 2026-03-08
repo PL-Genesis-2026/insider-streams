@@ -36,7 +36,7 @@ export default async function CreateAuctionPage({
 
   return (
     <main className="min-h-screen">
-      <section className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 pt-16 pb-12 md:px-10 md:pt-24">
+      <section className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 pt-8 pb-12 md:px-10 md:pt-12">
         <div className="max-w-4xl space-y-4">
           {isDeepLinkedFromTrade && (
             <Badge

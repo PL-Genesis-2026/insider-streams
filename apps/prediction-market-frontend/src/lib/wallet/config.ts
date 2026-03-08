@@ -12,6 +12,8 @@ export const walletProjectId = configuredWalletProjectId ?? null;
 export const walletEnabled = configuredWalletProjectId !== undefined;
 export const walletNetworks = [requiredChain] as const;
 const APPKIT_INSTANCE_KEY = "__prediction_market_appkit__";
+const DEFAULT_PUBLIC_RPC_URL = "https://ethereum-sepolia-rpc.publicnode.com";
+const walletRpcUrl = env.NEXT_PUBLIC_RPC_URL ?? DEFAULT_PUBLIC_RPC_URL;
 
 const wagmiAdapter = configuredWalletProjectId
   ? new WagmiAdapter({
@@ -22,7 +24,7 @@ const wagmiAdapter = configuredWalletProjectId
         storage: cookieStorage,
       }),
       transports: {
-        [requiredChain.id]: http("https://eth-sepolia.g.alchemy.com/v2/59LCREaM5uGpTVXZgR8A7z6IiULWjwG6"),
+        [requiredChain.id]: http(walletRpcUrl),
       },
     })
   : null;
