@@ -92,7 +92,7 @@ const VENICE_API_KEY = envRequired("VENICE_API_KEY");
 
 const ENABLE_NTFY = process.env.ENABLE_NTFY === "true";
 const NTFY_HOST = process.env.NTFY_HOST ?? "http://localhost:8090";
-const NTFY_TOPIC = process.env.NTFY_TOPIC ?? "event-creator";
+const NTFY_TOPIC = process.env.NTFY_TOPIC ?? "event-creator-script";
 const NTFY_USER = process.env.NTFY_USER ?? "UNKNOWN";
 
 async function ntfy(

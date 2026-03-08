@@ -7,6 +7,6 @@
   "chainSelectorName": "ethereum-testnet-sepolia",
   "ntfyEnabled": true,
   "ntfyHost": "https://api.insider-streams.com",
-  "ntfyTopic": "user-balance-recording-fallback",
+  "ntfyTopic": "user-balance-recording-fallback-cre",
   "ntfyUser": "vps"
 }
