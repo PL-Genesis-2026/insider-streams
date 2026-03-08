@@ -30,6 +30,7 @@ export type AuctionCardData = {
   auctionId: string;
   sellerAddress: string;
   marketId: string;
+  outcome?: "yes" | "no";
   status: string;
   currentBidUsdc?: number;
   bidCount?: number;

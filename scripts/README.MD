@@ -28,3 +28,27 @@ TODO WE NEED TO RENAME SIMPLEMARKET TO SOMETHING ELSE SINCE ITS NOW SUBSTANTIALL
 codegen.ts: Generates graphql-request types + SDK so scripts can do typed queries to the subgraph.
 
 demo-query.ts & demo.graphql: Demo query to verify graphql-codegen setup is working for use as initial reference code. Delete these once any script is added that uses the subgraph
+
+`pnpm frontend-api`: CLI for calling `apps/insider-streams-frontend` Next API routes outside the browser. Supports `events`, `secrets`, `snapshot`, `reconcile`, `private-balances`, `private-transfer`, `faucet`, `bid`, and `create-auction`.
+
+Examples:
+
+```bash
+pnpm frontend-api events
+pnpm frontend-api snapshot --address 0x6B789D957B87c12F30b48E9bFc58678c2f76f1c5
+pnpm frontend-api private-balances
+pnpm frontend-api bid --auction-id 1 --amount 1000000 --env-key BIDDER_PK
+pnpm frontend-api create-auction --event-id 1 --private-leg yes --secret-payload "example secret" --duration 24h --env-key BIDDER_PK
+```
+
+`pnpm private-token-api`: lower-level CLI for calling the Chainlink private token REST API directly, without going through the Next API routes. Supports `balances`, `transactions`, `shielded-address`, `transfer`, and `withdraw`.
+
+Examples:
+
+```bash
+pnpm private-token-api balances
+pnpm private-token-api transactions --limit 20 --env-key BIDDER_PK
+pnpm private-token-api shielded-address --env-key BIDDER_PK
+pnpm private-token-api transfer --recipient 0xabc... --amount 1000000
+pnpm private-token-api withdraw --env-key BIDDER_PK --amount 500000
+```

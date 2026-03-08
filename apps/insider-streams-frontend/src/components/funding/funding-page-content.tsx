@@ -14,13 +14,22 @@ import {
   Loader2,
   RefreshCw,
 } from "lucide-react";
-import { getAddress, isAddressEqual, parseUnits, type Address } from "viem";
+import {
+  erc20Abi,
+  getAddress,
+  isAddressEqual,
+  parseUnits,
+  type Address,
+  zeroAddress,
+} from "viem";
+import { useReadContract } from "wagmi";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { ConfidentialUsdcFaucetButton } from "@/components/funding/confidential-usdc-faucet-button";
 import { FundingStatusBadge } from "@/components/funding/funding-status-badge";
 import { ConnectWalletButton } from "@/components/wallet/connect-wallet-button";
 import { SwitchNetworkButton } from "@/components/wallet/switch-network-button";
@@ -95,9 +104,42 @@ function DiagnosticRow({
   );
 }
 
+function BalancePanel({
+  label,
+  value,
+  description,
+}: {
+  label: string;
+  value: string;
+  description: string;
+}) {
+  return (
+    <div className="rounded-[calc(var(--radius)-2px)] border border-border/70 bg-muted/20 p-4">
+      <p className="text-xs font-medium uppercase tracking-[0.22em] text-accent">
+        {label}
+      </p>
+      <p className="mt-3 font-serif text-[1.8rem] leading-none font-medium tracking-[-0.04em] text-foreground">
+        {value}
+      </p>
+      <p className="mt-2 text-sm leading-6 text-muted-foreground">
+        {description}
+      </p>
+    </div>
+  );
+}
+
 export function FundingPageContent() {
   const walletSession = useWalletSession();
   const fundingSnapshot = useFundingSnapshot();
+  const publicWalletBalanceQuery = useReadContract({
+    address: PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
+    abi: erc20Abi,
+    functionName: "balanceOf",
+    args: [walletSession.address ?? zeroAddress],
+    query: {
+      enabled: Boolean(walletSession.address) && walletSession.isSupportedChain,
+    },
+  });
   const statusCopy = getFundingStatusCopy(fundingSnapshot.status);
   const {
     data: privateBalanceLookup,
@@ -155,6 +197,12 @@ export function FundingPageContent() {
     (privateUsdcBalance
       ? formatFundingBalance(privateUsdcBalance.amount)
       : null);
+  const publicWalletBalanceDisplay =
+    publicWalletBalanceQuery.data !== undefined
+      ? formatFundingBalance(publicWalletBalanceQuery.data.toString())
+      : walletSession.isConnected && walletSession.isSupportedChain
+        ? "Loading..."
+        : "Connect wallet";
   const latestTransfer = fundingSnapshot.transfers[0];
   const hasRecordedSnapshot =
     fundingSnapshot.balance !== undefined || fundingSnapshot.transfers.length > 0;
@@ -245,6 +293,39 @@ export function FundingPageContent() {
             {statusCopy.description}
           </p>
         </header>
+
+        <Card className="border-border/70 bg-muted/30">
+          <CardContent className="flex items-center justify-between gap-4 pt-6">
+            <div className="min-w-0">
+              <p className="text-xs font-medium uppercase tracking-[0.22em] text-accent">
+                Testnet faucet
+              </p>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                Need test tokens? Mint ConfidentialUSDC directly to your wallet,
+                then deposit below.
+              </p>
+            </div>
+            <ConfidentialUsdcFaucetButton
+              onSuccess={() => void publicWalletBalanceQuery.refetch()}
+            />
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <BalancePanel
+            label="Public wallet balance"
+            value={publicWalletBalanceDisplay}
+            description="This stays in your Sepolia wallet. Deposit from here into the vault."
+          />
+          <BalancePanel
+            label="Private bidding balance"
+            value={
+              displayBalance ??
+              (walletSession.isConnected ? "Not funded yet" : "Connect wallet")
+            }
+            description="This lives in the private system and is the balance used for bids."
+          />
+        </div>
 
         <Card className="border-border/70">
           <CardContent className="space-y-6 pt-6">
@@ -343,6 +424,10 @@ export function FundingPageContent() {
                     <DiagnosticRow
                       label="Funding status"
                       value={statusCopy.title}
+                    />
+                    <DiagnosticRow
+                      label="Public wallet balance"
+                      value={publicWalletBalanceDisplay}
                     />
                     <DiagnosticRow
                       label="Recorded balance"
