@@ -29,6 +29,7 @@ const onLogTrigger = (runtime: Runtime<Config>, log: EVMLog): string => {
     const auctionId = decoded.args.auctionId as bigint;
     const cancelledBidAmount = decoded.args.cancelledBidAmount as bigint;
     const sellerId = decoded.args.sellerId as string;
+    const eventId = decoded.args.eventId as bigint;
 
     runtime.log(
       `AuctionCancelled: auction=${auctionId}, cancelledBid=${cancelledBidAmount}, sellerId=${sellerId}`,
@@ -37,7 +38,8 @@ const onLogTrigger = (runtime: Runtime<Config>, log: EVMLog): string => {
     // Refund active bids in Supabase
     const refunded = refundActiveBids(runtime, [auctionId.toString()]);
 
-    const summary = `Refunded ${refunded} bid(s) for cancelled auction ${auctionId}`;
+    const bidUsdc = (Number(cancelledBidAmount) / 1e6).toFixed(2);
+    const summary = `Refunded ${refunded} bid(s) for cancelled auction ${auctionId}\nSeller: ${sellerId} | Event: ${eventId} | Bid: ${bidUsdc} USDC`;
     runtime.log(summary);
     sendNotification(runtime, `Bids Refunded: Auction ${auctionId}`, summary);
     return summary;
