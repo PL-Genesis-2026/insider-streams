@@ -23,6 +23,7 @@ import {
   CONFIDENTIAL_USDC_DECIMALS,
 } from "@private-streams/common";
 import { formatUnits } from "viem";
+import { PredictionMarketLink } from "@/components/prediction-market-link";
 import { cn } from "@/lib/utils";
 import type { PrivateBidRecord } from "@/lib/private-data/types";
 
@@ -147,9 +148,12 @@ function BidModule({ auction }: { auction: AuctionCardData }) {
         <p className="text-xs uppercase tracking-[0.22em] text-accent">
           Market
         </p>
-        <p className="mt-2 font-serif text-[1.8rem] leading-none font-medium tracking-[-0.05em] text-foreground">
-          #{auction.marketId}
-        </p>
+        <div className="mt-2">
+          <PredictionMarketLink
+            marketId={auction.marketId}
+            variant="inline"
+          />
+        </div>
       </div>
     </div>
   );
