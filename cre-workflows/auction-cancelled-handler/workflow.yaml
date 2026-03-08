@@ -1,13 +1,13 @@
 # ==========================================================================
-# CRE WORKFLOW SETTINGS FILE — force-close-handler
+# CRE WORKFLOW SETTINGS FILE — auction-cancelled-handler
 # ==========================================================================
-# Listens for AuctionForceClosed events from SecretMarketplace and refunds
+# Listens for AuctionCancelled events from SecretMarketplace and refunds
 # active bids in Supabase.
 
 # ==========================================================================
 local-simulation:
   user-workflow:
-    workflow-name: "force-close-handler"
+    workflow-name: "auction-cancelled-handler"
   workflow-artifacts:
     workflow-path: "./main.ts"
     config-path: "./config.json"
@@ -16,7 +16,7 @@ local-simulation:
 # ==========================================================================
 staging:
   user-workflow:
-    workflow-name: "force-close-handler"
+    workflow-name: "auction-cancelled-handler"
   workflow-artifacts:
     workflow-path: "./main.ts"
     config-path: "./config.json"

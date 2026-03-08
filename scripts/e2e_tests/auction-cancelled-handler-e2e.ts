@@ -1,5 +1,5 @@
 /**
- * Force Close Handler E2E Test Script
+ * Auction Cancelled Handler E2E Test Script
  *
  * Full lifecycle test on Eth Sepolia:
  *   1. Owner creates an ExamplePredictionMarket event
@@ -8,21 +8,21 @@
  *   4. Insert Supabase records (seller, secret, deposit transfer, private_bid)
  *   5. Verify bidder's locked_balance includes the bid
  *   6. Cancel the auction on-chain via cancelAuction(auctionId, 0)
- *   7. Run CRE force-close-handler with --evm-tx-hash + --evm-event-index
+ *   7. Run CRE auction-cancelled-handler with --evm-tx-hash + --evm-event-index
  *   8. Verify bid status=refunded, refunded_at set, bidder locked_balance decreased
  *
- * NOTE: force-close-handler does NOT make on-chain writes — it only makes
+ * NOTE: auction-cancelled-handler does NOT make on-chain writes — it only makes
  * Supabase HTTP calls. CRE simulation makes real HTTP calls even without
  * --broadcast, so we run without broadcast.
  *
  * Env vars required:
- *   OWNER_PK                  — deploys, creates events, force-closes auctions
+ *   OWNER_PK                  — deploys, creates events, cancels auctions
  *   BIDDER_PK                 — different from owner (used as bidder address in Supabase)
  *   RPC_URL                   — Eth Sepolia RPC
  *   SUPABASE_URL              — Supabase project URL
  *   SUPABASE_SERVICE_ROLE_KEY — Supabase service role key
  *
- * Usage: pnpm e2e:force-close-handler
+ * Usage: pnpm e2e:auction-cancelled-handler
  */
 
 import "dotenv/config";
@@ -77,7 +77,7 @@ const BID_AMOUNT = 1_000_000n; // 1 USDC
 const AUCTION_DURATION = 120; // 2 minutes (we'll force-close before it ends)
 const EVENT_DURATION = BigInt(300); // 5 minutes
 const DEPOSIT_AMOUNT = BID_AMOUNT * 10n; // 10 USDC headroom
-const QUESTION = "Force close handler E2E test event";
+const QUESTION = "Auction cancelled handler E2E test event";
 
 // Unique transaction ID for the mock deposit (avoids collisions with real data)
 const DEPOSIT_TX_ID = `e2e-force-close-deposit-${Date.now()}`;
@@ -88,7 +88,7 @@ async function main() {
   // Read the ExamplePredictionMarket address from SecretMarketplace
   const SIMPLE_MARKET = await readSimpleMarketAddress(publicClient, SECRET_MARKETPLACE);
 
-  banner("Force Close Handler E2E Test");
+  banner("Auction Cancelled Handler E2E Test");
   console.log(`  Owner (seller):    ${ownerAccount.address}`);
   console.log(`  Bidder (buyer):    ${bidderAccount!.address}`);
   console.log(`  ConfidentialUSDC:  ${CONFIDENTIAL_USDC}`);
@@ -254,16 +254,16 @@ async function main() {
   });
   console.log(`  Auction on-chain status: ${closedAuction.status}`);
 
-  // ── Step 9: Run CRE force-close-handler ────────────────────────────────────
-  step("Running CRE force-close-handler...");
+  // ── Step 9: Run CRE auction-cancelled-handler ──────────────────────────────
+  step("Running CRE auction-cancelled-handler...");
   runCRE({
-    workflow: "force-close-handler",
+    workflow: "auction-cancelled-handler",
     triggerIndex: 0,
     evmTxHash: cancelHash,
     evmEventIndex: eventIndex,
     broadcast: false,
   });
-  console.log(`  ok CRE force-close-handler completed`);
+  console.log(`  ok CRE auction-cancelled-handler completed`);
 
   // ── Step 10: Verify bid refunded in Supabase ──────────────────────────────
   step("Verifying bid refunded in Supabase...");
@@ -296,7 +296,7 @@ async function main() {
   console.log(`  ok Buyer locked: ${formatUnits(buyerLockedBefore, USDC_DECIMALS)} -> ${formatUnits(buyerLockedAfter, USDC_DECIMALS)}`);
 
   // ── Summary ─────────────────────────────────────────────────────────────────
-  banner("PASS -- Force Close Handler E2E");
+  banner("PASS -- Auction Cancelled Handler E2E");
   console.log(`  Auction ID:        ${auctionId}`);
   console.log(`  Event ID:          ${eventId}`);
   console.log(`  Bid Amount:        ${formatUnits(BID_AMOUNT, USDC_DECIMALS)} USDC`);

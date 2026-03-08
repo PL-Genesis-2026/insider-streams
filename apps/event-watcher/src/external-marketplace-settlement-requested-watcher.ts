@@ -1,6 +1,8 @@
 /**
- * Force-close watcher — subscribes to AuctionCancelled events via WebSocket
- * and triggers the force-close-handler CRE workflow to refund active bids.
+ * Settlement-requested watcher — subscribes to SettlementRequested events via
+ * WebSocket and triggers the external-prediction-market-settler CRE workflow.
+ * Note: The external-prediction-market-scheduler CRE is also invoked directly
+ * by cron on the VPS in case this misses something.
  *
  * On startup, catches up from lastProcessedBlock using getLogs, then switches
  * to real-time WebSocket subscription.
@@ -8,11 +10,12 @@
 
 import type { PublicClient, WatchContractEventReturnType } from "viem";
 import {
-  SECRET_MARKETPLACE_ADDRESS,
-  secretMarketplaceAbi,
+  EXAMPLE_PREDICTION_MARKET_ADDRESS,
+  examplePredictionMarketAbi,
 } from "@private-streams/common";
 import { runCRE } from "./cre-runner.js";
 import { log } from "./index.js";
+import { notify } from "./notify.js";
 
 const processed = new Set<string>();
 const MAX_PROCESSED = 1000;
@@ -32,7 +35,7 @@ async function handleEvent(
   publicClient: PublicClient,
   txHash: `0x${string}`,
   logIndex: number,
-  auctionId: bigint | undefined,
+  eventId: bigint | undefined,
   blockNumber: bigint | null,
 ): Promise<void> {
   const key = dedupKey(txHash, logIndex);
@@ -42,20 +45,23 @@ async function handleEvent(
   const eventIndex = receipt.logs.findIndex((l) => l.logIndex === logIndex);
 
   log(
-    "force-close",
-    `AuctionCancelled auctionId=${auctionId} in block ${blockNumber} — txHash=${txHash.slice(0, 12)}... eventIndex=${eventIndex}`,
+    "settlement-requested",
+    `SettlementRequested eventId=${eventId} in block ${blockNumber} — txHash=${txHash.slice(0, 12)}... eventIndex=${eventIndex}`,
   );
 
   try {
     runCRE({
-      workflow: "force-close-handler",
+      workflow: "external-prediction-market-settler",
       triggerIndex: 0,
       evmTxHash: txHash,
       evmEventIndex: eventIndex,
+      broadcast: true,
     });
-    log("force-close", `CRE completed for auction ${auctionId}`);
+    log("settlement-requested", `CRE completed for event ${eventId}`);
+    await notify("SettlementRequested - CRE done", `Event ${eventId} settlement broadcast\nBlock ${blockNumber}\ntx ${txHash.slice(0, 16)}...`, ["white_check_mark"]);
   } catch (err) {
-    log("force-close", `CRE FAILED for auction ${auctionId}: ${err}`);
+    log("settlement-requested", `CRE FAILED for event ${eventId}: ${err}`);
+    await notify("SettlementRequested - CRE FAILED", `Event ${eventId}\n${err}`, ["x"]);
   }
 
   processed.add(key);
@@ -63,16 +69,16 @@ async function handleEvent(
 }
 
 /** Catch up on missed events since lastProcessedBlock using getLogs. */
-export async function catchUpForceClose(
+export async function catchUpSettlementRequested(
   publicClient: PublicClient,
   fromBlock: bigint,
   toBlock: bigint,
 ): Promise<void> {
   const logs = await publicClient.getLogs({
-    address: SECRET_MARKETPLACE_ADDRESS,
-    event: secretMarketplaceAbi.find(
-      (e): e is Extract<typeof e, { type: "event"; name: "AuctionCancelled" }> =>
-        e.type === "event" && e.name === "AuctionCancelled",
+    address: EXAMPLE_PREDICTION_MARKET_ADDRESS,
+    event: examplePredictionMarketAbi.find(
+      (e): e is Extract<typeof e, { type: "event"; name: "SettlementRequested" }> =>
+        e.type === "event" && e.name === "SettlementRequested",
     )!,
     fromBlock,
     toBlock,
@@ -80,42 +86,42 @@ export async function catchUpForceClose(
 
   if (logs.length === 0) return;
 
-  log("force-close", `Catching up: ${logs.length} AuctionCancelled event(s) in blocks ${fromBlock}-${toBlock}`);
+  log("settlement-requested", `Catching up: ${logs.length} SettlementRequested event(s) in blocks ${fromBlock}-${toBlock}`);
   for (const entry of logs) {
     await handleEvent(
       publicClient,
       entry.transactionHash,
       entry.logIndex,
-      entry.args.auctionId,
+      entry.args.eventId,
       entry.blockNumber,
     );
   }
 }
 
-/** Subscribe to real-time AuctionCancelled events via WebSocket. */
-export function watchForceClose(
+/** Subscribe to real-time SettlementRequested events via WebSocket. */
+export function watchSettlementRequested(
   wsClient: PublicClient,
   httpClient: PublicClient,
 ): WatchContractEventReturnType {
   return wsClient.watchContractEvent({
-    address: SECRET_MARKETPLACE_ADDRESS,
-    abi: secretMarketplaceAbi,
-    eventName: "AuctionCancelled",
+    address: EXAMPLE_PREDICTION_MARKET_ADDRESS,
+    abi: examplePredictionMarketAbi,
+    eventName: "SettlementRequested",
     onLogs: (logs) => {
       for (const entry of logs) {
         handleEvent(
           httpClient,
           entry.transactionHash,
           entry.logIndex,
-          entry.args.auctionId,
+          entry.args.eventId,
           entry.blockNumber,
         ).catch((err) => {
-          log("force-close", `Error handling event: ${err}`);
+          log("settlement-requested", `Error handling event: ${err}`);
         });
       }
     },
     onError: (err) => {
-      log("force-close", `WebSocket subscription error: ${err.message}`);
+      log("settlement-requested", `WebSocket subscription error: ${err.message}`);
     },
   });
 }

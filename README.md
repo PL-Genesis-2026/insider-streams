@@ -90,7 +90,7 @@ PREDICTION_OUTCOME=0 \
 forge script script/secret-marketplace/CancelAuction.s.sol --rpc-url $RPC_URL --broadcast
 ```
 
-`PREDICTION_OUTCOME`: 0=NoPrediction, 1=PredictionCorrect, 2=PredictionWrong. The `force-close-handler` CRE workflow handles bid refunds when auctions are force-closed.
+`PREDICTION_OUTCOME`: 0=NoPrediction, 1=PredictionCorrect, 2=PredictionWrong. The `auction-cancelled-handler` CRE workflow handles bid refunds when auctions are cancelled.
 
 ## Regenerate Contract Types
 

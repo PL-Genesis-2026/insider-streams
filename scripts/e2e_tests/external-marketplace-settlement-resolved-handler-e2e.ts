@@ -1,5 +1,5 @@
 /**
- * Reputation Resolver E2E Test Script
+ * External Marketplace Settlement Resolved Handler E2E Test Script
  *
  * Full lifecycle test on Eth Sepolia:
  *   1. Owner creates an ExamplePredictionMarket event
@@ -8,7 +8,7 @@
  *   4. Insert Supabase records (sellers, secrets with event_data, deposits, private_bids)
  *   5. Admin-expires both auctions immediately -> CRE auction-closer closes them
  *   6. Admin-closes prediction market event + requests settlement + CRE settler settles to "Yes"
- *   7. Runs CRE reputation-resolver (broadcast)
+ *   7. Runs CRE external-marketplace-settlement-resolved-handler (broadcast)
  *   8. Verifies: SellerA reputation +1, SellerB reputation -1, event marked resolved
  *
  * NOTE: No dry run before broadcast for auction-closer — CRE simulation makes
@@ -22,7 +22,7 @@
  *   SUPABASE_URL              — Supabase project URL
  *   SUPABASE_SERVICE_ROLE_KEY — Supabase service role key
  *
- * Usage: pnpm e2e:reputation-resolver
+ * Usage: pnpm e2e:external-marketplace-settlement-resolved-handler
  */
 
 import "dotenv/config";
@@ -79,7 +79,7 @@ const DEPOSIT_AMOUNT = BID_AMOUNT * 10n; // 10 USDC headroom
 const QUESTION = "The New York Yankees won the 2009 World Series."; // factual "Yes" for Gemini
 
 // Unique transaction ID for the mock deposit (avoids collisions with real data)
-const DEPOSIT_TX_ID = `e2e-reputation-resolver-deposit-${Date.now()}`;
+const DEPOSIT_TX_ID = `e2e-settlement-resolved-deposit-${Date.now()}`;
 
 // ─── E2E Flow ────────────────────────────────────────────────────────────────
 
@@ -87,7 +87,7 @@ async function main() {
   // Read the ExamplePredictionMarket address from SecretMarketplace
   const SIMPLE_MARKET = await readSimpleMarketAddress(publicClient, SECRET_MARKETPLACE);
 
-  banner("Reputation Resolver E2E Test");
+  banner("Settlement Resolved Handler E2E Test");
   console.log(`  Owner (seller):    ${ownerAccount.address}`);
   console.log(`  Bidder (buyer):    ${bidderAccount!.address}`);
   console.log(`  ConfidentialUSDC:  ${CONFIDENTIAL_USDC}`);
@@ -368,7 +368,7 @@ async function main() {
   console.log(`  ok Event ${eventId} settled — outcome: ${settledEvent.outcome === 2 ? "Yes" : settledEvent.outcome === 1 ? "No" : `Unknown(${settledEvent.outcome})`}`);
 
   // ── Step 14: Record reputation before ──────────────────────────────────────
-  step("Recording seller reputations before reputation-resolver...");
+  step("Recording seller reputations before settlement-resolved-handler...");
   const sellerABefore = await publicClient.readContract({
     address: SECRET_MARKETPLACE,
     abi: secretMarketplaceAbi,
@@ -386,11 +386,11 @@ async function main() {
   console.log(`  ${SELLER_A} reputation: ${repABefore}`);
   console.log(`  ${SELLER_B} reputation: ${repBBefore}`);
 
-  // ── Step 15: Run CRE reputation-resolver (broadcast) ──────────────────────
+  // ── Step 15: Run CRE settlement-resolved-handler (broadcast) ───────────────
   // NOTE: Skip dry run — it asserts nothing meaningful and adds 10-30s overhead.
   // The broadcast step does the real work, and verification happens on-chain afterward.
-  step("Running CRE reputation-resolver with broadcast...");
-  runCRE({ workflow: "reputation-resolver", triggerIndex: 0, broadcast: true });
+  step("Running CRE external-marketplace-settlement-resolved-handler with broadcast...");
+  runCRE({ workflow: "external-marketplace-settlement-resolved-handler", triggerIndex: 0, broadcast: true });
   console.log(`  ok Broadcast completed`);
 
   // ── Step 17: Verify reputation changes ─────────────────────────────────────
@@ -437,7 +437,7 @@ async function main() {
   console.log(`  ok Event ${eventId} is marked as resolved`);
 
   // ── Summary ─────────────────────────────────────────────────────────────────
-  banner("PASS -- Reputation Resolver E2E");
+  banner("PASS -- Settlement Resolved Handler E2E");
   console.log(`  Event ID:            ${eventId}`);
   console.log(`  Auction A ID:        ${auctionIdA} (${SELLER_A}, predicted "yes")`);
   console.log(`  Auction B ID:        ${auctionIdB} (${SELLER_B}, predicted "no")`);
