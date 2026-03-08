@@ -4,7 +4,7 @@
 // This is the CLEAR/Non-private CONFIDENTIAL_USDC address, can't be used for private transfers.
 // It's used in ExamplePredictionMarket and tests that run against ExternalPredictionMarket
 export const CONFIDENTIAL_USDC_ADDRESS =
-  "0x38EDa3F7b7649CE3f8534C59a40132bE347E750A" as const;
+  "0xee3A0Cccb31fF816615C18E1d1DB480df8a0f9F1" as const;
 
 // ConfidentialUSDC instance registered with the vault for private transfers.
 // This is a separate deployment from CONFIDENTIAL_USDC_ADDRESS (used by the marketplace, frontend, any interaction with the CCC REST API).

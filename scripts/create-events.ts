@@ -5,7 +5,7 @@
  *   1. Fetches existing events from subgraph (deduplication)
  *   2. Asks Venice AI to suggest 1-3 new prediction market questions
  *   3. Creates events on ExamplePredictionMarket
- *   4. Places 5-10 random bets per event from test accounts
+ *   4. Places 3-5 random bets per event from test accounts (fire-and-forget)
  *
  * Env vars required:
  *   OWNER_PK                  — creates events, mints CUSDC
@@ -47,16 +47,21 @@ const SUBGRAPH_URL =
   "https://api.studio.thegraph.com/query/1743303/insider-streams-2/version/latest";
 
 const USDC_DECIMALS = 6;
-const MIN_BALANCE = 10_000_000n; // 10 CUSDC
-const MINT_AMOUNT = 10_000_000_000n; // 10,000 CUSDC
-const APPROVAL_AMOUNT = 100_000_000_000n; // 100,000 CUSDC
-const MIN_ALLOWANCE = 10_000_000n; // 10 CUSDC
+// Balance threshold: if below 1,000 CUSDC, mint more (reads first — writes are expensive)
+const MIN_BALANCE = 1_000_000_000n; // 1,000 CUSDC
+const MINT_AMOUNT = 10_000_000_000n; // 10,000 CUSDC per mint
+// Approve uint256 max so we never need to re-approve
+const APPROVAL_AMOUNT =
+  115_792_089_237_316_195_423_570_985_008_687_907_853_269_984_665_640_564_039_457_584_007_913_129_639_935n;
+// Re-approve when allowance drops below 1,000 CUSDC
+const MIN_ALLOWANCE = 1_000_000_000n;
 
 const DURATIONS = [1800n, 3600n]; // 30 min or 1 hour
 const MIN_BET_USDC = 10; // $10
 const MAX_BET_USDC = 500; // $500
-const MIN_BETS_PER_EVENT = 5;
-const MAX_BETS_PER_EVENT = 10;
+const MIN_BETS_PER_EVENT = 3;
+const MAX_BETS_PER_EVENT = 5;
+const BET_PAUSE_MS = 5_000; // 5s pause between bets
 const NUM_EVENTS_TO_GENERATE = 3;
 
 // Outcome enum: 1=No, 2=Yes
@@ -143,6 +148,8 @@ async function ensureBalance(target: Address) {
       h,
       `Mint ${formatUnits(MINT_AMOUNT, USDC_DECIMALS)} CUSDC to ${target.slice(0, 8)}...`,
     );
+    // Brief pause after mint so node state propagates before next read/write
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
   }
 }
 
@@ -165,6 +172,8 @@ async function ensureApproval(
       args: [EXAMPLE_PREDICTION_MARKET_ADDRESS, APPROVAL_AMOUNT],
     });
     await waitForTx(h, `Approval for ${owner.slice(0, 8)}...`);
+    // Brief pause after approval so node state propagates before next read/write
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
   }
 }
 
@@ -345,7 +354,7 @@ async function main() {
     process.exit(1);
   }
 
-  // ── Step 5: Place random bets ─────────────────────────────────────────────
+  // ── Step 5: Place random bets (fire-and-forget) ──────────────────────────
   console.log("\n━━━ Step 5: Placing random bets ━━━");
 
   for (const { eventId, question } of createdEvents) {
@@ -363,7 +372,7 @@ async function main() {
       const outcomeLabel = outcome === 2 ? "YES" : "NO";
 
       try {
-        // Ensure balance and approval
+        // Ensure balance and approval (reads first — writes are expensive)
         await ensureBalance(account.address);
         const betterClient = createWalletClient({
           account,
@@ -372,22 +381,24 @@ async function main() {
         });
         await ensureApproval(betterClient, account.address);
 
-        // Place bet
+        // Place bet — fire-and-forget, don't wait for receipt
         const hash = await betterClient.writeContract({
           address: EXAMPLE_PREDICTION_MARKET_ADDRESS,
           abi: examplePredictionMarketAbi,
           functionName: "buyShares",
           args: [eventId, outcome, betAmount],
         });
-        await waitForTx(
-          hash,
-          `${label} bet $${formatUnits(betAmount, USDC_DECIMALS)} ${outcomeLabel}`,
+        console.log(
+          `  >> ${label} bet $${formatUnits(betAmount, USDC_DECIMALS)} ${outcomeLabel} (tx: ${hash.slice(0, 10)}...)`,
         );
       } catch (err) {
         console.error(
           `  x ${label} bet failed: ${err instanceof Error ? err.message : err}`,
         );
       }
+
+      // Pause between bets
+      await new Promise((resolve) => setTimeout(resolve, BET_PAUSE_MS));
     }
   }
 
