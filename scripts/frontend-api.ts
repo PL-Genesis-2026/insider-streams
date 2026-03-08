@@ -15,7 +15,7 @@ import {
 } from "@private-streams/common";
 import { PrivateTokenApiClient } from "@private-streams/chainlink-private-token-api-client";
 import { privateKeyToAccount } from "viem/accounts";
-import { createWalletClient, http, isAddress, type Hex } from "viem";
+import { createPublicClient, createWalletClient, http, isAddress, type Hex } from "viem";
 import { sepolia } from "viem/chains";
 
 type Command =
@@ -57,6 +57,20 @@ const DEFAULT_BASE_URL = "http://localhost:3000";
 ].forEach((path, index) => {
   loadEnv({ path, override: index > 0, quiet: true });
 });
+
+const vaultWithdrawAbi = [
+  {
+    type: "function",
+    name: "withdrawWithTicket",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "token", type: "address" },
+      { name: "amount", type: "uint256" },
+      { name: "ticket", type: "bytes" },
+    ],
+    outputs: [],
+  },
+] as const;
 
 const PRIVATE_TOKEN_EIP712_DOMAIN = {
   name: "CompliantPrivateTokenDemo" as const,
@@ -557,6 +571,26 @@ async function runWithdraw(args: string[]): Promise<void> {
     token: PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
     amount: validatedAmount,
   });
+
+  const { account, walletClient } = getSigner(common);
+  const publicClient = createPublicClient({
+    chain: sepolia,
+    transport: http(),
+  });
+
+  const redeemHash = await walletClient.writeContract({
+    account,
+    address: VAULT_ADDRESS as Hex,
+    abi: vaultWithdrawAbi,
+    functionName: "withdrawWithTicket",
+    args: [
+      PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
+      BigInt(validatedAmount),
+      withdrawal.ticket as Hex,
+    ],
+  });
+
+  await publicClient.waitForTransactionReceipt({ hash: redeemHash });
 
   const finalizeResponse = await requestJson(
     common,
