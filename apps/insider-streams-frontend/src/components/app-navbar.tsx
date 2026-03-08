@@ -5,7 +5,7 @@ import { RevealPrivateDataButton } from "@/components/reveal-private-data-button
 
 export function AppNavbar() {
   return (
-    <header className="border-b border-border/60">
+    <header className="fixed top-0 z-50 w-full border-b border-border/60 bg-background/80 backdrop-blur-md">
       <nav className="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 px-4 py-4 sm:gap-6 sm:px-6 md:px-10">
         <Link href="/" className="transition-opacity hover:opacity-80">
           <Logo />

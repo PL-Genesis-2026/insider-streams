@@ -9,6 +9,7 @@ import {
   limit,
   getDocs,
 } from "firebase/firestore";
+import { Badge } from "@/components/ui/badge";
 
 interface SettlementDoc {
   id: string;
@@ -74,7 +75,7 @@ export function SettlementsList() {
 
   if (error) {
     return (
-      <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">
+      <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
         {error}
       </div>
     );
@@ -86,7 +87,7 @@ export function SettlementsList() {
         {Array.from({ length: 3 }).map((_, i) => (
           <div
             key={i}
-            className="h-40 animate-pulse rounded-lg border border-gray-700 bg-gray-800"
+            className="h-40 animate-pulse rounded-[calc(var(--radius)+6px)] border bg-card"
           />
         ))}
       </div>
@@ -95,7 +96,7 @@ export function SettlementsList() {
 
   if (docs.length === 0) {
     return (
-      <div className="rounded-lg border border-gray-700 bg-gray-800 p-6 text-center text-sm text-gray-400">
+      <div className="rounded-[calc(var(--radius)+6px)] border bg-card p-6 text-center text-sm text-muted-foreground">
         No settlement records found.
       </div>
     );
@@ -114,33 +115,28 @@ export function SettlementsList() {
         return (
           <div
             key={doc.id}
-            className="rounded-lg border border-gray-700 bg-gray-800 p-5"
+            className="rounded-[calc(var(--radius)+6px)] border bg-card p-5"
           >
             <div className="mb-2 flex items-start justify-between gap-3">
-              <h3 className="text-base font-semibold text-white">
+              <h3 className="text-base font-semibold text-card-foreground">
                 {doc.question}
               </h3>
-              <span
-                className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
-                  doc.statusCode === 1
-                    ? "border-green-500/30 bg-green-500/20 text-green-400"
-                    : "border-gray-500/30 bg-gray-500/20 text-gray-400"
-                }`}
+              <Badge
+                variant={doc.statusCode === 1 ? "accent" : "muted"}
+                className="text-[0.65rem]"
               >
                 Status: {doc.statusCode}
-              </span>
+              </Badge>
             </div>
 
-            <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-gray-400">
+            <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
               <span>Response: {doc.responseId}</span>
               <span>Tx: {shortenHash(doc.txHash)}</span>
-              <span>
-                {new Date(doc.createdAt).toLocaleString()}
-              </span>
+              <span>{new Date(doc.createdAt).toLocaleString()}</span>
             </div>
 
             {geminiParsed && (
-              <pre className="mt-3 overflow-x-auto rounded-md bg-gray-900 p-3 text-xs text-gray-300">
+              <pre className="mt-3 overflow-x-auto rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
                 {geminiParsed}
               </pre>
             )}

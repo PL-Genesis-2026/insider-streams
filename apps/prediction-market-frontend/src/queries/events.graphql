@@ -40,7 +40,12 @@ query EventDetail($eventId: BigInt!) {
     blockTimestamp
     transactionHash
   }
-  settlementResponses(first: 1, where: { eventId: $eventId }) {
+  settlementResponses(
+    first: 1
+    where: { eventId: $eventId }
+    orderBy: blockTimestamp
+    orderDirection: desc
+  ) {
     eventId
     status
     outcome
