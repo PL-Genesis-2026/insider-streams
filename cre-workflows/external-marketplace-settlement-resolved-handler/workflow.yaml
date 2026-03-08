@@ -1,5 +1,5 @@
 # ==========================================================================
-# CRE WORKFLOW SETTINGS FILE — reputation-resolver
+# CRE WORKFLOW SETTINGS FILE — external-marketplace-settlement-resolved-handler
 # ==========================================================================
 # Checks settled prediction market events and submits per-auction
 # reputation updates to SecretMarketplace.
@@ -7,7 +7,7 @@
 # ==========================================================================
 local-simulation:
   user-workflow:
-    workflow-name: "reputation-resolver"
+    workflow-name: "external-marketplace-settlement-resolved-handler"
   workflow-artifacts:
     workflow-path: "./main.ts"
     config-path: "./config.json"
@@ -16,7 +16,7 @@ local-simulation:
 # ==========================================================================
 staging:
   user-workflow:
-    workflow-name: "reputation-resolver"
+    workflow-name: "external-marketplace-settlement-resolved-handler"
   workflow-artifacts:
     workflow-path: "./main.ts"
     config-path: "./config.json"

@@ -1,6 +1,7 @@
 /**
- * Auction-expiry watcher — polls getOpenAuctions() for expired auctions
- * and triggers the secret-marketplace-auction-closer CRE workflow.
+ * Auction-closed event watcher — polls getOpenAuctions() for expired auctions
+ * and triggers the secret-marketplace-auction-closer CRE workflow that
+ * transfers the bid amount to the seller and marks auction as closed.
  */
 
 import type { PublicClient } from "viem";
@@ -10,6 +11,7 @@ import {
 } from "@private-streams/common";
 import { runCRE } from "./cre-runner.js";
 import { log } from "./index.js";
+import { notify } from "./notify.js";
 
 let isRunning = false;
 
@@ -17,7 +19,7 @@ export async function pollExpiredAuctions(
   publicClient: PublicClient,
 ): Promise<void> {
   if (isRunning) {
-    log("auction-expiry", "Previous run still active, skipping");
+    log("auction-closed", "Previous run still active, skipping");
     return;
   }
 
@@ -31,7 +33,7 @@ export async function pollExpiredAuctions(
     })) as bigint[];
 
     if (openAuctions.length === 0) {
-      log("auction-expiry", "No open auctions");
+      log("auction-closed", "No open auctions");
       return;
     }
 
@@ -47,27 +49,29 @@ export async function pollExpiredAuctions(
       })) as { endTime: bigint };
 
       if (Number(auction.endTime) <= now) {
-        log("auction-expiry", `Auction ${auctionId} expired (endTime=${auction.endTime}, now=${now})`);
+        log("auction-closed", `Auction ${auctionId} expired (endTime=${auction.endTime}, now=${now})`);
         hasExpired = true;
         break;
       }
     }
 
     if (!hasExpired) {
-      log("auction-expiry", `${openAuctions.length} open auction(s), none expired`);
+      log("auction-closed", `${openAuctions.length} open auction(s), none expired`);
       return;
     }
 
-    log("auction-expiry", "Triggering CRE secret-marketplace-auction-closer...");
+    log("auction-closed", "Triggering CRE secret-marketplace-auction-closer...");
     try {
       runCRE({
         workflow: "secret-marketplace-auction-closer",
         triggerIndex: 0,
         broadcast: true,
       });
-      log("auction-expiry", "CRE secret-marketplace-auction-closer completed");
+      log("auction-closed", "CRE secret-marketplace-auction-closer completed");
+      await notify("Auction expired - CRE done", `Expired auction detected, auction-closer broadcast`, ["white_check_mark"]);
     } catch (err) {
-      log("auction-expiry", `CRE secret-marketplace-auction-closer FAILED: ${err}`);
+      log("auction-closed", `CRE secret-marketplace-auction-closer FAILED: ${err}`);
+      await notify("Auction expired - CRE FAILED", `${err}`, ["x"]);
     }
   } finally {
     isRunning = false;
