@@ -30,6 +30,17 @@ export type FundingReconcileResponse = {
   scannedCount: number;
 };
 
+export type FundingWithdrawResponse = {
+  data: FundingServerSnapshot;
+  transactionId: string;
+};
+
+export type FundingFinalizeWithdrawalResponse = {
+  data: FundingServerSnapshot;
+  transactionId: string;
+  withdrawalId: string;
+};
+
 export type FundingSnapshot = {
   status: FundingStatus;
   address?: Address;

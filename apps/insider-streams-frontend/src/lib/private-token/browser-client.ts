@@ -4,11 +4,14 @@ import type {
   GetBalancesResponse,
   PrivateTransferRequest,
   PrivateTransferResponse,
+  WithdrawRequest,
+  WithdrawResponse,
 } from "@private-streams/chainlink-private-token-api-client";
 import type { Address, Hex } from "viem";
 import {
   createPrivateTransferRequest,
   createRetrieveBalancesRequest,
+  createWithdrawRequest,
   type PrivateTokenSignaturePayload,
 } from "./domain";
 
@@ -29,6 +32,15 @@ const getBalancesResponseSchema = z.object({
 
 const privateTransferResponseSchema = z.object({
   transaction_id: z.string(),
+});
+
+const withdrawResponseSchema = z.object({
+  id: z.string(),
+  account: z.string(),
+  token: z.string(),
+  amount: z.string(),
+  deadline: z.number(),
+  ticket: z.string(),
 });
 
 const PRIVATE_TOKEN_PROXY_BASE_PATH = "/api/private-token";
@@ -124,5 +136,27 @@ export async function privateTransfer(
       auth,
     },
     privateTransferResponseSchema,
+  );
+}
+
+export async function withdraw(
+  account: Address,
+  signTypedData: PrivateTokenSigner,
+  payload: WithdrawRequest,
+): Promise<WithdrawResponse> {
+  const request = createWithdrawRequest({
+    account,
+    token: payload.token as Address,
+    amount: payload.amount,
+  });
+  const auth = await signTypedData(request.signaturePayload);
+
+  return postPrivateTokenJson(
+    "/withdraw",
+    {
+      ...request.body,
+      auth,
+    },
+    withdrawResponseSchema,
   );
 }
