@@ -37,7 +37,7 @@ export function useWalletSession(): WalletSession {
       connectorName: wagmiAccount.connector?.name,
       isConnected,
       isSupportedChain:
-        currentChainId === undefined || currentChainId === requiredChain.id,
+        !isConnected || currentChainId === requiredChain.id,
       requiredChainId: requiredChain.id,
       requiredChainName: requiredChain.name,
     };
