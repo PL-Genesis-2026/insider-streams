@@ -56,10 +56,15 @@ async function handleEvent(
       evmEventIndex: eventIndex,
     });
     log("auction-cancelled", `CRE completed for auction ${auctionId}`);
-    await notify("AuctionCancelled - CRE done", `Auction ${auctionId} auction-cancelled handled\nBlock ${blockNumber}\ntx ${txHash.slice(0, 16)}...`, ["white_check_mark"]);
+    await notify(
+      "AuctionCancelled - CRE done",
+      `Auction ${auctionId} cancelled\nBlock ${blockNumber}\nCRE: auction-cancelled-handler\nCRE topic: https://api.insider-streams.com/auction-cancelled-handler-cre\ntx: ${txHash}`,
+      ["white_check_mark"],
+      `https://sepolia.etherscan.io/tx/${txHash}`,
+    );
   } catch (err) {
     log("auction-cancelled", `CRE FAILED for auction ${auctionId}: ${err}`);
-    await notify("AuctionCancelled - CRE FAILED", `Auction ${auctionId}\n${err}`, ["x"]);
+    await notify("AuctionCancelled - CRE FAILED", `Auction ${auctionId}\nCRE: auction-cancelled-handler\n${err}`, ["x"]);
   }
 
   processed.add(key);

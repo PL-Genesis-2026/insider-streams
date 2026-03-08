@@ -74,10 +74,14 @@ export async function pollExpiredAuctions(
         broadcast: true,
       });
       log("auction-closed", "CRE secret-marketplace-auction-closer completed");
-      await notify("Auction expired - CRE done", `Expired auctions: [${idList}] (${expiredIds.length} total)\nsecret-marketplace-auction-closer broadcast`, ["white_check_mark"]);
+      await notify(
+        "Auction expired - CRE done",
+        `Expired auctions: [${idList}] (${expiredIds.length} total)\nCRE: secret-marketplace-auction-closer (broadcast)\nCRE topic: https://api.insider-streams.com/secret-marketplace-auction-closer-cre`,
+        ["white_check_mark"],
+      );
     } catch (err) {
       log("auction-closed", `CRE secret-marketplace-auction-closer FAILED: ${err}`);
-      await notify("Auction expired - CRE FAILED", `Expired auctions: [${idList}] (${expiredIds.length} total)\nsecret-marketplace-auction-closer FAILED\n${err}`, ["x"]);
+      await notify("Auction expired - CRE FAILED", `Expired auctions: [${idList}] (${expiredIds.length} total)\nCRE: secret-marketplace-auction-closer\n${err}`, ["x"]);
     }
   } finally {
     isRunning = false;

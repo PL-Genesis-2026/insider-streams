@@ -14,6 +14,7 @@ export async function notify(
   title: string,
   message: string,
   tags?: string[],
+  clickUrl?: string,
 ): Promise<void> {
   try {
     await fetch(`${NTFY_HOST}/${NTFY_TOPIC}`, {
@@ -21,6 +22,7 @@ export async function notify(
       headers: {
         Title: title,
         ...(tags?.length ? { Tags: tags.join(",") } : {}),
+        ...(clickUrl ? { Click: clickUrl } : {}),
       },
       body: `[${NTFY_USER}] ${message}`,
       signal: AbortSignal.timeout(5000),

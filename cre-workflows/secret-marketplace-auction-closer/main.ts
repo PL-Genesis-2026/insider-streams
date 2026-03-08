@@ -30,11 +30,14 @@ const onCronTrigger = (runtime: Runtime<Config>, payload: CronPayload): string =
     // Phase 1: Close expired auctions on-chain (up to MAX_PER_RUN)
     const closedAuctionIds: string[] = [];
     const results: string[] = [];
+    let lastTxHash = "";
     for (const auction of batch) {
       try {
         const txHash = closeAuction(runtime, auction.auctionId);
         closedAuctionIds.push(auction.auctionId.toString());
-        results.push(`Auction ${auction.auctionId}: closed (tx=${txHash})`);
+        lastTxHash = txHash;
+        const bidUsdc = (Number(auction.currentBid) / 1e6).toFixed(2);
+        results.push(`Auction ${auction.auctionId} (event ${auction.eventId}, bid ${bidUsdc} USDC): closed`);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         runtime.log(`Failed to close auction ${auction.auctionId}: ${msg}`);
@@ -55,9 +58,10 @@ const onCronTrigger = (runtime: Runtime<Config>, payload: CronPayload): string =
       }
     }
 
-    const summary = results.join("; ");
+    const summary = results.join("\n");
     runtime.log(summary);
-    sendNotification(runtime, `Auctions Closed: ${closedAuctionIds.length}`, summary);
+    const etherscanUrl = lastTxHash ? `https://sepolia.etherscan.io/tx/${lastTxHash}` : undefined;
+    sendNotification(runtime, `Auctions Closed: ${closedAuctionIds.length}`, summary, etherscanUrl);
     return summary;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
