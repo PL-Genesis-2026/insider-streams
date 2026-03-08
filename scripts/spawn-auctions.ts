@@ -42,7 +42,7 @@ const NTFY_HOST = process.env.NTFY_HOST ?? "http://localhost:8090";
 const NTFY_TOPIC = process.env.NTFY_TOPIC ?? "auction-creator-script";
 const NTFY_USER = process.env.NTFY_USER ?? "UNKNOWN";
 
-async function ntfy(title: string, message: string, tags?: string[]) {
+async function ntfy(title: string, message: string, tags?: string[], clickUrl?: string) {
   if (!ENABLE_NTFY) return;
   try {
     await fetch(`${NTFY_HOST}/${NTFY_TOPIC}`, {
@@ -50,6 +50,7 @@ async function ntfy(title: string, message: string, tags?: string[]) {
       headers: {
         Title: title,
         ...(tags?.length ? { Tags: tags.join(",") } : {}),
+        ...(clickUrl ? { Click: clickUrl } : {}),
       },
       body: `[${NTFY_USER}] ${message}`,
       signal: AbortSignal.timeout(5000),
@@ -245,9 +246,11 @@ async function runCycle(client: GraphQLClient, accounts: Hex[]): Promise<void> {
       const result = await createAuction(pk, event.eventId, secretPayload, duration);
 
       if (result.ok) {
-        const msg = `Auction ${result.auctionId ?? "?"} created for event ${event.eventId}`;
-        console.log(`[spawn-auctions] ${msg}`);
-        await ntfy("Auction Created", msg, ["tada"]);
+        const auctionId = result.auctionId ?? "?";
+        const url = `${BASE_URL}/auction/${auctionId}`;
+        const msg = `Auction ${auctionId} (${duration}) for event ${event.eventId}\n"${event.question}"`;
+        console.log(`[spawn-auctions] ${msg}\n${url}`);
+        await ntfy("Auction Created", msg, ["tada"], url);
         return;
       }
 
