@@ -8,7 +8,8 @@ import {
 } from "@/__generated__/graphql";
 import { EventCard } from "@/components/event-card";
 
-type SettlementResponseItem = PredictionEventsQuery["settlementResponses"][number];
+type SettlementResponseItem =
+  PredictionEventsQuery["settlementResponses"][number];
 
 const PAGE_SIZE = 50;
 
@@ -28,10 +29,10 @@ export function EventsList() {
 
   if (error) {
     return (
-      <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">
-        Failed to load events. The ExamplePredictionMarket subgraph may not be
-        deployed yet. Check that <code>NEXT_PUBLIC_SUBGRAPH_URL</code> points to
-        the correct subgraph endpoint.
+      <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        Failed to load events. Check that{" "}
+        <code className="font-mono text-xs">NEXT_PUBLIC_SUBGRAPH_URL</code>{" "}
+        points to the correct subgraph endpoint.
       </div>
     );
   }
@@ -42,7 +43,7 @@ export function EventsList() {
         {Array.from({ length: 3 }).map((_, i) => (
           <div
             key={i}
-            className="h-28 animate-pulse rounded-lg border border-gray-700 bg-gray-800"
+            className="h-28 animate-pulse rounded-[calc(var(--radius)+6px)] border bg-card"
           />
         ))}
       </div>
@@ -53,7 +54,7 @@ export function EventsList() {
 
   if (events.length === 0) {
     return (
-      <div className="rounded-lg border border-gray-700 bg-gray-800 p-6 text-center text-sm text-gray-400">
+      <div className="rounded-[calc(var(--radius)+6px)] border bg-card p-6 text-center text-sm text-muted-foreground">
         No events found.
       </div>
     );

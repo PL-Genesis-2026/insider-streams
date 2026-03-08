@@ -7,18 +7,29 @@ export const env = createEnv({
       .string()
       .regex(/^0x[0-9a-fA-F]{64}$/)
       .optional(),
-    RPC_URL: z.string().url().optional().default("https://ethereum-sepolia-rpc.publicnode.com"),
+    RPC_URL: z
+      .string()
+      .url()
+      .optional()
+      .default("https://ethereum-sepolia-rpc.publicnode.com"),
   },
   client: {
+    NEXT_PUBLIC_PROJECT_ID: z.string().min(1),
     NEXT_PUBLIC_SUBGRAPH_URL: z.string().url(),
     NEXT_PUBLIC_SUBGRAPH_API_KEY: z.string().min(1).optional(),
     NEXT_PUBLIC_FIREBASE_API_KEY: z.string().min(1).optional(),
     NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: z.string().min(1).optional(),
     NEXT_PUBLIC_FIREBASE_PROJECT_ID: z.string().min(1).optional(),
+    NEXT_PUBLIC_INSIDER_STREAMS_URL: z
+      .string()
+      .url()
+      .optional()
+      .default("http://localhost:3000"),
   },
   runtimeEnv: {
     OWNER_PK: process.env.OWNER_PK,
     RPC_URL: process.env.RPC_URL,
+    NEXT_PUBLIC_PROJECT_ID: process.env.NEXT_PUBLIC_PROJECT_ID,
     NEXT_PUBLIC_SUBGRAPH_URL: process.env.NEXT_PUBLIC_SUBGRAPH_URL,
     NEXT_PUBLIC_SUBGRAPH_API_KEY: process.env.NEXT_PUBLIC_SUBGRAPH_API_KEY,
     NEXT_PUBLIC_FIREBASE_API_KEY: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -26,6 +37,8 @@ export const env = createEnv({
       process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
     NEXT_PUBLIC_FIREBASE_PROJECT_ID:
       process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    NEXT_PUBLIC_INSIDER_STREAMS_URL:
+      process.env.NEXT_PUBLIC_INSIDER_STREAMS_URL,
   },
   emptyStringAsUndefined: true,
 });

@@ -1,7 +1,10 @@
 import type { PredictionEventsQuery } from "@/__generated__/graphql";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 type EventCreatedItem = PredictionEventsQuery["eventCreateds"][number];
-type SettlementResponseItem = PredictionEventsQuery["settlementResponses"][number];
+type SettlementResponseItem =
+  PredictionEventsQuery["settlementResponses"][number];
 
 type EventCardProps = {
   event: EventCreatedItem;
@@ -9,7 +12,6 @@ type EventCardProps = {
   href?: string;
 };
 
-// Contract: enum Outcome { None=0, No=1, Yes=2, Inconclusive=3 }
 function outcomeLabel(outcome: number): string {
   switch (outcome) {
     case 1:
@@ -26,34 +28,24 @@ function outcomeLabel(outcome: number): string {
 function outcomeBadgeClass(outcome: number): string {
   switch (outcome) {
     case 2:
-      return "bg-green-500/20 text-green-400 border-green-500/30";
+      return "border-emerald-500/30 bg-emerald-500/15 text-emerald-400";
     case 1:
-      return "bg-red-500/20 text-red-400 border-red-500/30";
+      return "border-rose-500/30 bg-rose-500/15 text-rose-400";
     case 3:
-      return "bg-yellow-500/20 text-yellow-400 border-yellow-500/30";
+      return "border-yellow-500/30 bg-yellow-500/15 text-yellow-400";
     default:
-      return "bg-gray-500/20 text-gray-400 border-gray-500/30";
+      return "bg-muted text-muted-foreground";
   }
 }
 
-function statusLabel(event: EventCreatedItem, settlement?: SettlementResponseItem): string {
+function statusLabel(
+  event: EventCreatedItem,
+  settlement?: SettlementResponseItem,
+): string {
   if (settlement) return "Settled";
   const closeTime = Number(event.eventClose) * 1000;
   if (Date.now() > closeTime) return "Closed";
   return "Open";
-}
-
-function statusBadgeClass(status: string): string {
-  switch (status) {
-    case "Open":
-      return "bg-blue-500/20 text-blue-400 border-blue-500/30";
-    case "Closed":
-      return "bg-gray-500/20 text-gray-400 border-gray-500/30";
-    case "Settled":
-      return "bg-purple-500/20 text-purple-400 border-purple-500/30";
-    default:
-      return "bg-gray-500/20 text-gray-400 border-gray-500/30";
-  }
 }
 
 function formatDate(unixSeconds: string): string {
@@ -68,30 +60,41 @@ export function EventCard({ event, settlement, href }: EventCardProps) {
   const status = statusLabel(event, settlement);
 
   const content = (
-    <div className="rounded-lg border border-gray-700 bg-gray-800 p-5 transition-colors hover:border-gray-600 hover:bg-gray-750">
-      {/* Header: question + badges */}
+    <div
+      className={cn(
+        "rounded-[calc(var(--radius)+6px)] border bg-card p-5 transition-colors",
+        href && "hover:border-accent/30 hover:bg-card/80",
+      )}
+    >
       <div className="mb-3 flex items-start justify-between gap-3">
-        <h3 className="text-base font-semibold leading-snug text-white">
+        <h3 className="text-base font-semibold leading-snug text-card-foreground">
           {event.question}
         </h3>
         <div className="flex shrink-0 items-center gap-2">
-          <span
-            className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${statusBadgeClass(status)}`}
+          <Badge
+            variant={
+              status === "Open"
+                ? "accent"
+                : status === "Settled"
+                  ? "default"
+                  : "muted"
+            }
+            className="text-[0.65rem]"
           >
             {status}
-          </span>
+          </Badge>
           {settlement && (
-            <span
-              className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${outcomeBadgeClass(settlement.outcome)}`}
+            <Badge
+              variant="outline"
+              className={cn("text-[0.65rem]", outcomeBadgeClass(settlement.outcome))}
             >
               {outcomeLabel(settlement.outcome)}
-            </span>
+            </Badge>
           )}
         </div>
       </div>
 
-      {/* Meta row */}
-      <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-gray-400">
+      <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
         <span>Event #{event.eventId}</span>
         <span>Creator: {shortenAddress(event.creator)}</span>
         <span>Created: {formatDate(event.blockTimestamp)}</span>
@@ -100,11 +103,10 @@ export function EventCard({ event, settlement, href }: EventCardProps) {
         )}
       </div>
 
-      {/* Settlement info */}
       {settlement && (
-        <div className="mt-3 rounded-md border border-gray-700 bg-gray-900/50 px-3 py-2 text-xs text-gray-300">
+        <div className="mt-3 rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
           Settled at {formatDate(settlement.blockTimestamp)} &mdash; Outcome:{" "}
-          <span className="font-semibold text-white">
+          <span className="font-semibold text-foreground">
             {outcomeLabel(settlement.outcome)}
           </span>
         </div>
@@ -113,7 +115,11 @@ export function EventCard({ event, settlement, href }: EventCardProps) {
   );
 
   if (href) {
-    return <a href={href} className="block">{content}</a>;
+    return (
+      <a href={href} className="block">
+        {content}
+      </a>
+    );
   }
 
   return content;
