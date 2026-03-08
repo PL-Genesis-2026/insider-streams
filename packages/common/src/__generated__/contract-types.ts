@@ -333,6 +333,13 @@ export const examplePredictionMarketAbi = [
   },
   {
     type: 'function',
+    inputs: [{ name: 'eventId', internalType: 'uint256', type: 'uint256' }],
+    name: 'adminCloseEvent',
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
     inputs: [
       { name: 'eventId', internalType: 'uint256', type: 'uint256' },
       {
@@ -621,6 +628,19 @@ export const examplePredictionMarketAbi = [
     name: 'withdrawLiquidity',
     outputs: [],
     stateMutability: 'nonpayable',
+  },
+  {
+    type: 'event',
+    anonymous: false,
+    inputs: [
+      {
+        name: 'eventId',
+        internalType: 'uint256',
+        type: 'uint256',
+        indexed: true,
+      },
+    ],
+    name: 'EventAdminClosed',
   },
   {
     type: 'event',

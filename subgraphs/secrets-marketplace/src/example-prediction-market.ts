@@ -1,4 +1,5 @@
 import {
+  EventAdminClosed as EventAdminClosedEvent,
   EventCreated as EventCreatedEvent,
   LiquidityWithdrawn as LiquidityWithdrawnEvent,
   SettlementRequested as SettlementRequestedEvent,
@@ -7,6 +8,7 @@ import {
   SharesRedeemed as SharesRedeemedEvent,
 } from "../generated/ExamplePredictionMarket/ExamplePredictionMarket"
 import {
+  EventAdminClosed,
   EventCreated,
   LiquidityWithdrawn,
   SettlementRequested,
@@ -14,6 +16,19 @@ import {
   SharesPurchased,
   SharesRedeemed,
 } from "../generated/schema"
+
+export function handleEventAdminClosed(event: EventAdminClosedEvent): void {
+  let entity = new EventAdminClosed(
+    event.transaction.hash.concatI32(event.logIndex.toI32()),
+  )
+  entity.eventId = event.params.eventId
+
+  entity.blockNumber = event.block.number
+  entity.blockTimestamp = event.block.timestamp
+  entity.transactionHash = event.transaction.hash
+
+  entity.save()
+}
 
 export function handleEventCreated(event: EventCreatedEvent): void {
   let entity = new EventCreated(

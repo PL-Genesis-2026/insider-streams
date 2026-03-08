@@ -2,12 +2,12 @@
  * Reputation Resolver E2E Test Script
  *
  * Full lifecycle test on Eth Sepolia:
- *   1. Owner creates an ExamplePredictionMarket event (60s duration)
+ *   1. Owner creates an ExamplePredictionMarket event
  *   2. Owner creates 2 auctions — SellerA predicts "yes", SellerB predicts "no"
  *   3. Owner places bids on both auctions
  *   4. Insert Supabase records (sellers, secrets with event_data, deposits, private_bids)
- *   5. Waits for auctions to expire -> CRE auction-closer closes them
- *   6. Waits for prediction market event to close + force settles it to "Yes"
+ *   5. Admin-expires both auctions immediately -> CRE auction-closer closes them
+ *   6. Admin-closes prediction market event + requests settlement + CRE settler settles to "Yes"
  *   7. Runs CRE reputation-resolver (broadcast)
  *   8. Verifies: SellerA reputation +1, SellerB reputation -1, event marked resolved
  *
@@ -76,7 +76,7 @@ const SELLER_B = "E2EReputationSellerB";
 const BID_AMOUNT = 1_000_000n; // 1 USDC
 const EVENT_DURATION = BigInt(3600); // 1 hour — well beyond test duration
 const DEPOSIT_AMOUNT = BID_AMOUNT * 10n; // 10 USDC headroom
-const QUESTION = "Reputation resolver E2E test event";
+const QUESTION = "The New York Yankees won the 2009 World Series."; // factual "Yes" for Gemini
 
 // Unique transaction ID for the mock deposit (avoids collisions with real data)
 const DEPOSIT_TX_ID = `e2e-reputation-resolver-deposit-${Date.now()}`;
@@ -331,15 +331,41 @@ async function main() {
   );
   console.log(`  ok Auction B (${auctionIdB}) is Closed (status=1)`);
 
-  // ── Step 12: Force settle event to "Yes" outcome ──────────────────────────
-  step('Force settling event to "Yes" outcome...');
-  const forceSettleHash = await ownerClient.writeContract({
+  // ── Step 12: Admin-close event + request settlement + CRE settler ──────────
+  step("Admin-closing prediction market event...");
+  const adminCloseHash = await ownerClient.writeContract({
     address: SIMPLE_MARKET,
     abi: examplePredictionMarketAbi,
-    functionName: "forceSettle",
-    args: [eventId, 2, 9500, "E2E test"],
+    functionName: "adminCloseEvent",
+    args: [eventId],
   });
-  await waitForTx(publicClient, forceSettleHash, "Event force-settled to Yes");
+  await waitForTx(publicClient, adminCloseHash, "Event admin-closed");
+
+  step("Requesting settlement...");
+  const settlementRequestHash = await ownerClient.writeContract({
+    address: SIMPLE_MARKET,
+    abi: examplePredictionMarketAbi,
+    functionName: "requestSettlement",
+    args: [eventId],
+  });
+  await waitForTx(publicClient, settlementRequestHash, "Settlement requested");
+
+  step("Running CRE external-prediction-market-settler with broadcast...");
+  runCRE({
+    workflow: "external-prediction-market-settler",
+    evmTxHash: settlementRequestHash,
+    evmEventIndex: 0,
+    triggerIndex: 0,
+    broadcast: true,
+  });
+  const settledEvent = await publicClient.readContract({
+    address: SIMPLE_MARKET,
+    abi: examplePredictionMarketAbi,
+    functionName: "getEvent",
+    args: [eventId],
+  });
+  assert(settledEvent.status === 2, `Expected event status=2 (Settled), got ${settledEvent.status}`);
+  console.log(`  ok Event ${eventId} settled — outcome: ${settledEvent.outcome === 2 ? "Yes" : settledEvent.outcome === 1 ? "No" : `Unknown(${settledEvent.outcome})`}`);
 
   // ── Step 14: Record reputation before ──────────────────────────────────────
   step("Recording seller reputations before reputation-resolver...");
