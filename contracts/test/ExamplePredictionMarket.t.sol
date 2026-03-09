@@ -55,6 +55,21 @@ contract ExamplePredictionMarketTest is Test {
         sm.onReport(hex"", report);
     }
 
+    /// @dev Asserts that tracked reserves match actual token balances held by the contract.
+    function _assertReservesMatchBalances(uint256 eventId) internal view {
+        ExamplePredictionMarket.Event memory e = sm.getEvent(eventId);
+        assertEq(
+            e.yesToken.balanceOf(address(sm)),
+            e.yesReserve,
+            "yesReserve != actual YES token balance"
+        );
+        assertEq(
+            e.noToken.balanceOf(address(sm)),
+            e.noReserve,
+            "noReserve != actual NO token balance"
+        );
+    }
+
     // ── newEvent tests ─────────────────────────────────────
 
     function test_newEvent_createsEventWithTokens() public {
@@ -523,6 +538,81 @@ contract ExamplePredictionMarketTest is Test {
         uint256 no = sm.getNoPrice(id);
         // Should sum to ~1e6 (may lose 1 due to integer division)
         assertTrue(yes + no >= 999_999 && yes + no <= 1_000_001);
+    }
+
+    // ── Reserve accounting invariant tests ──────────────────
+
+    function test_buyShares_reservesMatchBalances_afterSingleBuyYes() public {
+        uint256 id = _createEvent();
+        _assertReservesMatchBalances(id);
+
+        vm.prank(buyer1);
+        sm.buyShares(id, ExamplePredictionMarket.Outcome.Yes, 5e6);
+        _assertReservesMatchBalances(id);
+    }
+
+    function test_buyShares_reservesMatchBalances_afterSingleBuyNo() public {
+        uint256 id = _createEvent();
+
+        vm.prank(buyer1);
+        sm.buyShares(id, ExamplePredictionMarket.Outcome.No, 5e6);
+        _assertReservesMatchBalances(id);
+    }
+
+    function test_buyShares_reservesMatchBalances_afterMultipleTrades() public {
+        uint256 id = _createEvent();
+
+        vm.prank(buyer1);
+        sm.buyShares(id, ExamplePredictionMarket.Outcome.Yes, 5e6);
+        _assertReservesMatchBalances(id);
+
+        vm.prank(buyer2);
+        sm.buyShares(id, ExamplePredictionMarket.Outcome.No, 3e6);
+        _assertReservesMatchBalances(id);
+
+        vm.prank(buyer1);
+        sm.buyShares(id, ExamplePredictionMarket.Outcome.Yes, 2e6);
+        _assertReservesMatchBalances(id);
+
+        vm.prank(buyer2);
+        sm.buyShares(id, ExamplePredictionMarket.Outcome.No, 7e6);
+        _assertReservesMatchBalances(id);
+    }
+
+    function test_buyShares_reservesMatchBalances_manyTrades() public {
+        uint256 id = _createEvent();
+
+        // 20 alternating trades to stress-test cumulative accounting
+        for (uint256 i = 0; i < 20; i++) {
+            address buyer = (i % 2 == 0) ? buyer1 : buyer2;
+            ExamplePredictionMarket.Outcome side = (i % 3 == 0)
+                ? ExamplePredictionMarket.Outcome.No
+                : ExamplePredictionMarket.Outcome.Yes;
+            uint256 amount = (1 + (i % 5)) * 1e6; // 1–5 USDC
+
+            vm.prank(buyer);
+            sm.buyShares(id, side, amount);
+            _assertReservesMatchBalances(id);
+        }
+    }
+
+    function test_buyShares_reservesMatchBalances_largeBuyAfterSkew() public {
+        uint256 id = _createEvent();
+
+        // Skew the pool heavily toward YES
+        vm.prank(buyer1);
+        sm.buyShares(id, ExamplePredictionMarket.Outcome.Yes, 100e6);
+        _assertReservesMatchBalances(id);
+
+        // Now buy the opposite side
+        vm.prank(buyer2);
+        sm.buyShares(id, ExamplePredictionMarket.Outcome.No, 50e6);
+        _assertReservesMatchBalances(id);
+
+        // And buy YES again on the skewed pool
+        vm.prank(buyer1);
+        sm.buyShares(id, ExamplePredictionMarket.Outcome.Yes, 1e6);
+        _assertReservesMatchBalances(id);
     }
 
     // ── Full lifecycle test ─────────────────────────────────
