@@ -1,5 +1,11 @@
 # Insider Streams
 
+## Links
+
+* [Video](https://www.youtube.com/watch?v=sGsNvkky2xc)
+* [Insider Streams frontend](https://insider-streams-insider-streams-fro.vercel.app/)
+* [External Prediction Market frontend](https://insider-streams-prediction-market-f.vercel.app/) (demo prediction market we integrated with to show CRE based interop)
+
 ## Architecture
 
 ![alt text](./docs/architecture.png)
