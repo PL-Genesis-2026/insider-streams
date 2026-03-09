@@ -5,6 +5,7 @@ import { format, parseISO } from "date-fns";
 import { ExternalLink, Trophy, User } from "lucide-react";
 import { CONFIDENTIAL_USDC_DECIMALS } from "@private-streams/common";
 import { formatUnits } from "viem";
+import { findOwnBidTransactionHash } from "@/lib/private-data/find-own-bid-transaction-hash";
 import { usePrivateData } from "@/lib/private-data/use-private-data";
 import type { AuctionDetailBid } from "@/lib/auction-detail";
 import { cn } from "@/lib/utils";
@@ -66,19 +67,21 @@ function BidRow({
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-3">
-          <p className="truncate text-sm font-medium text-foreground">
-            {formatCurrency(bid.amountUsdc)}
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <p className="text-sm font-medium text-foreground">
+              {formatCurrency(bid.amountUsdc)}
+            </p>
             {highlightLabel ? (
-              <span className="ml-2 text-xs font-normal text-accent">
+              <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.18em] text-accent">
                 {highlightLabel}
               </span>
             ) : null}
-            {isOwnBid && !highlightLabel ? (
-              <span className="ml-2 text-xs font-normal text-primary/70">
+            {isOwnBid ? (
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.18em] text-primary">
                 Your bid
               </span>
             ) : null}
-          </p>
+          </div>
         </div>
         <div className="mt-0.5 flex items-center gap-3 text-xs text-muted-foreground/70">
           <time>{formatTimestamp(bid.timestamp)}</time>
@@ -119,27 +122,19 @@ export function BidHistoryList({
     );
   }, [privateBid]);
 
-  // Track whether we've already matched the user's bid to avoid
-  // marking duplicates if two bids happen to share the same amount.
-  let matched = false;
+  const ownBidTransactionHash = useMemo(
+    () => findOwnBidTransactionHash(bids, ownBidAmountUsdc),
+    [bids, ownBidAmountUsdc],
+  );
 
   return (
     <>
       {bids.map((bid, index) => {
-        let isOwnBid = false;
-        if (
-          !matched &&
-          ownBidAmountUsdc !== undefined &&
-          bid.amountUsdc === ownBidAmountUsdc
-        ) {
-          isOwnBid = true;
-          matched = true;
-        }
         return (
           <BidRow
             key={bid.transactionHash}
             bid={bid}
-            isOwnBid={isOwnBid}
+            isOwnBid={bid.transactionHash === ownBidTransactionHash}
             highlightLabel={
               index === 0
                 ? isClosed

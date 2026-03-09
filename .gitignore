@@ -16,6 +16,7 @@ contracts/lib/
 .DS_Store
 .turbo/
 .cre_build_tmp.js
-.claude/settings.local.json
+.claude/worktrees/
+.playwright-cli/
 .watcher-state.json
 Untitled
