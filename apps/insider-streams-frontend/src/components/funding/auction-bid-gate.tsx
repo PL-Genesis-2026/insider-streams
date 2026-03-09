@@ -20,6 +20,7 @@ import { getFundingStatusCopy } from "@/lib/funding/get-funding-snapshot";
 import { useFundingSnapshot } from "@/lib/funding/use-funding-snapshot";
 import { usePrivateData } from "@/lib/private-data/use-private-data";
 import { BidModal } from "@/components/funding/bid-modal";
+import { getDashboardTabHref } from "@/lib/dashboard-tabs";
 
 function Label({ children }: { children: React.ReactNode }) {
   return (
@@ -177,13 +178,13 @@ export function AuctionBidGate({
         {fundingSnapshot.status === "not_funded_yet" ? (
           <div className="space-y-3">
             <Button asChild className="w-full">
-              <Link href="/dashboard#wallet">
+              <Link href={getDashboardTabHref("wallet")}>
                 Deposit funds to bid
                 <ArrowRight className="size-4" />
               </Link>
             </Button>
             <Button asChild variant="outline" className="w-full">
-              <Link href="/dashboard#wallet">
+              <Link href={getDashboardTabHref("wallet")}>
                 Manage wallet
                 <RefreshCw className="size-4" />
               </Link>
@@ -207,7 +208,7 @@ export function AuctionBidGate({
               <RefreshCw className="size-4" />
             </Button>
             <Button asChild variant="outline" className="w-full">
-              <Link href="/dashboard#wallet">
+              <Link href={getDashboardTabHref("wallet")}>
                 Manage wallet
                 <ArrowRight className="size-4" />
               </Link>

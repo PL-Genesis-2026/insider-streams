@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { lazy, Suspense, useCallback, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CONFIDENTIAL_USDC_DECIMALS } from "@private-streams/common";
 import {
@@ -9,6 +10,7 @@ import {
   ArrowRight,
   Gavel,
   Loader2,
+  Megaphone,
   RefreshCw,
   Wallet,
 } from "lucide-react";
@@ -51,9 +53,13 @@ import { fetchBuyerDashboard } from "@/lib/buyer-dashboard/api";
 import type { BuyerDashboardAuction } from "@/lib/buyer-dashboard/types";
 import { useFundingSnapshot } from "@/lib/funding/use-funding-snapshot";
 import { usePrivateData } from "@/lib/private-data/use-private-data";
+import type { DashboardTab } from "@/lib/dashboard-tabs";
+import { getDashboardTabHref } from "@/lib/dashboard-tabs";
 import { useSignedWalletSession } from "@/lib/wallet/use-signed-wallet-session";
 import { formatAddress } from "@/lib/wallet/format-address";
 import { useWalletSession } from "@/lib/wallet/use-wallet-session";
+
+const SellerTab = lazy(() => import("@/components/dashboard/seller-tab"));
 
 const usdPreciseFormat = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -155,7 +161,8 @@ function AuctionStatusBadge({ status }: { status: string }) {
   return <Badge variant="muted">{status}</Badge>;
 }
 
-export function BuyerDashboard() {
+export function BuyerDashboard({ activeTab }: { activeTab: DashboardTab }) {
+  const router = useRouter();
   const walletSession = useWalletSession();
   const { getSignedSession } = useSignedWalletSession();
   const {
@@ -166,7 +173,6 @@ export function BuyerDashboard() {
   } = usePrivateData();
 
   const fundingSnapshot = useFundingSnapshot({ enabled: isRevealed });
-  const [activeTab, setActiveTab] = useState<"wallet" | "positions">("wallet");
   const [hideLost, setHideLost] = useState(true);
   const [hideResolvedWins, setHideResolvedWins] = useState(false);
   const [activeBidAuctionId, setActiveBidAuctionId] = useState<string | null>(
@@ -265,45 +271,16 @@ export function BuyerDashboard() {
     [activeBidAuctionId, auctions],
   );
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const syncTabFromHash = () => {
-      const hash = window.location.hash.toLowerCase();
-      if (hash === "#positions") {
-        setActiveTab("positions");
-        return;
-      }
-      if (hash === "#wallet") {
-        setActiveTab("wallet");
-        return;
-      }
-      setActiveTab(isRevealed ? "positions" : "wallet");
-    };
-
-    syncTabFromHash();
-    window.addEventListener("hashchange", syncTabFromHash);
-
-    return () => {
-      window.removeEventListener("hashchange", syncTabFromHash);
-    };
-  }, [isRevealed]);
-
-  useEffect(() => {
-    if (!isRevealed && activeTab !== "wallet") {
-      setActiveTab("wallet");
-    }
-  }, [activeTab, isRevealed]);
-
   const handleTabChange = useCallback((nextTab: string) => {
-    const normalized = nextTab === "positions" ? "positions" : "wallet";
-    setActiveTab(normalized);
-
-    if (typeof window === "undefined") return;
-    const nextHash = normalized === "positions" ? "#positions" : "#wallet";
-    const nextUrl = `${window.location.pathname}${window.location.search}${nextHash}`;
-    window.history.replaceState(null, "", nextUrl);
-  }, []);
+    const normalized =
+      nextTab === "positions"
+        ? "positions"
+        : nextTab === "signals"
+          ? "signals"
+          : "wallet";
+    if (normalized === activeTab) return;
+    router.push(getDashboardTabHref(normalized));
+  }, [activeTab, router]);
 
   if (!walletSession.isConnected) {
     return (
@@ -389,6 +366,13 @@ export function BuyerDashboard() {
                   ({filteredAuctions.length})
                 </span>
               ) : null}
+            </TabsTrigger>
+            <TabsTrigger
+              value="signals"
+              className="relative gap-2 rounded-none border-none bg-transparent px-5 py-2.5 text-base font-medium text-muted-foreground/60 shadow-none transition-colors after:absolute after:inset-x-0 after:-bottom-[17px] after:h-[2px] after:rounded-full after:bg-accent after:opacity-0 after:transition-opacity data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none data-[state=active]:after:opacity-100"
+            >
+              <Megaphone className="size-4" />
+              My Signals
             </TabsTrigger>
           </TabsList>
 
@@ -746,10 +730,58 @@ export function BuyerDashboard() {
                 <Button
                   variant="accent"
                   className="w-full sm:w-auto"
-                  onClick={() => {
-                    handleTabChange("wallet");
-                    handleReveal();
-                  }}
+                  onClick={handleReveal}
+                  disabled={isRevealing}
+                >
+                  {isRevealing ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="size-4" />
+                  )}
+                  Unlock wallet
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        <TabsContent value="signals" className="space-y-6">
+          {isRevealed ? (
+            <Suspense
+              fallback={
+                <div className="flex flex-col gap-5">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="h-64 animate-pulse rounded-[calc(var(--radius)+6px)] border border-border/60 bg-muted/25"
+                    />
+                  ))}
+                </div>
+              }
+            >
+              <SellerTab />
+            </Suspense>
+          ) : (
+            <Card className="border-border/70 bg-muted/20">
+              <CardHeader>
+                <CardTitle className="text-[2.4rem]">
+                  Unlock your wallet to view your signals.
+                </CardTitle>
+                <CardDescription>
+                  Your auctions, reputation, and earnings appear here after
+                  unlocking.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="max-w-2xl text-sm leading-7 text-muted-foreground">
+                  If you have sold signals before, you will see your track
+                  record and every auction you created. Otherwise you can
+                  create your first one from here.
+                </p>
+                <Button
+                  variant="accent"
+                  className="w-full sm:w-auto"
+                  onClick={handleReveal}
                   disabled={isRevealing}
                 >
                   {isRevealing ? (
