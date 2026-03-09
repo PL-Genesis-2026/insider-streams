@@ -9,18 +9,14 @@ import {
   CONFIDENTIAL_USDC_DECIMALS,
 } from "@private-streams/common";
 import { parseUnits, type Address } from "viem";
-import {
-  ArrowRight,
-  Loader2,
-  TrendingUp,
-  TrendingDown,
-  ExternalLink,
-} from "lucide-react";
+import { ArrowRight, Loader2, TrendingUp, TrendingDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { EtherscanLink } from "@/components/etherscan-link";
 import { useWalletSession } from "@/lib/wallet/use-wallet-session";
 import { ConnectWalletButton } from "@/components/wallet/connect-wallet-button";
 import { SwitchNetworkButton } from "@/components/wallet/switch-network-button";
+import { OUTCOME } from "@/lib/market-utils";
 import { cn } from "@/lib/utils";
 import { env } from "@/env";
 import { walletEnabled } from "@/lib/wallet/config";
@@ -38,7 +34,7 @@ type PurchaseState =
   | { step: "success"; txHash: string; outcome: Outcome; amount: string }
   | { step: "error"; message: string };
 
-const OUTCOME_CONTRACT_VALUES = { yes: 2, no: 1 } as const;
+const OUTCOME_CONTRACT_VALUES = { yes: OUTCOME.Yes, no: OUTCOME.No } as const;
 
 export function BuySharesPanel({ eventId }: BuySharesPanelProps) {
   if (!walletEnabled) {
@@ -216,15 +212,13 @@ function BuySharesPanelWithWallet({ eventId }: BuySharesPanelProps) {
             </span>{" "}
             shares.
           </p>
-          <a
-            href={`https://sepolia.etherscan.io/tx/${purchaseState.txHash}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-2 inline-flex items-center gap-1.5 text-xs text-accent underline underline-offset-4 hover:text-accent/80"
-          >
-            View on Etherscan
-            <ExternalLink className="size-3" />
-          </a>
+          <div className="mt-2">
+            <EtherscanLink
+              type="tx"
+              value={purchaseState.txHash}
+              className="inline-flex items-center gap-1.5 text-xs text-accent underline underline-offset-4 hover:text-accent/80 font-mono"
+            />
+          </div>
         </div>
 
         <div className="rounded-[calc(var(--radius)+6px)] border border-accent/25 bg-accent/5 p-5">
