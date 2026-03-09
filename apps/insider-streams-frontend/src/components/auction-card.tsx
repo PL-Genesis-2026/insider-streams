@@ -23,6 +23,7 @@ import {
   CONFIDENTIAL_USDC_DECIMALS,
 } from "@private-streams/common";
 import { formatUnits } from "viem";
+import { PredictionMarketLink } from "@/components/prediction-market-link";
 import { cn } from "@/lib/utils";
 import type { PrivateBidRecord } from "@/lib/private-data/types";
 
@@ -147,9 +148,13 @@ function BidModule({ auction }: { auction: AuctionCardData }) {
         <p className="text-xs uppercase tracking-[0.22em] text-accent">
           Market
         </p>
-        <p className="mt-2 font-serif text-[1.8rem] leading-none font-medium tracking-[-0.05em] text-foreground">
-          #{auction.marketId}
-        </p>
+        <div className="mt-2">
+          <PredictionMarketLink
+            marketId={auction.marketId}
+            variant="inline"
+            className="relative z-20"
+          />
+        </div>
       </div>
     </div>
   );
@@ -166,7 +171,7 @@ function ReputationBadge({ auction }: { auction: AuctionCardData }) {
     <TooltipProvider delayDuration={1000}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <span>
+          <span className="relative z-20">
             <Badge variant="outline" className="cursor-default text-[10px]">
               Rep: {auction.sellerReputationScore}
             </Badge>
@@ -243,7 +248,7 @@ export function AuctionCard({
   const cardContent = (
     <Card
       className={cn(
-        "border-border/90 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_98%,transparent),color-mix(in_srgb,var(--secondary)_22%,transparent))] transition-[border-color,box-shadow] duration-120 ease-out hover:border-primary/30 hover:shadow-[0_18px_48px_rgba(0,0,0,0.22)]",
+        "border-border/90 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_98%,transparent),color-mix(in_srgb,var(--secondary)_22%,transparent))] transition-[border-color,box-shadow] duration-120 ease-out hover:border-primary/30 hover:shadow-[0_18px_48px_rgba(0,0,0,0.22)] group-hover:border-primary/30 group-hover:shadow-[0_18px_48px_rgba(0,0,0,0.22)]",
         className,
       )}
     >
@@ -287,12 +292,13 @@ export function AuctionCard({
   }
 
   return (
-    <Link
-      href={href}
-      className="group block rounded-[calc(var(--radius)+6px)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-      aria-label={`View ${titleLabel}`}
-    >
+    <div className="group relative rounded-[calc(var(--radius)+6px)]">
+      <Link
+        href={href}
+        className="absolute inset-0 z-10 rounded-[calc(var(--radius)+6px)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        aria-label={`View ${titleLabel}`}
+      />
       {cardContent}
-    </Link>
+    </div>
   );
 }
