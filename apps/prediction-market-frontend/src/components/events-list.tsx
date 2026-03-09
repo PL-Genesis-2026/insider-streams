@@ -19,8 +19,10 @@ import { BarChart3, TrendingUp, Users, Activity } from "lucide-react";
 type EventCreatedItem = PredictionEventsQuery["eventCreateds"][number];
 type SettlementResponseItem =
   PredictionEventsQuery["settlementResponses"][number];
+type SettlementRequestedItem =
+  PredictionEventsQuery["settlementRequesteds"][number];
 
-type FilterTab = "all" | "open" | "closed" | "settled";
+type FilterTab = "all" | "open" | "pending" | "settled";
 
 const PAGE_SIZE = 50;
 
@@ -37,20 +39,25 @@ const EMPTY_VOLUME: EventVolume = {
 const FILTER_TABS: { key: FilterTab; label: string }[] = [
   { key: "all", label: "All" },
   { key: "open", label: "Live" },
-  { key: "closed", label: "Closed" },
+  { key: "pending", label: "Pending" },
   { key: "settled", label: "Settled" },
 ];
 
 function sortEvents(
   events: readonly EventCreatedItem[],
   settlements: Map<string, SettlementResponseItem>,
+  settlementRequests: Map<string, SettlementRequestedItem>,
 ): EventCreatedItem[] {
-  const now = Date.now();
-
   function bucket(e: EventCreatedItem): number {
-    const settled = settlements.has(String(e.eventId));
-    if (!settled && Number(e.eventClose) * 1000 > now) return 0;
-    if (!settled) return 1;
+    const status = getEventStatus(
+      e,
+      settlements.get(String(e.eventId)),
+      settlementRequests.get(String(e.eventId)),
+    );
+    if (status === "open") return 0;
+    if (status === "settling" || status === "closed" || status === "manual") {
+      return 1;
+    }
     return 2;
   }
 
@@ -122,6 +129,14 @@ export function EventsList() {
     return map;
   }, [data?.settlementResponses]);
 
+  const settlementRequestMap = useMemo(() => {
+    const map = new Map<string, SettlementRequestedItem>();
+    for (const s of data?.settlementRequesteds ?? []) {
+      map.set(String(s.eventId), s);
+    }
+    return map;
+  }, [data?.settlementRequesteds]);
+
   const volumeMap = useMemo(
     () => computeAllEventVolumes(data?.sharesPurchaseds ?? []),
     [data?.sharesPurchaseds],
@@ -132,8 +147,8 @@ export function EventsList() {
     [data?.eventCreateds],
   );
   const sortedEvents = useMemo(
-    () => sortEvents(events, settlementMap),
-    [events, settlementMap],
+    () => sortEvents(events, settlementMap, settlementRequestMap),
+    [events, settlementMap, settlementRequestMap],
   );
 
   const stats = useMemo(() => {
@@ -146,7 +161,11 @@ export function EventsList() {
       if (vol) {
         totalVolume += vol.totalUsdc;
       }
-      const status = getEventStatus(event, settlementMap.get(String(event.eventId)));
+      const status = getEventStatus(
+        event,
+        settlementMap.get(String(event.eventId)),
+        settlementRequestMap.get(String(event.eventId)),
+      );
       if (status === "open") openCount++;
     }
 
@@ -160,29 +179,46 @@ export function EventsList() {
       totalVolume,
       traderCount: allTraders.size,
     };
-  }, [events, volumeMap, settlementMap, data?.sharesPurchaseds]);
+  }, [events, volumeMap, settlementMap, settlementRequestMap, data?.sharesPurchaseds]);
 
   const filteredEvents = useMemo(() => {
     if (activeFilter === "all") return sortedEvents;
     return sortedEvents.filter((event) => {
-      const status = getEventStatus(event, settlementMap.get(String(event.eventId)));
+      const status = getEventStatus(
+        event,
+        settlementMap.get(String(event.eventId)),
+        settlementRequestMap.get(String(event.eventId)),
+      );
       if (activeFilter === "open") return status === "open";
-      if (activeFilter === "closed") return status === "closed";
+      if (activeFilter === "pending") {
+        return status === "closed" || status === "settling" || status === "manual";
+      }
       if (activeFilter === "settled") return status === "settled";
       return true;
     });
-  }, [sortedEvents, settlementMap, activeFilter]);
+  }, [sortedEvents, settlementMap, settlementRequestMap, activeFilter]);
 
   const filterCounts = useMemo(() => {
-    const counts: Record<FilterTab, number> = { all: sortedEvents.length, open: 0, closed: 0, settled: 0 };
+    const counts: Record<FilterTab, number> = {
+      all: sortedEvents.length,
+      open: 0,
+      pending: 0,
+      settled: 0,
+    };
     for (const event of sortedEvents) {
-      const status = getEventStatus(event, settlementMap.get(String(event.eventId)));
+      const status = getEventStatus(
+        event,
+        settlementMap.get(String(event.eventId)),
+        settlementRequestMap.get(String(event.eventId)),
+      );
       if (status === "open") counts.open++;
-      else if (status === "closed") counts.closed++;
+      else if (status === "closed" || status === "settling" || status === "manual") {
+        counts.pending++;
+      }
       else if (status === "settled") counts.settled++;
     }
     return counts;
-  }, [sortedEvents, settlementMap]);
+  }, [sortedEvents, settlementMap, settlementRequestMap]);
 
   if (error) {
     return (
@@ -250,6 +286,7 @@ export function EventsList() {
               key={event.id}
               event={event}
               settlement={settlementMap.get(String(event.eventId))}
+              settlementRequest={settlementRequestMap.get(String(event.eventId))}
               volume={volumeMap.get(String(event.eventId)) ?? EMPTY_VOLUME}
               href={`/events/${event.eventId}`}
             />

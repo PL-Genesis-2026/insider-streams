@@ -23,6 +23,7 @@ import { EtherscanLink } from "@/components/etherscan-link";
 import { Button } from "@/components/ui/button";
 import {
   OUTCOME,
+  MARKET_STATUS,
   computeEventVolume,
   getEventStatus,
   type EventStatus,
@@ -70,7 +71,9 @@ export default function EventDetailPage({ params }: { params: Params }) {
     Number(event?.eventClose) > 0 &&
     Date.now() < Number(event?.eventClose) * 1000;
 
-  const status: EventStatus | null = event ? getEventStatus(event, settlement) : null;
+  const status: EventStatus | null = event
+    ? getEventStatus(event, settlement, settlementRequest)
+    : null;
   const isOpen = event && !settlement && eventStillOpen && !adminJustClosed;
 
   const canAdminClose =
@@ -261,6 +264,21 @@ export default function EventDetailPage({ params }: { params: Params }) {
                   </div>
                   <div className="mt-0.5 text-xs text-yellow-400/70">
                     CRE workflow is verifying the outcome via Gemini AI.
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {settlement?.status === MARKET_STATUS.NeedsManual && (
+              <div className="flex items-center gap-3 rounded-[calc(var(--radius)+4px)] border border-orange-500/20 bg-orange-500/5 px-5 py-4">
+                <AlertTriangle className="size-4 shrink-0 text-orange-300" />
+                <div>
+                  <div className="text-sm font-medium text-orange-200">
+                    Manual settlement required
+                  </div>
+                  <div className="mt-0.5 text-xs text-orange-200/70">
+                    CRE returned an inconclusive outcome. This market still needs
+                    a manual resolution before winnings can be redeemed.
                   </div>
                 </div>
               </div>

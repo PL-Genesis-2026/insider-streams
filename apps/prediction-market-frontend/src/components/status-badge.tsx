@@ -31,5 +31,14 @@ export function StatusBadge({ status }: { status: EventStatus }) {
           Settled
         </Badge>
       );
+    case "manual":
+      return (
+        <Badge
+          variant="outline"
+          className="border-orange-500/30 bg-orange-500/10 text-[0.6rem] text-orange-300"
+        >
+          Manual
+        </Badge>
+      );
   }
 }

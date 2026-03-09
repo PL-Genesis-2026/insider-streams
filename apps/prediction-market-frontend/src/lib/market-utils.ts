@@ -3,6 +3,7 @@ import type { PredictionEventsQuery } from "@/__generated__/graphql";
 type EventCreatedItem = PredictionEventsQuery["eventCreateds"][number];
 type SettlementResponseItem = PredictionEventsQuery["settlementResponses"][number];
 type SharesPurchasedItem = PredictionEventsQuery["sharesPurchaseds"][number];
+type SettlementRequestLike = { eventId: string };
 
 export const SEPOLIA_EXPLORER_URL = "https://sepolia.etherscan.io" as const;
 
@@ -20,13 +21,28 @@ export const OUTCOME = {
   Inconclusive: 3,
 } as const;
 
-export type EventStatus = "open" | "closed" | "settling" | "settled";
+export const MARKET_STATUS = {
+  Open: 0,
+  SettlementRequested: 1,
+  Settled: 2,
+  NeedsManual: 3,
+} as const;
+
+export type EventStatus =
+  | "open"
+  | "closed"
+  | "settling"
+  | "manual"
+  | "settled";
 
 export function getEventStatus(
   event: EventCreatedItem,
   settlement?: SettlementResponseItem,
+  settlementRequest?: SettlementRequestLike,
 ): EventStatus {
-  if (settlement) return "settled";
+  if (settlement?.status === MARKET_STATUS.Settled) return "settled";
+  if (settlement?.status === MARKET_STATUS.NeedsManual) return "manual";
+  if (settlementRequest) return "settling";
   const closeTime = Number(event.eventClose) * 1000;
   if (Date.now() > closeTime) return "closed";
   return "open";
