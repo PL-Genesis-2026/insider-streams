@@ -1,9 +1,9 @@
-import { BuyerDashboard } from "@/components/buyer-dashboard";
+import { redirect } from "next/navigation";
+import {
+  DEFAULT_DASHBOARD_TAB,
+  getDashboardTabHref,
+} from "@/lib/dashboard-tabs";
 
 export default function DashboardPage() {
-  return (
-    <main className="min-h-screen text-foreground">
-      <BuyerDashboard />
-    </main>
-  );
+  redirect(getDashboardTabHref(DEFAULT_DASHBOARD_TAB));
 }

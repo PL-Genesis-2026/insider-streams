@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
+import { getDashboardTabHref } from "@/lib/dashboard-tabs";
 
 export default function FundingPage() {
-  redirect("/dashboard#wallet");
+  redirect(getDashboardTabHref("wallet"));
 }
