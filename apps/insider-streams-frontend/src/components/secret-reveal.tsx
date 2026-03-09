@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import { Eye, EyeOff, Loader2, Lock } from "lucide-react";
 import { useAccount } from "wagmi";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { PrivateSecretState } from "@/lib/private-data/types";
 import { usePrivateData } from "@/lib/private-data/use-private-data";
@@ -36,12 +37,32 @@ function RevealedContent({
 }: {
   data: Extract<PrivateSecretState, { kind: "accessible" }>;
 }) {
+  const outcome = data.event_data?.outcome;
+
   return (
-    <div className="space-y-2">
-      <span className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground/60">
-        Secret data
-      </span>
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground/60">
+          Secret data
+        </span>
+        {outcome ? (
+          <Badge
+            variant="outline"
+            className={cn(
+              "border-current/20 bg-background/70",
+              outcome === "yes" ? "text-emerald-400" : "text-rose-400",
+            )}
+          >
+            Bet {outcome.toUpperCase()}
+          </Badge>
+        ) : null}
+      </div>
       <p className="text-sm leading-7 text-foreground">{data.secret_data}</p>
+      <p className="text-sm text-muted-foreground">
+        {outcome
+          ? `Use this signal to bet ${outcome.toUpperCase()} on the linked prediction market.`
+          : "This secret was revealed, but the market side was not attached to the record."}
+      </p>
     </div>
   );
 }
