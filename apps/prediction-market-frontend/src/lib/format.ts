@@ -18,15 +18,6 @@ export function formatShares(amountRaw: string): string {
   return shares.toFixed(2);
 }
 
-export function formatDate(unixSeconds: string | number): string {
-  const ts = typeof unixSeconds === "string" ? Number(unixSeconds) : unixSeconds;
-  return new Date(ts * 1000).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
 export function formatDateTime(unixSeconds: string | number): string {
   const ts = typeof unixSeconds === "string" ? Number(unixSeconds) : unixSeconds;
   return new Date(ts * 1000).toLocaleString("en-US", {

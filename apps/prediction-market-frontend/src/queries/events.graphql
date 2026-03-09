@@ -24,6 +24,11 @@ query PredictionEvents($limit: Int!, $skip: Int!) {
     blockTimestamp
     transactionHash
   }
+  settlementRequesteds(first: 1000, orderBy: blockTimestamp, orderDirection: desc) {
+    eventId
+    blockTimestamp
+    transactionHash
+  }
   sharesPurchaseds(first: 1000, orderBy: blockTimestamp, orderDirection: desc) {
     eventId
     buyer

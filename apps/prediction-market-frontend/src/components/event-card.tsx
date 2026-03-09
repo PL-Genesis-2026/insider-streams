@@ -14,16 +14,25 @@ import { Clock, Users, BarChart3 } from "lucide-react";
 type EventCreatedItem = PredictionEventsQuery["eventCreateds"][number];
 type SettlementResponseItem =
   PredictionEventsQuery["settlementResponses"][number];
+type SettlementRequestedItem =
+  PredictionEventsQuery["settlementRequesteds"][number];
 
 type EventCardProps = {
   event: EventCreatedItem;
   settlement?: SettlementResponseItem;
+  settlementRequest?: SettlementRequestedItem;
   volume: EventVolume;
   href: string;
 };
 
-export function EventCard({ event, settlement, volume, href }: EventCardProps) {
-  const status = getEventStatus(event, settlement);
+export function EventCard({
+  event,
+  settlement,
+  settlementRequest,
+  volume,
+  href,
+}: EventCardProps) {
+  const status = getEventStatus(event, settlement, settlementRequest);
   const closeTime = Number(event.eventClose);
   const hasTrades = volume.yesPercent !== null;
 
