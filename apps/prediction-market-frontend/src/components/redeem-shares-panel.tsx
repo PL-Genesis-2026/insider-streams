@@ -8,12 +8,14 @@ import {
   CONFIDENTIAL_USDC_DECIMALS,
 } from "@private-streams/common";
 import { parseUnits, type Address } from "viem";
-import { Loader2, ExternalLink, Coins } from "lucide-react";
+import { Loader2, Coins } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { EtherscanLink } from "@/components/etherscan-link";
 import { useWalletSession } from "@/lib/wallet/use-wallet-session";
 import { ConnectWalletButton } from "@/components/wallet/connect-wallet-button";
 import { SwitchNetworkButton } from "@/components/wallet/switch-network-button";
+import { outcomeLabel } from "@/lib/format";
 import { walletEnabled } from "@/lib/wallet/config";
 
 type RedeemSharesPanelProps = {
@@ -26,17 +28,6 @@ type RedeemState =
   | { step: "redeeming" }
   | { step: "success"; txHash: string }
   | { step: "error"; message: string };
-
-function outcomeLabel(outcome: number): string {
-  switch (outcome) {
-    case 1:
-      return "No";
-    case 2:
-      return "Yes";
-    default:
-      return "Unknown";
-  }
-}
 
 export function RedeemSharesPanel({
   eventId,
@@ -151,15 +142,13 @@ function RedeemSharesPanelWithWallet({
         <p className="text-sm text-muted-foreground">
           Your winning shares have been burned and USDC returned to your wallet.
         </p>
-        <a
-          href={`https://sepolia.etherscan.io/tx/${redeemState.txHash}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-2 inline-flex items-center gap-1.5 text-xs text-accent underline underline-offset-4 hover:text-accent/80"
-        >
-          View on Etherscan
-          <ExternalLink className="size-3" />
-        </a>
+        <div className="mt-2">
+          <EtherscanLink
+            type="tx"
+            value={redeemState.txHash}
+            className="inline-flex items-center gap-1.5 text-xs text-accent underline underline-offset-4 hover:text-accent/80 font-mono"
+          />
+        </div>
       </div>
     );
   }
