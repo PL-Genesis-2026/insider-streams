@@ -8,7 +8,7 @@ import {
   EXAMPLE_PREDICTION_MARKET_ADDRESS,
   CONFIDENTIAL_USDC_DECIMALS,
 } from "@private-streams/common";
-import { parseUnits, type Address } from "viem";
+import { maxUint256, parseUnits, type Address } from "viem";
 import { ArrowRight, Loader2, TrendingUp, TrendingDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -112,21 +112,30 @@ function BuySharesPanelWithWallet({ eventId }: BuySharesPanelProps) {
         functionName: "paymentToken",
       });
 
-      const approveGas = await publicClient.estimateContractGas({
-        account,
+      const currentAllowance = await publicClient.readContract({
         address: usdcAddress,
         abi: confidentialUsdcAbi,
-        functionName: "approve",
-        args: [contractAddress, parsedAmount],
+        functionName: "allowance",
+        args: [account, contractAddress],
       });
-      const approveHash = await writeContractAsync({
-        address: usdcAddress,
-        abi: confidentialUsdcAbi,
-        functionName: "approve",
-        args: [contractAddress, parsedAmount],
-        gas: approveGas,
-      });
-      await publicClient.waitForTransactionReceipt({ hash: approveHash });
+
+      if (currentAllowance < parsedAmount) {
+        const approveGas = await publicClient.estimateContractGas({
+          account,
+          address: usdcAddress,
+          abi: confidentialUsdcAbi,
+          functionName: "approve",
+          args: [contractAddress, maxUint256],
+        });
+        const approveHash = await writeContractAsync({
+          address: usdcAddress,
+          abi: confidentialUsdcAbi,
+          functionName: "approve",
+          args: [contractAddress, maxUint256],
+          gas: approveGas,
+        });
+        await publicClient.waitForTransactionReceipt({ hash: approveHash });
+      }
 
       setPurchaseState({ step: "buying" });
 
