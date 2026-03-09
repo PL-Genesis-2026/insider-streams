@@ -186,23 +186,26 @@ export default function EventDetailPage({ params }: { params: Params }) {
                 </div>
               </div>
 
-              {hasVolumeData && (
+              {hasVolumeData && volume.yesPercent !== null && (
                 <div className="mb-5">
+                  <div className="mb-1 text-[0.65rem] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                    Bet distribution
+                  </div>
                   <div className="mb-2 flex items-center justify-between">
                     <span className="text-sm font-semibold text-emerald-400">
-                      Yes {volume.yesPercent?.toFixed(1)}%
+                      ${formatUsdc(volume.yesUsdc)} Yes
                     </span>
                     <span className="text-sm font-semibold text-rose-400">
-                      {volume.noPercent?.toFixed(1)}% No
+                      No ${formatUsdc(volume.noUsdc)}
                     </span>
                   </div>
-                  <DualProgress yesPercent={volume.yesPercent ?? 50} className="h-3 rounded-lg" />
+                  <DualProgress yesPercent={volume.yesPercent} className="h-3 rounded-lg" />
                 </div>
               )}
 
               {!hasVolumeData && (
                 <div className="mb-5 text-sm text-muted-foreground/60">
-                  No trades yet — probability will appear after the first trade.
+                  No trades yet.
                 </div>
               )}
 

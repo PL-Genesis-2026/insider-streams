@@ -25,7 +25,7 @@ type EventCardProps = {
 export function EventCard({ event, settlement, volume, href }: EventCardProps) {
   const status = getEventStatus(event, settlement);
   const closeTime = Number(event.eventClose);
-  const hasVolume = volume.yesPercent !== null;
+  const hasTrades = volume.yesPercent !== null;
 
   return (
     <Link href={href} className="group block">
@@ -46,21 +46,21 @@ export function EventCard({ event, settlement, volume, href }: EventCardProps) {
           </div>
         </div>
 
-        {hasVolume && (
+        {hasTrades && volume.yesPercent !== null && (
           <div className="mb-3.5">
             <div className="mb-1.5 flex items-center justify-between text-xs">
               <span className="font-medium text-emerald-400">
-                Yes {volume.yesPercent?.toFixed(0)}%
+                ${formatUsdc(volume.yesUsdc)} Yes
               </span>
               <span className="font-medium text-rose-400">
-                {volume.noPercent?.toFixed(0)}% No
+                No ${formatUsdc(volume.noUsdc)}
               </span>
             </div>
-            <DualProgress yesPercent={volume.yesPercent ?? 50} />
+            <DualProgress yesPercent={volume.yesPercent} />
           </div>
         )}
 
-        {!hasVolume && (
+        {!hasTrades && (
           <div className="mb-3.5 flex h-[30px] items-center text-xs text-muted-foreground/60">
             No trades yet
           </div>
