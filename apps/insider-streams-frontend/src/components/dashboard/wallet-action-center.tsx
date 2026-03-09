@@ -890,7 +890,7 @@ export function WalletActionCenter({
                           <Input
                             id="wallet-fund-amount"
                             inputMode="decimal"
-                            placeholder="10"
+                            placeholder="0.00"
                             value={amount}
                             onChange={(event) => {
                               setAmount(event.target.value);
@@ -1009,7 +1009,7 @@ export function WalletActionCenter({
                         <Input
                           id="wallet-withdraw-amount"
                           inputMode="decimal"
-                          placeholder="5"
+                          placeholder="0.00"
                           value={withdrawAmount}
                           onChange={(event) => {
                             setWithdrawAmount(event.target.value);
