@@ -10,7 +10,11 @@ import {
   getDocs,
 } from "firebase/firestore";
 import { Badge } from "@/components/ui/badge";
-import { ExternalLink, Bot, CheckCircle2, AlertCircle } from "lucide-react";
+import { EtherscanLink } from "@/components/etherscan-link";
+import { ZERO_TX_HASH } from "@/lib/market-utils";
+import { formatConfidenceBps } from "@/lib/format";
+import { formatAddress } from "@/lib/wallet/format-address";
+import { Bot, CheckCircle2, AlertCircle } from "lucide-react";
 
 interface SettlementDoc {
   id: string;
@@ -25,26 +29,30 @@ interface SettlementDoc {
 
 const ITEMS_LIMIT = 20;
 
-function shortenHash(hash: string): string {
-  if (
-    hash ===
-    "0x0000000000000000000000000000000000000000000000000000000000000000"
-  ) {
-    return "Simulated (no tx)";
-  }
-  return `${hash.slice(0, 10)}...${hash.slice(-6)}`;
+interface GeminiResponseShape {
+  answer?: unknown;
+  confidence?: unknown;
+  sources?: unknown;
 }
 
-function parseGeminiResponse(raw: string): { answer?: string; confidence?: number; sources?: string[] } | null {
+function parseGeminiResponse(raw: string): GeminiResponseShape | null {
   try {
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed === "object" && parsed !== null) {
-      return parsed as { answer?: string; confidence?: number; sources?: string[] };
+      return parsed as GeminiResponseShape;
     }
     return null;
   } catch {
     return null;
   }
+}
+
+function getAnswer(gemini: GeminiResponseShape): string | null {
+  return typeof gemini.answer === "string" ? gemini.answer : null;
+}
+
+function getConfidenceBps(gemini: GeminiResponseShape): number | null {
+  return typeof gemini.confidence === "number" ? gemini.confidence : null;
 }
 
 export function SettlementsList() {
@@ -122,6 +130,9 @@ export function SettlementsList() {
         const gemini = parseGeminiResponse(doc.geminiResponse);
         const isExpanded = expandedId === doc.id;
         const isSuccess = doc.statusCode === 1 || doc.statusCode === 200;
+        const answer = gemini ? getAnswer(gemini) : null;
+        const confidenceBps = gemini ? getConfidenceBps(gemini) : null;
+        const hasRealTx = doc.txHash !== ZERO_TX_HASH;
 
         return (
           <div
@@ -150,45 +161,33 @@ export function SettlementsList() {
                 </Badge>
               </div>
 
-              {gemini?.answer && (
+              {answer && (
                 <div className="mb-3 flex gap-2 rounded-lg border bg-muted/20 p-3">
                   <Bot className="mt-0.5 size-4 shrink-0 text-accent" />
                   <p className="text-sm leading-relaxed text-foreground/90">
-                    {gemini.answer}
+                    {answer}
                   </p>
                 </div>
               )}
 
-              {gemini?.confidence !== undefined && (
+              {confidenceBps !== null && (
                 <div className="mb-3 text-xs text-muted-foreground">
                   AI Confidence:{" "}
                   <span className="font-medium text-foreground">
-                    {gemini.confidence > 100
-                      ? `${(gemini.confidence / 100).toFixed(0)}%`
-                      : `${gemini.confidence}%`}
+                    {formatConfidenceBps(confidenceBps)}
                   </span>
                 </div>
               )}
 
               <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs text-muted-foreground">
                 <span>Response: {doc.responseId}</span>
-                <a
-                  href={
-                    doc.txHash !==
-                    "0x0000000000000000000000000000000000000000000000000000000000000000"
-                      ? `https://sepolia.etherscan.io/tx/${doc.txHash}`
-                      : undefined
-                  }
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-accent underline-offset-4 hover:underline"
-                >
-                  Tx: {shortenHash(doc.txHash)}
-                  {doc.txHash !==
-                    "0x0000000000000000000000000000000000000000000000000000000000000000" && (
-                    <ExternalLink className="size-2.5" />
-                  )}
-                </a>
+                {hasRealTx ? (
+                  <EtherscanLink type="tx" value={doc.txHash} className="text-xs text-accent underline-offset-4 hover:underline inline-flex items-center gap-1 font-mono" />
+                ) : (
+                  <span className="font-mono">
+                    Tx: {formatAddress(doc.txHash, 10, 6)} (simulated)
+                  </span>
+                )}
                 <span>{new Date(doc.createdAt).toLocaleString()}</span>
               </div>
             </div>

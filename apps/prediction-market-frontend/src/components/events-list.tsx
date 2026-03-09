@@ -10,9 +10,9 @@ import { EventCard } from "@/components/event-card";
 import {
   type EventVolume,
   getEventStatus,
-  computeEventVolume,
-  formatUsdc,
+  computeAllEventVolumes,
 } from "@/lib/market-utils";
+import { formatUsdc } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { BarChart3, TrendingUp, Users, Activity } from "lucide-react";
 
@@ -23,6 +23,16 @@ type SettlementResponseItem =
 type FilterTab = "all" | "open" | "closed" | "settled";
 
 const PAGE_SIZE = 50;
+
+const EMPTY_VOLUME: EventVolume = {
+  totalUsdc: BigInt(0),
+  yesUsdc: BigInt(0),
+  noUsdc: BigInt(0),
+  yesPercent: null,
+  noPercent: null,
+  traderCount: 0,
+  tradeCount: 0,
+};
 
 const FILTER_TABS: { key: FilterTab; label: string }[] = [
   { key: "all", label: "All" },
@@ -112,14 +122,10 @@ export function EventsList() {
     return map;
   }, [data?.settlementResponses]);
 
-  const volumeMap = useMemo(() => {
-    const map = new Map<string, EventVolume>();
-    const purchases = data?.sharesPurchaseds ?? [];
-    for (const event of data?.eventCreateds ?? []) {
-      map.set(String(event.eventId), computeEventVolume(String(event.eventId), purchases));
-    }
-    return map;
-  }, [data?.eventCreateds, data?.sharesPurchaseds]);
+  const volumeMap = useMemo(
+    () => computeAllEventVolumes(data?.sharesPurchaseds ?? []),
+    [data?.sharesPurchaseds],
+  );
 
   const events = useMemo(
     () => data?.eventCreateds ?? [],
@@ -244,17 +250,7 @@ export function EventsList() {
               key={event.id}
               event={event}
               settlement={settlementMap.get(String(event.eventId))}
-              volume={
-                volumeMap.get(String(event.eventId)) ?? {
-                  totalUsdc: BigInt(0),
-                  yesUsdc: BigInt(0),
-                  noUsdc: BigInt(0),
-                  yesPercent: 50,
-                  noPercent: 50,
-                  traderCount: 0,
-                  tradeCount: 0,
-                }
-              }
+              volume={volumeMap.get(String(event.eventId)) ?? EMPTY_VOLUME}
               href={`/events/${event.eventId}`}
             />
           ))}

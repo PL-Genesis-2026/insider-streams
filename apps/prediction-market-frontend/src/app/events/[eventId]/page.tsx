@@ -6,13 +6,10 @@ import { EventDetailDocument } from "@/__generated__/graphql";
 import Link from "next/link";
 import {
   ArrowLeft,
-  ExternalLink,
   Loader2,
   Clock,
   Users,
   BarChart3,
-  CheckCircle2,
-  XCircle,
   AlertTriangle,
 } from "lucide-react";
 import { BuySharesPanel } from "@/components/buy-shares-panel";
@@ -20,16 +17,17 @@ import { RedeemSharesPanel } from "@/components/redeem-shares-panel";
 import { ActivityFeed } from "@/components/activity-feed";
 import { Countdown } from "@/components/countdown";
 import { DualProgress } from "@/components/ui/progress";
+import { OutcomeBadge } from "@/components/outcome-badge";
+import { StatusBadge } from "@/components/status-badge";
+import { EtherscanLink } from "@/components/etherscan-link";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
+  OUTCOME,
   computeEventVolume,
-  formatUsdc,
-  formatDateTime,
-  shortenAddress,
   getEventStatus,
-  outcomeLabel,
+  type EventStatus,
 } from "@/lib/market-utils";
+import { formatUsdc, formatDateTime } from "@/lib/format";
 
 type Params = Promise<{ eventId: string }>;
 
@@ -72,7 +70,7 @@ export default function EventDetailPage({ params }: { params: Params }) {
     Number(event?.eventClose) > 0 &&
     Date.now() < Number(event?.eventClose) * 1000;
 
-  const status = event ? getEventStatus(event, settlement) : null;
+  const status: EventStatus | null = event ? getEventStatus(event, settlement) : null;
   const isOpen = event && !settlement && eventStillOpen && !adminJustClosed;
 
   const canAdminClose =
@@ -138,6 +136,8 @@ export default function EventDetailPage({ params }: { params: Params }) {
     }
   }, [eventId, refetch]);
 
+  const hasVolumeData = volume.yesPercent !== null;
+
   return (
     <main className="mx-auto min-h-screen max-w-6xl px-6 py-8 md:px-10">
       <Link
@@ -180,23 +180,31 @@ export default function EventDetailPage({ params }: { params: Params }) {
                 </h1>
                 <div className="flex shrink-0 items-center gap-1.5">
                   {settlement && (
-                    <OutcomePill outcome={settlement.outcome} />
+                    <OutcomeBadge outcome={settlement.outcome} />
                   )}
-                  <StatusPill status={status} />
+                  {status && <StatusBadge status={status} />}
                 </div>
               </div>
 
-              <div className="mb-5">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-sm font-semibold text-emerald-400">
-                    Yes {volume.yesPercent.toFixed(1)}%
-                  </span>
-                  <span className="text-sm font-semibold text-rose-400">
-                    {volume.noPercent.toFixed(1)}% No
-                  </span>
+              {hasVolumeData && (
+                <div className="mb-5">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-sm font-semibold text-emerald-400">
+                      Yes {volume.yesPercent?.toFixed(1)}%
+                    </span>
+                    <span className="text-sm font-semibold text-rose-400">
+                      {volume.noPercent?.toFixed(1)}% No
+                    </span>
+                  </div>
+                  <DualProgress yesPercent={volume.yesPercent ?? 50} className="h-3 rounded-lg" />
                 </div>
-                <DualProgress yesPercent={volume.yesPercent} className="h-3 rounded-lg" />
-              </div>
+              )}
+
+              {!hasVolumeData && (
+                <div className="mb-5 text-sm text-muted-foreground/60">
+                  No trades yet — probability will appear after the first trade.
+                </div>
+              )}
 
               <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
                 <span className="inline-flex items-center gap-1.5">
@@ -263,17 +271,7 @@ export default function EventDetailPage({ params }: { params: Params }) {
                 <DetailRow label="Market ID" value={`#${event.eventId}`} />
                 <DetailRow
                   label="Creator"
-                  value={
-                    <a
-                      href={`https://sepolia.etherscan.io/address/${event.creator}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 font-mono text-xs text-accent underline-offset-4 hover:underline"
-                    >
-                      {shortenAddress(event.creator)}
-                      <ExternalLink className="size-2.5" />
-                    </a>
-                  }
+                  value={<EtherscanLink type="address" value={event.creator} />}
                 />
                 <DetailRow label="Opened" value={formatDateTime(event.eventOpen)} />
                 <DetailRow
@@ -290,24 +288,18 @@ export default function EventDetailPage({ params }: { params: Params }) {
                 />
                 <DetailRow
                   label="Creation Tx"
-                  value={
-                    <TxLink hash={event.transactionHash} />
-                  }
+                  value={<EtherscanLink type="tx" value={event.transactionHash} />}
                 />
                 {event.yesToken && (
                   <DetailRow
                     label="Yes Token"
-                    value={
-                      <TokenLink address={event.yesToken} />
-                    }
+                    value={<EtherscanLink type="token" value={event.yesToken} />}
                   />
                 )}
                 {event.noToken && (
                   <DetailRow
                     label="No Token"
-                    value={
-                      <TokenLink address={event.noToken} />
-                    }
+                    value={<EtherscanLink type="token" value={event.noToken} />}
                   />
                 )}
                 {settlement && (
@@ -315,7 +307,7 @@ export default function EventDetailPage({ params }: { params: Params }) {
                     <div className="border-t border-border/50" />
                     <DetailRow
                       label="Settlement Tx"
-                      value={<TxLink hash={settlement.transactionHash} />}
+                      value={<EtherscanLink type="tx" value={settlement.transactionHash} />}
                     />
                     <DetailRow
                       label="Settled At"
@@ -324,7 +316,7 @@ export default function EventDetailPage({ params }: { params: Params }) {
                     <div className="flex items-center justify-between">
                       <dt className="text-muted-foreground">Outcome</dt>
                       <dd>
-                        <OutcomePill outcome={settlement.outcome} />
+                        <OutcomeBadge outcome={settlement.outcome} />
                       </dd>
                     </div>
                   </>
@@ -343,7 +335,7 @@ export default function EventDetailPage({ params }: { params: Params }) {
           <div className="space-y-5 lg:sticky lg:top-20 lg:self-start">
             {isOpen && <BuySharesPanel eventId={eventId} />}
             {settlement &&
-              (settlement.outcome === 1 || settlement.outcome === 2) && (
+              (settlement.outcome === OUTCOME.No || settlement.outcome === OUTCOME.Yes) && (
                 <RedeemSharesPanel
                   eventId={eventId}
                   outcome={settlement.outcome}
@@ -375,94 +367,6 @@ function DetailRow({
       <dt className="text-muted-foreground">{label}</dt>
       <dd className="text-right text-foreground">{value}</dd>
     </div>
-  );
-}
-
-function TxLink({ hash }: { hash: string }) {
-  return (
-    <a
-      href={`https://sepolia.etherscan.io/tx/${hash}`}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex items-center gap-1 font-mono text-xs text-accent underline-offset-4 hover:underline"
-    >
-      {hash.slice(0, 10)}...{hash.slice(-6)}
-      <ExternalLink className="size-2.5" />
-    </a>
-  );
-}
-
-function TokenLink({ address }: { address: string }) {
-  return (
-    <a
-      href={`https://sepolia.etherscan.io/token/${address}`}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex items-center gap-1 font-mono text-xs text-accent underline-offset-4 hover:underline"
-    >
-      {address.slice(0, 10)}...{address.slice(-6)}
-      <ExternalLink className="size-2.5" />
-    </a>
-  );
-}
-
-function StatusPill({ status }: { status: string | null }) {
-  switch (status) {
-    case "open":
-      return (
-        <Badge variant="accent" className="text-[0.6rem]">
-          <span className="mr-0.5 inline-block size-1.5 animate-pulse rounded-full bg-current" />
-          Live
-        </Badge>
-      );
-    case "closed":
-      return (
-        <Badge variant="muted" className="text-[0.6rem]">
-          Closed
-        </Badge>
-      );
-    case "settled":
-      return (
-        <Badge variant="muted" className="text-[0.6rem]">
-          Settled
-        </Badge>
-      );
-    default:
-      return null;
-  }
-}
-
-function OutcomePill({ outcome }: { outcome: number }) {
-  const label = outcomeLabel(outcome);
-  if (outcome === 2) {
-    return (
-      <Badge
-        variant="outline"
-        className="border-emerald-500/30 bg-emerald-500/15 text-[0.6rem] text-emerald-400"
-      >
-        <CheckCircle2 className="size-2.5" />
-        {label}
-      </Badge>
-    );
-  }
-  if (outcome === 1) {
-    return (
-      <Badge
-        variant="outline"
-        className="border-rose-500/30 bg-rose-500/15 text-[0.6rem] text-rose-400"
-      >
-        <XCircle className="size-2.5" />
-        {label}
-      </Badge>
-    );
-  }
-  return (
-    <Badge
-      variant="outline"
-      className="border-yellow-500/30 bg-yellow-500/15 text-[0.6rem] text-yellow-400"
-    >
-      {label}
-    </Badge>
   );
 }
 
@@ -510,7 +414,7 @@ function AdminClosePanel({
       )}
       {txHash && (
         <div className="mt-2 text-xs text-emerald-400">
-          Event closed! <TxLink hash={txHash} />
+          Event closed! <EtherscanLink type="tx" value={txHash} />
         </div>
       )}
     </div>
@@ -555,7 +459,7 @@ function SettlePanel({
       )}
       {txHash && (
         <div className="mt-2 text-xs text-emerald-400">
-          Settlement requested! <TxLink hash={txHash} />
+          Settlement requested! <EtherscanLink type="tx" value={txHash} />
         </div>
       )}
     </div>

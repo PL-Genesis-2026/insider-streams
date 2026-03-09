@@ -1,13 +1,9 @@
 "use client";
 
 import type { EventDetailQuery } from "@/__generated__/graphql";
-import {
-  formatUsdc,
-  formatDateTime,
-  shortenAddress,
-  outcomeLabel,
-} from "@/lib/market-utils";
-import { CONFIDENTIAL_USDC_DECIMALS } from "@private-streams/common";
+import { formatUsdc, formatShares, formatDateTime, outcomeLabel } from "@/lib/format";
+import { OUTCOME, SEPOLIA_EXPLORER_URL } from "@/lib/market-utils";
+import { formatAddress } from "@/lib/wallet/format-address";
 import { ExternalLink, TrendingUp, TrendingDown, Coins } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -22,17 +18,6 @@ type ActivityFeedProps = {
   purchases: readonly SharesPurchasedItem[];
   redemptions: readonly SharesRedeemedItem[];
 };
-
-function formatAmount(raw: string): string {
-  return formatUsdc(BigInt(raw));
-}
-
-function formatShares(raw: string): string {
-  const divisor = 10 ** CONFIDENTIAL_USDC_DECIMALS;
-  const shares = Number(raw) / divisor;
-  if (shares >= 1000) return `${(shares / 1000).toFixed(1)}K`;
-  return shares.toFixed(2);
-}
 
 export function ActivityFeed({ purchases, redemptions }: ActivityFeedProps) {
   const items: ActivityItem[] = [
@@ -57,7 +42,7 @@ export function ActivityFeed({ purchases, redemptions }: ActivityFeedProps) {
       {items.map((item) => {
         if (item.type === "purchase") {
           const p = item.data;
-          const isYes = p.outcome === 2;
+          const isYes = p.outcome === OUTCOME.Yes;
           return (
             <div key={p.id} className="flex items-center gap-3 py-3">
               <div
@@ -77,7 +62,7 @@ export function ActivityFeed({ purchases, redemptions }: ActivityFeedProps) {
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-1.5 text-sm">
                   <span className="truncate font-mono text-xs text-muted-foreground">
-                    {shortenAddress(p.buyer)}
+                    {formatAddress(p.buyer)}
                   </span>
                   <span className="text-muted-foreground">bought</span>
                   <span
@@ -90,13 +75,13 @@ export function ActivityFeed({ purchases, redemptions }: ActivityFeedProps) {
                   </span>
                 </div>
                 <div className="mt-0.5 flex items-center gap-3 text-xs text-muted-foreground/70">
-                  <span>${formatAmount(p.usdcIn)} USDC</span>
+                  <span>${formatUsdc(BigInt(p.usdcIn))} USDC</span>
                   <span>{formatShares(p.sharesOut)} shares</span>
                   <span className="ml-auto">{formatDateTime(p.blockTimestamp)}</span>
                 </div>
               </div>
               <a
-                href={`https://sepolia.etherscan.io/tx/${p.transactionHash}`}
+                href={`${SEPOLIA_EXPLORER_URL}/tx/${p.transactionHash}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="shrink-0 text-muted-foreground/40 transition-colors hover:text-accent"
@@ -116,18 +101,18 @@ export function ActivityFeed({ purchases, redemptions }: ActivityFeedProps) {
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline gap-1.5 text-sm">
                 <span className="truncate font-mono text-xs text-muted-foreground">
-                  {shortenAddress(r.redeemer)}
+                  {formatAddress(r.redeemer)}
                 </span>
                 <span className="text-muted-foreground">redeemed</span>
               </div>
               <div className="mt-0.5 flex items-center gap-3 text-xs text-muted-foreground/70">
                 <span>{formatShares(r.sharesIn)} shares</span>
-                <span>${formatAmount(r.usdcOut)} USDC</span>
+                <span>${formatUsdc(BigInt(r.usdcOut))} USDC</span>
                 <span className="ml-auto">{formatDateTime(r.blockTimestamp)}</span>
               </div>
             </div>
             <a
-              href={`https://sepolia.etherscan.io/tx/${r.transactionHash}`}
+              href={`${SEPOLIA_EXPLORER_URL}/tx/${r.transactionHash}`}
               target="_blank"
               rel="noopener noreferrer"
               className="shrink-0 text-muted-foreground/40 transition-colors hover:text-accent"
