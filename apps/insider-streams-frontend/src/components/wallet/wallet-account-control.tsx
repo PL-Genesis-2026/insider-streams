@@ -24,6 +24,7 @@ import { ConnectWalletButton } from "@/components/wallet/connect-wallet-button";
 import { SwitchNetworkButton } from "@/components/wallet/switch-network-button";
 import { formatAddress } from "@/lib/wallet/format-address";
 import { useFundingSnapshot } from "@/lib/funding/use-funding-snapshot";
+import { getDashboardTabHref } from "@/lib/dashboard-tabs";
 import { usePrivateData } from "@/lib/private-data/use-private-data";
 import { useWalletSession } from "@/lib/wallet/use-wallet-session";
 
@@ -47,7 +48,7 @@ export function WalletAccountControl() {
       {isRevealed ? (
         <Badge asChild variant="secondary">
           <Link
-            href="/dashboard#wallet"
+            href={getDashboardTabHref("wallet")}
             className="border border-border/70 bg-secondary/70 px-3 py-1 text-[10px] tracking-[0.18em] text-secondary-foreground transition-colors hover:border-accent/40 hover:bg-secondary"
             aria-label={
               displayBalance
@@ -65,7 +66,7 @@ export function WalletAccountControl() {
           <TooltipTrigger asChild>
             <Badge asChild variant="secondary">
               <Link
-                href="/dashboard#wallet"
+                href={getDashboardTabHref("wallet")}
                 className="border border-border/70 bg-secondary/70 px-3 py-1 text-[10px] tracking-[0.18em] text-muted-foreground transition-colors hover:border-accent/40 hover:bg-secondary hover:text-secondary-foreground"
                 aria-label="Open wallet controls on the dashboard. Reveal secret data to see balance."
               >
