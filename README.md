@@ -111,6 +111,7 @@ cd scripts && pnpm run-demo
 Prerequisites: frontend dev server running + all env vars set (see individual scripts below). Press Ctrl+C to stop all processes cleanly.
 
 Optional env overrides:
+
 - `CREATE_EVENTS_INTERVAL_MS` — how often to refresh events (default: `1800000` / 30 min)
 - `INTERVAL_MS` — spawn-auctions / place-bids cycle interval (default: `300000` / 5 min)
 - `BASE_URL` — frontend origin (default: `http://localhost:3000`)
@@ -126,6 +127,7 @@ cd scripts && pnpm create-events
 ```
 
 Required env vars in `scripts/.env`:
+
 - `OWNER_PK` — creates events, mints CUSDC
 - `TEST_ACCOUNT_1..25` — private keys for bet-placing accounts
 - `RPC_URL` — Eth Sepolia RPC
@@ -140,9 +142,11 @@ cd scripts && pnpm spawn-auctions
 ```
 
 Required env vars in `scripts/.env`:
+
 - `TEST_ACCOUNT_1..25` — private keys for signing auction creation
 
 Optional:
+
 - `BASE_URL` — frontend origin (default: `http://localhost:3000`)
 - `INTERVAL_MS` — cycle interval in ms (default: `300000` / 5 min)
 
@@ -159,11 +163,13 @@ cd scripts && pnpm place-bids
 ```
 
 Required env vars in `scripts/.env`:
+
 - `TEST_ACCOUNT_1..25` — private keys for signing bids
 - `SUPABASE_URL` — Supabase project URL
 - `SUPABASE_SERVICE_ROLE_KEY` — service role key (bypasses RLS)
 
 Optional:
+
 - `BASE_URL` — frontend origin (default: `http://localhost:3000`)
 - `INTERVAL_MS` — cycle interval in ms (default: `300000` / 5 min)
 
@@ -210,3 +216,5 @@ private-streams/
 ├── subgraphs/secrets-marketplace/   # The Graph subgraph
 └── scripts/                         # E2E tests and utilities
 ```
+
+.
