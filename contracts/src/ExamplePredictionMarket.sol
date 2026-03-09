@@ -199,7 +199,7 @@ contract ExamplePredictionMarket is ReceiverTemplate {
             sharesOut = yesFromPool + usdcAmount;
 
             e.yesReserve = newYesReserve;
-            e.noReserve = newNoReserve + usdcAmount; // pool gets the minted NO tokens too
+            e.noReserve = newNoReserve; // newNoReserve already includes minted NO tokens
 
             // Transfer YES shares to buyer
             e.yesToken.transfer(msg.sender, sharesOut);
@@ -212,7 +212,7 @@ contract ExamplePredictionMarket is ReceiverTemplate {
             sharesOut = noFromPool + usdcAmount;
 
             e.noReserve = newNoReserve;
-            e.yesReserve = newYesReserve + usdcAmount; // pool gets the minted YES tokens too
+            e.yesReserve = newYesReserve; // newYesReserve already includes minted YES tokens
 
             // Transfer NO shares to buyer
             e.noToken.transfer(msg.sender, sharesOut);

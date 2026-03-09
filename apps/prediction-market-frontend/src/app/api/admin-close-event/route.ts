@@ -41,7 +41,7 @@ const abi = [
   },
 ] as const;
 
-const CONTRACT_ADDRESS = "0xFfe58E05eFc5888a0f5F5155c72f3Ca2341fEDc7";
+const CONTRACT_ADDRESS = "0xc0800a96EbfEEd4F7C9113C6D9D960d2D912004f";
 
 export async function POST(request: Request) {
   try {
