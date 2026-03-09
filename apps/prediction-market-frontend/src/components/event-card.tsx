@@ -2,18 +2,14 @@
 
 import Link from "next/link";
 import type { PredictionEventsQuery } from "@/__generated__/graphql";
-import { Badge } from "@/components/ui/badge";
 import { DualProgress } from "@/components/ui/progress";
+import { OutcomeBadge } from "@/components/outcome-badge";
+import { StatusBadge } from "@/components/status-badge";
 import { Countdown } from "@/components/countdown";
-import {
-  type EventVolume,
-  type EventStatus,
-  getEventStatus,
-  formatUsdc,
-  outcomeLabel,
-} from "@/lib/market-utils";
+import { type EventVolume, getEventStatus } from "@/lib/market-utils";
+import { formatUsdc } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { Clock, Users, BarChart3, CheckCircle2, XCircle } from "lucide-react";
+import { Clock, Users, BarChart3 } from "lucide-react";
 
 type EventCreatedItem = PredictionEventsQuery["eventCreateds"][number];
 type SettlementResponseItem =
@@ -26,77 +22,10 @@ type EventCardProps = {
   href: string;
 };
 
-function StatusIndicator({ status }: { status: EventStatus }) {
-  switch (status) {
-    case "open":
-      return (
-        <Badge variant="accent" className="text-[0.6rem]">
-          <span className="mr-0.5 inline-block size-1.5 animate-pulse rounded-full bg-current" />
-          Live
-        </Badge>
-      );
-    case "closed":
-      return (
-        <Badge variant="muted" className="text-[0.6rem]">
-          Closed
-        </Badge>
-      );
-    case "settling":
-      return (
-        <Badge
-          variant="outline"
-          className="border-yellow-500/30 bg-yellow-500/10 text-[0.6rem] text-yellow-400"
-        >
-          Settling
-        </Badge>
-      );
-    case "settled":
-      return (
-        <Badge variant="muted" className="text-[0.6rem]">
-          Settled
-        </Badge>
-      );
-  }
-}
-
-function OutcomeBadge({ outcome }: { outcome: number }) {
-  const label = outcomeLabel(outcome);
-  if (outcome === 2) {
-    return (
-      <Badge
-        variant="outline"
-        className="border-emerald-500/30 bg-emerald-500/15 text-[0.6rem] text-emerald-400"
-      >
-        <CheckCircle2 className="size-2.5" />
-        {label}
-      </Badge>
-    );
-  }
-  if (outcome === 1) {
-    return (
-      <Badge
-        variant="outline"
-        className="border-rose-500/30 bg-rose-500/15 text-[0.6rem] text-rose-400"
-      >
-        <XCircle className="size-2.5" />
-        {label}
-      </Badge>
-    );
-  }
-  return (
-    <Badge
-      variant="outline"
-      className="border-yellow-500/30 bg-yellow-500/15 text-[0.6rem] text-yellow-400"
-    >
-      {label}
-    </Badge>
-  );
-}
-
 export function EventCard({ event, settlement, volume, href }: EventCardProps) {
   const status = getEventStatus(event, settlement);
   const closeTime = Number(event.eventClose);
-  const hasVolume = volume.totalUsdc > BigInt(0);
+  const hasVolume = volume.yesPercent !== null;
 
   return (
     <Link href={href} className="group block">
@@ -113,7 +42,7 @@ export function EventCard({ event, settlement, volume, href }: EventCardProps) {
           </h3>
           <div className="flex shrink-0 items-center gap-1.5">
             {settlement && <OutcomeBadge outcome={settlement.outcome} />}
-            <StatusIndicator status={status} />
+            <StatusBadge status={status} />
           </div>
         </div>
 
@@ -121,30 +50,26 @@ export function EventCard({ event, settlement, volume, href }: EventCardProps) {
           <div className="mb-3.5">
             <div className="mb-1.5 flex items-center justify-between text-xs">
               <span className="font-medium text-emerald-400">
-                Yes {volume.yesPercent.toFixed(0)}%
+                Yes {volume.yesPercent?.toFixed(0)}%
               </span>
               <span className="font-medium text-rose-400">
-                {volume.noPercent.toFixed(0)}% No
+                {volume.noPercent?.toFixed(0)}% No
               </span>
             </div>
-            <DualProgress yesPercent={volume.yesPercent} />
+            <DualProgress yesPercent={volume.yesPercent ?? 50} />
           </div>
         )}
 
-        {!hasVolume && !settlement && (
-          <div className="mb-3.5">
-            <div className="mb-1.5 flex items-center justify-between text-xs text-muted-foreground">
-              <span>Yes 50%</span>
-              <span>50% No</span>
-            </div>
-            <DualProgress yesPercent={50} className="opacity-40" />
+        {!hasVolume && (
+          <div className="mb-3.5 flex h-[30px] items-center text-xs text-muted-foreground/60">
+            No trades yet
           </div>
         )}
 
         <div className="mt-auto flex items-center gap-4 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1">
             <BarChart3 className="size-3" />
-            {hasVolume ? `$${formatUsdc(volume.totalUsdc)}` : "$0"}
+            ${formatUsdc(volume.totalUsdc)}
           </span>
           <span className="inline-flex items-center gap-1">
             <Users className="size-3" />
