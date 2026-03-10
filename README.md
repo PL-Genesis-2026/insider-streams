@@ -2,9 +2,9 @@
 
 ## Links
 
-* [Video](https://www.youtube.com/watch?v=sGsNvkky2xc)
-* [Insider Streams frontend](https://insider-streams-insider-streams-fro.vercel.app/)
-* [External Prediction Market frontend](https://insider-streams-prediction-market-f.vercel.app/) (demo prediction market we integrated with to show CRE based interop)
+- [Video](https://www.youtube.com/watch?v=sGsNvkky2xc)
+- [Insider Streams frontend](https://insider-streams-insider-streams-fro.vercel.app/)
+- [External Prediction Market frontend](https://insider-streams-prediction-market-f.vercel.app/) (demo prediction market to show CRE based interop)
 
 ## Architecture
 
@@ -26,7 +26,7 @@ These are the workflows:
 | [external-marketplace-settlement-resolved-handler](./cre-workflows/external-marketplace-settlement-resolved-handler/) | EVM Log (`SettlementResponse`)  | Triggered with the outcome of an event from the External Prediction Market is resolved. Updates the seller's reputation score by privately interrogating the Secret Store to see if the seller, with their privileged information, predicted the correct outcome or not                                                                                                                                                                                                       |
 | [secret-marketplace-auction-closer](./cre-workflows/secret-marketplace-auction-closer/)                               | Cron (30s)                      | Polls for expired auctions via The Graph subgraph, closes them on-chain via signed CRE report, and settles winning bids in the Secret Store.                                                                                                                                                                                                                                                                                                                                  |
 | [user-balance-recording-fallback](./cre-workflows/user-balance-recording-fallback/)                                   | Cron (60s)                      | Polls the Chainlink Compliant Private Token API for transfers to/from the platform EOA and records them as deposits (transfers in) or withdrawals (transfers out) in our Secret Store. Catches transfers made directly through the Private Token API rather than through our REST API.                                                                                                                                                                                        |
-| [external-prediction-market-settler](./cre-workflows/external-prediction-market-settler/)                             | EVM Log (`SettlementRequested`) | Listens for SettlementRequests on the external prediction market, queries Gemini AI with Google Search grounding to fact-check the claim, submits the settlement on-chain, and writes an audit trail to Firestore. (Note: Although we believe we modified the contracts sufficiently to be our own, **this workflow is based almost entirely on the workflow from the CRE [prediction-market-demo template](https://docs.chain.link/cre-templates/prediction-market-demo])**) |
+| [external-prediction-market-settler](./cre-workflows/external-prediction-market-settler/)                             | EVM Log (`SettlementRequested`) | Listens for SettlementRequests on the external prediction market, queries Gemini AI with Google Search grounding to fact-check the claim, submits the settlement on-chain, and writes an audit trail to Firestore. (Note: Although we believe we modified the contracts + frontend sufficiently to be our own, **this workflow is based almost entirely on the workflow from the CRE [prediction-market-demo template](https://docs.chain.link/cre-templates/prediction-market-demo])**) |
 
 Adjacent to the CRE workflows, since we couldn't deploy our CRE workflows during the hackathon, we created a dedicated event polling service to trigger our LogTrigger workflows as though they were live on Chainlink infra in [./apps/event-watcher](./apps/event-watcher)
 
