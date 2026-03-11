@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@johanneskares/wallet-mock@1.4.1':
+    hash: e0cbb7dcc27365888c56db0512840f881ca30a096393a63f65512def43d84bdd
+    path: patches/@johanneskares__wallet-mock@1.4.1.patch
+
 importers:
 
   .:
@@ -72,10 +77,10 @@ importers:
     dependencies:
       '@apollo/client':
         specifier: ^4.1.6
-        version: 4.1.6(graphql-ws@6.0.7(crossws@0.3.5)(graphql@16.13.1)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(graphql@16.13.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(rxjs@7.8.2)
+        version: 4.1.6(graphql-ws@6.0.7(crossws@0.3.5)(graphql@16.13.1)(ws@7.5.10(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(graphql@16.13.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(rxjs@7.8.2)
       '@apollo/client-integration-nextjs':
         specifier: ^0.14.4
-        version: 0.14.4(@apollo/client@4.1.6(graphql-ws@6.0.7(crossws@0.3.5)(graphql@16.13.1)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(graphql@16.13.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(rxjs@7.8.2))(@types/react@19.2.14)(graphql@16.13.1)(next@16.1.6(@babel/core@7.29.0)(@playwright/test@1.58.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(rxjs@7.8.2)
+        version: 0.14.4(@apollo/client@4.1.6(graphql-ws@6.0.7(crossws@0.3.5)(graphql@16.13.1)(ws@7.5.10(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(graphql@16.13.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(rxjs@7.8.2))(@types/react@19.2.14)(graphql@16.13.1)(next@16.1.6(@babel/core@7.29.0)(@playwright/test@1.58.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(rxjs@7.8.2)
       '@base-ui/react':
         specifier: ^1.2.0
         version: 1.2.0(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -205,7 +210,7 @@ importers:
         version: 5.0.8(graphql@16.13.1)
       '@johanneskares/wallet-mock':
         specifier: ^1.4.1
-        version: 1.4.1(@playwright/test@1.58.2)(viem@2.47.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@4.3.6))
+        version: 1.4.1(patch_hash=e0cbb7dcc27365888c56db0512840f881ca30a096393a63f65512def43d84bdd)(@playwright/test@1.58.2)(viem@2.47.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@4.3.6))
       '@playwright/test':
         specifier: ^1.58.2
         version: 1.58.2
@@ -7318,10 +7323,10 @@ snapshots:
 
   '@alloc/quick-lru@5.2.0': {}
 
-  '@apollo/client-integration-nextjs@0.14.4(@apollo/client@4.1.6(graphql-ws@6.0.7(crossws@0.3.5)(graphql@16.13.1)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(graphql@16.13.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(rxjs@7.8.2))(@types/react@19.2.14)(graphql@16.13.1)(next@16.1.6(@babel/core@7.29.0)(@playwright/test@1.58.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(rxjs@7.8.2)':
+  '@apollo/client-integration-nextjs@0.14.4(@apollo/client@4.1.6(graphql-ws@6.0.7(crossws@0.3.5)(graphql@16.13.1)(ws@7.5.10(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(graphql@16.13.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(rxjs@7.8.2))(@types/react@19.2.14)(graphql@16.13.1)(next@16.1.6(@babel/core@7.29.0)(@playwright/test@1.58.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(rxjs@7.8.2)':
     dependencies:
-      '@apollo/client': 4.1.6(graphql-ws@6.0.7(crossws@0.3.5)(graphql@16.13.1)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(graphql@16.13.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(rxjs@7.8.2)
-      '@apollo/client-react-streaming': 0.14.4(@apollo/client@4.1.6(graphql-ws@6.0.7(crossws@0.3.5)(graphql@16.13.1)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(graphql@16.13.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(rxjs@7.8.2))(@types/react@19.2.14)(graphql@16.13.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(rxjs@7.8.2)
+      '@apollo/client': 4.1.6(graphql-ws@6.0.7(crossws@0.3.5)(graphql@16.13.1)(ws@7.5.10(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(graphql@16.13.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(rxjs@7.8.2)
+      '@apollo/client-react-streaming': 0.14.4(@apollo/client@4.1.6(graphql-ws@6.0.7(crossws@0.3.5)(graphql@16.13.1)(ws@7.5.10(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(graphql@16.13.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(rxjs@7.8.2))(@types/react@19.2.14)(graphql@16.13.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(rxjs@7.8.2)
       next: 16.1.6(@babel/core@7.29.0)(@playwright/test@1.58.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       react: 19.2.4
       rxjs: 7.8.2
@@ -7342,9 +7347,9 @@ snapshots:
       - graphql
       - react-dom
 
-  '@apollo/client-react-streaming@0.14.4(@apollo/client@4.1.6(graphql-ws@6.0.7(crossws@0.3.5)(graphql@16.13.1)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(graphql@16.13.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(rxjs@7.8.2))(@types/react@19.2.14)(graphql@16.13.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(rxjs@7.8.2)':
+  '@apollo/client-react-streaming@0.14.4(@apollo/client@4.1.6(graphql-ws@6.0.7(crossws@0.3.5)(graphql@16.13.1)(ws@7.5.10(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(graphql@16.13.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(rxjs@7.8.2))(@types/react@19.2.14)(graphql@16.13.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(rxjs@7.8.2)':
     dependencies:
-      '@apollo/client': 4.1.6(graphql-ws@6.0.7(crossws@0.3.5)(graphql@16.13.1)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(graphql@16.13.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(rxjs@7.8.2)
+      '@apollo/client': 4.1.6(graphql-ws@6.0.7(crossws@0.3.5)(graphql@16.13.1)(ws@7.5.10(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(graphql@16.13.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(rxjs@7.8.2)
       '@types/react-dom': 19.2.3(@types/react@19.2.14)
       '@wry/equality': 0.5.7
       graphql: 16.13.1
@@ -7366,7 +7371,7 @@ snapshots:
     transitivePeerDependencies:
       - '@types/react'
 
-  '@apollo/client@4.1.6(graphql-ws@6.0.7(crossws@0.3.5)(graphql@16.13.1)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(graphql@16.13.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(rxjs@7.8.2)':
+  '@apollo/client@4.1.6(graphql-ws@6.0.7(crossws@0.3.5)(graphql@16.13.1)(ws@7.5.10(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(graphql@16.13.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(rxjs@7.8.2)':
     dependencies:
       '@graphql-typed-document-node/core': 3.2.0(graphql@16.13.1)
       '@wry/caches': 1.0.1
@@ -7378,7 +7383,7 @@ snapshots:
       rxjs: 7.8.2
       tslib: 2.8.1
     optionalDependencies:
-      graphql-ws: 6.0.7(crossws@0.3.5)(graphql@16.13.1)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))
+      graphql-ws: 6.0.7(crossws@0.3.5)(graphql@16.13.1)(ws@7.5.10(bufferutil@4.1.0)(utf-8-validate@6.0.6))
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
 
@@ -9533,7 +9538,7 @@ snapshots:
     optionalDependencies:
       '@types/node': 25.3.3
 
-  '@johanneskares/wallet-mock@1.4.1(@playwright/test@1.58.2)(viem@2.47.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@4.3.6))':
+  '@johanneskares/wallet-mock@1.4.1(patch_hash=e0cbb7dcc27365888c56db0512840f881ca30a096393a63f65512def43d84bdd)(@playwright/test@1.58.2)(viem@2.47.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@4.3.6))':
     dependencies:
       '@playwright/test': 1.58.2
       viem: 2.47.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@4.3.6)
@@ -14872,12 +14877,12 @@ snapshots:
       graphql: 16.13.1
       tslib: 2.8.1
 
-  graphql-ws@6.0.7(crossws@0.3.5)(graphql@16.13.1)(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)):
+  graphql-ws@6.0.7(crossws@0.3.5)(graphql@16.13.1)(ws@7.5.10(bufferutil@4.1.0)(utf-8-validate@6.0.6)):
     dependencies:
       graphql: 16.13.1
     optionalDependencies:
       crossws: 0.3.5
-      ws: 8.18.3(bufferutil@4.1.0)(utf-8-validate@6.0.6)
+      ws: 7.5.10(bufferutil@4.1.0)(utf-8-validate@6.0.6)
     optional: true
 
   graphql-ws@6.0.7(crossws@0.3.5)(graphql@16.13.1)(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)):

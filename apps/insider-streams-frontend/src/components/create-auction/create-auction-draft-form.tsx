@@ -288,6 +288,7 @@ export function CreateAuctionDraftForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           eventId: draft.eventId,
+          eventTitle: selectedEvent.title,
           privateLeg: draft.privateLeg,
           secretPayload: draft.secretPayload,
           duration: draft.duration,

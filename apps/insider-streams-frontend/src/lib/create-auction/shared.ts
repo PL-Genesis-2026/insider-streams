@@ -37,6 +37,7 @@ export const createAuctionInputSchema = z.object({
 });
 
 export const createAuctionRequestSchema = createAuctionInputSchema.extend({
+  eventTitle: z.string().min(1, "eventTitle is required"),
   timestamp: z.number().int("timestamp must be an integer"),
   signature: z
     .string()
