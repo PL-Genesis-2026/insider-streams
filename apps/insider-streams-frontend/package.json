@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "codegen": "graphql-codegen --config codegen.ts"
+    "codegen": "graphql-codegen --config codegen.ts",
+    "test:e2e": "node --import tsx --test src/e2e-proxy.test.ts"
   },
   "dependencies": {
     "@apollo/client": "^4.1.6",
@@ -15,7 +16,6 @@
     "@base-ui/react": "^1.2.0",
     "@graphql-typed-document-node/core": "^3.2.0",
     "@hookform/resolvers": "^5.2.2",
-    "@private-streams/chainlink-private-token-api-client": "workspace:*",
     "@private-streams/common": "workspace:*",
     "@reown/appkit": "^1.8.19",
     "@reown/appkit-adapter-wagmi": "^1.8.19",
@@ -64,6 +64,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type {
+  FundingDepositResponse,
   FundingServerSnapshot,
   FundingWithdrawResponse,
 } from "./types";
@@ -52,6 +53,26 @@ export async function requestFundingWithdrawal(payload: {
   signature: string;
 }): Promise<FundingWithdrawResponse> {
   const response = await fetch("/api/funding/withdraw", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response));
+  }
+
+  return response.json();
+}
+
+export async function requestFundingDeposit(payload: {
+  amount: string;
+  timestamp: number;
+  signature: string;
+}): Promise<FundingDepositResponse> {
+  const response = await fetch("/api/funding/deposit", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

@@ -1,12 +1,18 @@
 /**
  * Sepolia Smoke Test
  *
- * Exercises the full lifecycle against real FHE on Sepolia:
- * 1. Mint ConfidentialUSDC to deployer (admin)
- * 2. Admin creates auction with encrypted prediction
- * 3. Admin deposits for a user and places encrypted bid
- * 4. Close auction (after admin expire)
- * 5. Verify encrypted state transitions
+ * Exercises the full lifecycle against real FHE on Sepolia, with actual
+ * decrypted balance verification (not just "handle is non-zero").
+ *
+ * Tests:
+ * 1. Contract wiring verification
+ * 2. Token minting with decrypted balance check
+ * 3. Deposit & balance accumulation (decrypted)
+ * 4. Auction creation & bidding (balance deducted)
+ * 5. Outbid with automatic refund (decrypted balances)
+ * 6. Auction close & seller payment (finalize with decryption proof)
+ * 7. Auction cancel & bidder refund
+ * 8. Withdraw flow
  *
  * Run: npx hardhat test test/smoke.sepolia.ts --network sepolia
  *
@@ -26,13 +32,9 @@ const FAKE_CID = ethers.keccak256(ethers.toUtf8Bytes("QmSmokeTestCid"));
 const FAKE_AES_KEY = 99999999999999999999n;
 const ONE_USDC = 1_000_000n;
 
-// Known Sepolia addresses (deployed manually via Foundry, not via hardhat-deploy)
-const SEPOLIA_MOCK_USDC = "0x7Dd00c06B6123dFCaF23F6647Eb6f19eC21abD33";
-const SEPOLIA_EXAMPLE_PM = "0x791550c705B2272E1D6EC617AB18337f4E5712E8";
-
 describe("Sepolia Smoke Test", function () {
   // Longer timeouts for Sepolia transactions
-  this.timeout(300_000);
+  this.timeout(600_000);
 
   let deployer: HardhatEthersSigner;
   let confidentialUSDC: FHEConfidentialUSDC;
@@ -41,6 +43,11 @@ describe("Sepolia Smoke Test", function () {
   let marketplaceAddress: string;
   let mockUSDC: MockUSDC;
   let predictionMarket: ExamplePredictionMarket;
+
+  // State shared across tests within the Auction Lifecycle describe block
+  let auctionId: number;
+  // State for the cancel test
+  let cancelAuctionId: number;
 
   before(async function () {
     const signers = await ethers.getSigners();
@@ -68,32 +75,113 @@ describe("Sepolia Smoke Test", function () {
     marketplaceAddress = marketplaceDeployment.address;
 
     // Always derive the ConfidentialUSDC address from the marketplace's paymentToken
-    // so we use the same token the marketplace was deployed with.
     const actualPaymentToken = await marketplace.paymentToken();
     confidentialUSDC = (await ethers.getContractAt("FHEConfidentialUSDC", actualPaymentToken)) as FHEConfidentialUSDC;
     confidentialUSDCAddress = actualPaymentToken;
 
-    // MockUSDC and ExamplePredictionMarket were deployed via Foundry (not hardhat-deploy),
-    // so deployments.get() only works on local (where fixtures deploy them).
-    let mockUSDCAddress: string;
-    let pmAddress: string;
-    if (isLocal) {
-      const mockUSDCDeployment = await deployments.get("MockUSDC");
-      mockUSDCAddress = mockUSDCDeployment.address;
-      const pmDeployment = await deployments.get("ExamplePredictionMarket");
-      pmAddress = pmDeployment.address;
-    } else {
-      mockUSDCAddress = SEPOLIA_MOCK_USDC;
-      pmAddress = SEPOLIA_EXAMPLE_PM;
-    }
-    mockUSDC = (await ethers.getContractAt("MockUSDC", mockUSDCAddress)) as MockUSDC;
-    predictionMarket = (await ethers.getContractAt("ExamplePredictionMarket", pmAddress)) as ExamplePredictionMarket;
+    const mockUSDCDeployment = await deployments.get("MockUSDC");
+    mockUSDC = (await ethers.getContractAt("MockUSDC", mockUSDCDeployment.address)) as MockUSDC;
+
+    const pmDeployment = await deployments.get("ExamplePredictionMarket");
+    predictionMarket = (await ethers.getContractAt("ExamplePredictionMarket", pmDeployment.address)) as ExamplePredictionMarket;
 
     console.log(`FHEConfidentialUSDC: ${confidentialUSDCAddress}`);
     console.log(`FHESecretMarketplace: ${marketplaceAddress}`);
-    console.log(`MockUSDC: ${mockUSDCAddress}`);
-    console.log(`ExamplePredictionMarket: ${pmAddress}`);
+    console.log(`MockUSDC: ${mockUSDCDeployment.address}`);
+    console.log(`ExamplePredictionMarket: ${pmDeployment.address}`);
   });
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
+
+  /** Decrypt a marketplace internal balance via requestBalanceDecrypt + publicDecrypt. */
+  async function decryptInternalBalance(userId: string): Promise<bigint> {
+    const handle = await marketplace.getBalance(userId);
+    if (handle === ethers.ZeroHash) return 0n;
+
+    if (fhevm.isMock) {
+      return fhevm.debugger.decryptEuint(FhevmType.euint64, handle);
+    }
+
+    // On Sepolia: must call requestBalanceDecrypt (on-chain tx) to mark
+    // the handle for public decryption via FHE.makePubliclyDecryptable().
+    // Wait for the tx to confirm before attempting publicDecrypt.
+    const tx = await marketplace.connect(deployer).requestBalanceDecrypt(userId);
+    await tx.wait();
+
+    // Re-read the handle after the tx is mined (should be same handle, but be safe)
+    const freshHandle = await marketplace.getBalance(userId);
+    const result = await fhevm.publicDecrypt([freshHandle]);
+    return result.clearValues[ethers.toBeHex(freshHandle, 32)] as bigint;
+  }
+
+  /** Create an encrypted deposit for a user. */
+  async function depositFor(userId: string, amount: bigint): Promise<void> {
+    const encrypted = await fhevm
+      .createEncryptedInput(marketplaceAddress, deployer.address)
+      .add64(amount)
+      .encrypt();
+    const tx = await marketplace.connect(deployer).depositFor(
+      userId,
+      encrypted.handles[0],
+      encrypted.inputProof,
+    );
+    await tx.wait();
+  }
+
+  /** Create an auction via admin. */
+  async function createAuction(
+    sellerId: string,
+    eventId: number,
+    prediction: boolean,
+  ): Promise<number> {
+    const endTime = Math.floor(Date.now() / 1000) + 3600;
+    const encrypted = await fhevm
+      .createEncryptedInput(marketplaceAddress, deployer.address)
+      .addBool(prediction)
+      .add256(FAKE_AES_KEY)
+      .encrypt();
+
+    const tx = await marketplace.createAuction(
+      sellerId, eventId, `Smoke Test Event ${eventId}`, endTime,
+      encrypted.handles[0], FAKE_CID, encrypted.handles[1], encrypted.inputProof,
+    );
+    await tx.wait();
+    return Number(await marketplace.nextAuctionId()) - 1;
+  }
+
+  /** Place a bid via admin. */
+  async function placeBid(
+    targetAuctionId: number,
+    bidderId: string,
+    previousBidderId: string,
+    amount: bigint,
+  ): Promise<void> {
+    const encrypted = await fhevm
+      .createEncryptedInput(marketplaceAddress, deployer.address)
+      .add64(amount)
+      .encrypt();
+    const tx = await marketplace.connect(deployer).placeBid(
+      targetAuctionId, bidderId, previousBidderId,
+      encrypted.handles[0], encrypted.inputProof, amount,
+    );
+    await tx.wait();
+  }
+
+  /** Withdraw from a user's internal balance. */
+  async function withdrawFor(userId: string, amount: bigint): Promise<void> {
+    const encrypted = await fhevm
+      .createEncryptedInput(marketplaceAddress, deployer.address)
+      .add64(amount)
+      .encrypt();
+    const tx = await marketplace.connect(deployer).withdrawFor(
+      userId,
+      encrypted.handles[0],
+      encrypted.inputProof,
+    );
+    await tx.wait();
+  }
+
+  // ── Tests ────────────────────────────────────────────────────────────────
 
   describe("Contract Verification", function () {
     it("should have correct payment token on marketplace", async function () {
@@ -116,172 +204,229 @@ describe("Sepolia Smoke Test", function () {
   });
 
   describe("ConfidentialUSDC Minting", function () {
-    it("should mint plaintext USDC to deployer (admin)", async function () {
-      const mintAmount = 100n * ONE_USDC;
-      console.log(`  Minting ${mintAmount} cUSDC to deployer (${deployer.address})...`);
+    it("should mint plaintext USDC and verify decrypted balance", async function () {
+      const mintAmount = 500n * ONE_USDC;
+      console.log(`  Minting ${mintAmount} cUSDC to deployer...`);
 
       const tx = await confidentialUSDC.mintPlaintext(deployer.address, mintAmount);
       const receipt = await tx.wait();
       console.log(`  Tx: ${receipt?.hash}`);
-      console.log(`  Gas used: ${receipt?.gasUsed}`);
 
-      // Read encrypted balance
       const balHandle = await confidentialUSDC.confidentialBalanceOf(deployer.address);
-      console.log(`  Balance handle: ${balHandle}`);
+      expect(balHandle).to.not.equal(ethers.ZeroHash);
 
       if (fhevm.isMock) {
         const clearBal = await fhevm.userDecryptEuint(
-          FhevmType.euint64,
-          balHandle,
-          confidentialUSDCAddress,
-          deployer,
+          FhevmType.euint64, balHandle, confidentialUSDCAddress, deployer,
         );
         console.log(`  Decrypted balance: ${clearBal}`);
         expect(clearBal).to.be.gte(mintAmount);
       } else {
-        expect(balHandle).to.not.equal(ethers.ZeroHash);
-        console.log("  Balance handle is non-zero (real FHE)");
+        // On Sepolia: userDecryptEuint works because deployer is the token holder
+        const clearBal = await fhevm.userDecryptEuint(
+          FhevmType.euint64, balHandle, confidentialUSDCAddress, deployer,
+        );
+        console.log(`  Decrypted balance: ${clearBal}`);
+        expect(clearBal).to.be.gte(mintAmount);
       }
     });
   });
 
-  describe("Auction Lifecycle", function () {
-    let auctionId: number;
-
+  describe("Operator Setup", function () {
     it("should set marketplace as operator for deployer (admin)", async function () {
-      // Check if already an operator (Sepolia may have this from a previous run)
       const alreadyOp = await confidentialUSDC.isOperator(deployer.address, marketplaceAddress);
       if (alreadyOp) {
-        console.log("  Marketplace is already operator for deployer — skipping setOperator");
+        console.log("  Marketplace is already operator — skipping");
         return;
       }
 
       const farFuture = Math.floor(Date.now() / 1000) + 365 * 24 * 3600;
-      console.log(`  Setting marketplace as operator for deployer (admin)...`);
-
       const tx = await confidentialUSDC.connect(deployer).setOperator(marketplaceAddress, farFuture);
-      const receipt = await tx.wait();
-      console.log(`  Tx: ${receipt?.hash}`);
+      await tx.wait();
 
-      const isOp = await confidentialUSDC.isOperator(deployer.address, marketplaceAddress);
-      expect(isOp).to.be.true;
+      expect(await confidentialUSDC.isOperator(deployer.address, marketplaceAddress)).to.be.true;
       console.log("  Marketplace is now operator for deployer");
     });
+  });
 
-    it("should create auction with encrypted prediction (via admin)", async function () {
-      const endTime = Math.floor(Date.now() / 1000) + 3600;
-      console.log(`  Creating auction (endTime: ${endTime})...`);
+  describe("Deposit & Balance", function () {
+    it("should deposit and verify decrypted internal balance", async function () {
+      const depositAmount = 100n * ONE_USDC;
+      console.log(`  Depositing ${depositAmount} for 'smoke-bidder-1'...`);
 
-      const encryptedInput = await fhevm
-        .createEncryptedInput(marketplaceAddress, deployer.address)
-        .addBool(true) // prediction: YES
-        .add256(FAKE_AES_KEY)
-        .encrypt();
+      await depositFor("smoke-bidder-1", depositAmount);
 
-      const tx = await marketplace.createAuction(
-        "smoke-test-seller",
-        0, // eventId
-        "Smoke Test Event",
-        endTime,
-        encryptedInput.handles[0],
-        FAKE_CID,
-        encryptedInput.handles[1],
-        encryptedInput.inputProof,
-      );
-      const receipt = await tx.wait();
-      console.log(`  Tx: ${receipt?.hash}`);
-      console.log(`  Gas used: ${receipt?.gasUsed}`);
+      const balance = await decryptInternalBalance("smoke-bidder-1");
+      console.log(`  Decrypted balance: ${balance}`);
+      expect(balance).to.be.gte(depositAmount);
+    });
 
-      auctionId = Number(await marketplace.nextAuctionId()) - 1;
+    it("should accumulate deposits correctly", async function () {
+      const secondDeposit = 50n * ONE_USDC;
+      console.log(`  Depositing additional ${secondDeposit} for 'smoke-bidder-1'...`);
+
+      await depositFor("smoke-bidder-1", secondDeposit);
+
+      const balance = await decryptInternalBalance("smoke-bidder-1");
+      console.log(`  Decrypted balance after 2nd deposit: ${balance}`);
+      // Should be >= 150 (100 + 50), may be higher from previous runs on Sepolia
+      expect(balance).to.be.gte(150n * ONE_USDC);
+    });
+
+    it("should deposit for a second user", async function () {
+      const depositAmount = 80n * ONE_USDC;
+      console.log(`  Depositing ${depositAmount} for 'smoke-bidder-2'...`);
+
+      await depositFor("smoke-bidder-2", depositAmount);
+
+      const balance = await decryptInternalBalance("smoke-bidder-2");
+      console.log(`  Decrypted balance: ${balance}`);
+      expect(balance).to.be.gte(depositAmount);
+    });
+  });
+
+  describe("Auction & Bidding", function () {
+    it("should create auction with encrypted prediction", async function () {
+      auctionId = await createAuction("smoke-seller", 100, true);
       console.log(`  Created auction ID: ${auctionId}`);
 
       const openAuctions = await marketplace.getOpenAuctions();
-      expect(openAuctions.length).to.be.gte(1);
-      console.log(`  Open auctions: ${openAuctions}`);
+      expect(openAuctions.map(Number)).to.include(auctionId);
+      console.log(`  Open auctions: [${openAuctions}]`);
     });
 
-    it("should deposit into marketplace internal balance for pseudonymous user", async function () {
-      const depositAmount = 100n * ONE_USDC;
-      console.log(`  Depositing ${depositAmount} for user 'smoke-bidder' via admin...`);
+    it("should place bid and deduct from bidder balance", async function () {
+      const balBefore = await decryptInternalBalance("smoke-bidder-1");
+      console.log(`  Balance before bid: ${balBefore}`);
 
-      const encryptedInput = await fhevm
-        .createEncryptedInput(marketplaceAddress, deployer.address)
-        .add64(depositAmount)
-        .encrypt();
-
-      const tx = await marketplace.connect(deployer).depositFor(
-        "smoke-bidder",
-        encryptedInput.handles[0],
-        encryptedInput.inputProof,
-      );
-      const receipt = await tx.wait();
-      console.log(`  Tx: ${receipt?.hash}`);
-      console.log(`  Gas used: ${receipt?.gasUsed}`);
-
-      // Verify internal balance
-      const balHandle = await marketplace.getBalance("smoke-bidder");
-      console.log(`  Internal balance handle: ${balHandle}`);
-
-      if (fhevm.isMock) {
-        const clearBal = await fhevm.debugger.decryptEuint(FhevmType.euint64, balHandle);
-        console.log(`  Decrypted internal balance: ${clearBal}`);
-        expect(clearBal).to.be.gte(depositAmount);
-      } else {
-        expect(balHandle).to.not.equal(ethers.ZeroHash);
-        console.log("  Internal balance handle is non-zero (real FHE)");
-      }
-    });
-
-    it("should place encrypted bid via admin on behalf of pseudonymous user", async function () {
-      const bidAmount = 5n * ONE_USDC;
-      console.log(`  Placing bid of ${bidAmount} on auction ${auctionId} for 'smoke-bidder'...`);
-
-      const encryptedInput = await fhevm
-        .createEncryptedInput(marketplaceAddress, deployer.address)
-        .add64(bidAmount)
-        .encrypt();
-
-      const tx = await marketplace.connect(deployer).placeBid(
-        auctionId,
-        "smoke-bidder",
-        "", // no previous bidder
-        encryptedInput.handles[0],
-        encryptedInput.inputProof,
-        bidAmount, // plaintext for on-chain validation
-      );
-      const receipt = await tx.wait();
-      console.log(`  Tx: ${receipt?.hash}`);
-      console.log(`  Gas used: ${receipt?.gasUsed}`);
+      const bidAmount = 10n * ONE_USDC;
+      await placeBid(auctionId, "smoke-bidder-1", "", bidAmount);
 
       const auction = await marketplace.getAuction(auctionId);
-      expect(auction.currentBidderId).to.equal("smoke-bidder");
-      console.log(`  Current bidder: ${auction.currentBidderId}`);
-    });
+      expect(auction.currentBidderId).to.equal("smoke-bidder-1");
+      expect(auction.currentBidPlaintext).to.equal(bidAmount);
+      console.log(`  Current bidder: ${auction.currentBidderId}, bid: ${auction.currentBidPlaintext}`);
 
-    it("should close auction after admin expire", async function () {
+      const balAfter = await decryptInternalBalance("smoke-bidder-1");
+      console.log(`  Balance after bid: ${balAfter}`);
+      expect(balBefore - balAfter).to.equal(bidAmount);
+    });
+  });
+
+  describe("Outbid & Refund", function () {
+    it("should outbid and refund previous bidder", async function () {
+      const bidder1BalBefore = await decryptInternalBalance("smoke-bidder-1");
+      const bidder2BalBefore = await decryptInternalBalance("smoke-bidder-2");
+      console.log(`  Bidder1 balance before: ${bidder1BalBefore}`);
+      console.log(`  Bidder2 balance before: ${bidder2BalBefore}`);
+
+      const outbidAmount = 20n * ONE_USDC;
+      await placeBid(auctionId, "smoke-bidder-2", "smoke-bidder-1", outbidAmount);
+
+      const auction = await marketplace.getAuction(auctionId);
+      expect(auction.currentBidderId).to.equal("smoke-bidder-2");
+      expect(auction.currentBidPlaintext).to.equal(outbidAmount);
+      console.log(`  New highest bidder: ${auction.currentBidderId}`);
+
+      // Bidder1 should be refunded their 10 USDC
+      const bidder1BalAfter = await decryptInternalBalance("smoke-bidder-1");
+      console.log(`  Bidder1 balance after (refunded): ${bidder1BalAfter}`);
+      expect(bidder1BalAfter - bidder1BalBefore).to.equal(10n * ONE_USDC);
+
+      // Bidder2 should have been deducted
+      const bidder2BalAfter = await decryptInternalBalance("smoke-bidder-2");
+      console.log(`  Bidder2 balance after (deducted): ${bidder2BalAfter}`);
+      expect(bidder2BalBefore - bidder2BalAfter).to.equal(outbidAmount);
+    });
+  });
+
+  describe("Close Auction & Seller Payment", function () {
+    it("should close auction and credit seller via decryption proof", async function () {
+      // Admin-expire the auction
       console.log(`  Admin-expiring auction ${auctionId}...`);
       let tx = await marketplace.adminExpireAuction(auctionId);
-      let receipt = await tx.wait();
-      console.log(`  Expire Tx: ${receipt?.hash}`);
+      await tx.wait();
 
+      // Close auction
       console.log(`  Closing auction ${auctionId}...`);
       tx = await marketplace.closeAuction(auctionId);
-      receipt = await tx.wait();
-      console.log(`  Close Tx: ${receipt?.hash}`);
-      console.log(`  Gas used: ${receipt?.gasUsed}`);
+      await tx.wait();
 
-      // With a bid placed, should have pending decryption
-      const pendingClose = await marketplace.pendingAuctionClose(auctionId);
-      console.log(`  Pending close: ${pendingClose}`);
-      expect(pendingClose).to.be.true;
+      // Should have pending decryption (there was a winning bid)
+      expect(await marketplace.pendingAuctionClose(auctionId)).to.be.true;
+      console.log("  Pending close: true");
 
-      // Seller should have been credited
-      if (fhevm.isMock) {
-        const sellerBal = await marketplace.getBalance("smoke-test-seller");
-        const clearBal = await fhevm.debugger.decryptEuint(FhevmType.euint64, sellerBal);
-        console.log(`  Seller balance after close: ${clearBal}`);
-        expect(clearBal).to.equal(5n * ONE_USDC);
-      }
+      // Verify seller was credited with the winning bid (20 USDC from outbid)
+      const sellerBal = await decryptInternalBalance("smoke-seller");
+      console.log(`  Seller balance after close: ${sellerBal}`);
+      expect(sellerBal).to.be.gte(20n * ONE_USDC);
+
+      // Finalize with decryption proof
+      const [, , currentBidHandle] = await marketplace.getAuction(auctionId);
+      const decryptResult = await fhevm.publicDecrypt([currentBidHandle]);
+      const winningBid = decryptResult.clearValues[ethers.toBeHex(currentBidHandle, 32)] as bigint;
+      console.log(`  Winning bid (decrypted): ${winningBid}`);
+      expect(winningBid).to.equal(20n * ONE_USDC);
+
+      tx = await marketplace.finalizeAuctionClose(auctionId, winningBid, decryptResult.decryptionProof);
+      await tx.wait();
+
+      expect(await marketplace.pendingAuctionClose(auctionId)).to.be.false;
+      console.log("  Auction finalized successfully");
+
+      // Auction should no longer be open
+      const openAuctions = await marketplace.getOpenAuctions();
+      expect(openAuctions.map(Number)).to.not.include(auctionId);
+    });
+  });
+
+  describe("Cancel Auction & Refund", function () {
+    it("should cancel auction and refund current bidder", async function () {
+      // Create a second auction
+      cancelAuctionId = await createAuction("smoke-seller-2", 101, false);
+      console.log(`  Created auction ID: ${cancelAuctionId}`);
+
+      // Place a bid
+      const bidAmount = 15n * ONE_USDC;
+      await placeBid(cancelAuctionId, "smoke-bidder-1", "", bidAmount);
+
+      const balBefore = await decryptInternalBalance("smoke-bidder-1");
+      console.log(`  Bidder balance before cancel: ${balBefore}`);
+
+      // Cancel the auction
+      const tx = await marketplace.connect(deployer).cancelAuction(cancelAuctionId);
+      await tx.wait();
+      console.log("  Auction cancelled");
+
+      // Verify status
+      const [, , , , , , status] = await marketplace.getAuction(cancelAuctionId);
+      expect(status).to.equal(2); // Cancelled
+      console.log("  Status: Cancelled");
+
+      // Bidder should be refunded
+      const balAfter = await decryptInternalBalance("smoke-bidder-1");
+      console.log(`  Bidder balance after cancel: ${balAfter}`);
+      expect(balAfter - balBefore).to.equal(bidAmount);
+
+      // Should be removed from open auctions
+      const openAuctions = await marketplace.getOpenAuctions();
+      expect(openAuctions.map(Number)).to.not.include(cancelAuctionId);
+    });
+  });
+
+  describe("Withdraw", function () {
+    it("should withdraw from seller balance and verify decrease", async function () {
+      const balBefore = await decryptInternalBalance("smoke-seller");
+      console.log(`  Seller balance before withdraw: ${balBefore}`);
+      expect(balBefore).to.be.gte(20n * ONE_USDC);
+
+      const withdrawAmount = 5n * ONE_USDC;
+      await withdrawFor("smoke-seller", withdrawAmount);
+      console.log(`  Withdrew ${withdrawAmount}`);
+
+      const balAfter = await decryptInternalBalance("smoke-seller");
+      console.log(`  Seller balance after withdraw: ${balAfter}`);
+      expect(balBefore - balAfter).to.equal(withdrawAmount);
     });
   });
 
@@ -291,11 +436,9 @@ describe("Sepolia Smoke Test", function () {
       console.log(`  Next event ID: ${nextId}`);
 
       const pmToken = await predictionMarket.paymentToken();
-      const expectedMockUSDC = (network.name === "hardhat" || network.name === "localhost")
-        ? (await deployments.get("MockUSDC")).address
-        : SEPOLIA_MOCK_USDC;
+      const expectedMockUSDC = (await deployments.get("MockUSDC")).address;
       expect(pmToken).to.equal(expectedMockUSDC);
-      console.log(`  Payment token matches MockUSDC`);
+      console.log("  Payment token matches MockUSDC");
     });
   });
 });

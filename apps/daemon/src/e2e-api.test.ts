@@ -34,6 +34,8 @@ const BASE_URL = `http://localhost:${API_PORT}`;
 const ALICE_PK = "0xe38e78bfd13899c54453206eeb5e173fa917b5e5f42000bf0523e5763424f5a8" as Hex;
 const BOB_PK = "0x9d2db6cbff6b835d650c80b478c6884d478b4306d664b9fa368f644d07631897" as Hex;
 const CHARLIE_PK = "0x7a8ec3e637ff10271dc9521b8e0f8e19c0f195f21012f4a13b2080ddbaa3787e" as Hex;
+// Dedicated PK for the daemon server process (TEST_ACCOUNT_25 — not used by any test signer)
+const DAEMON_PK = "0x7e70fc45d677c1c5e6db2d221e4d30a67544301dbdf2f97e613df5e409d71b6d";
 
 const ALICE = privateKeyToAccount(ALICE_PK);
 const BOB = privateKeyToAccount(BOB_PK);
@@ -134,14 +136,12 @@ before(async () => {
   dbPath = join(tmpDir, "test.db");
 
   serverProcess = spawn("npx", ["tsx", "src/api.ts"], {
-    cwd: "/Users/adoll/projects/private-streams/apps/daemon",
+    cwd: new URL("..", import.meta.url).pathname,
     env: {
       ...process.env,
       API_PORT: String(API_PORT),
       DB_PATH: dbPath,
-      // Blank out contract addresses so tests don't make on-chain calls
-      SECRET_MARKETPLACE_ADDRESS: "",
-      PRIVATE_KEY: "",
+      PRIVATE_KEY: DAEMON_PK,
     },
     stdio: "pipe",
   });
@@ -489,6 +489,66 @@ describe("POST /withdraw", () => {
 });
 
 // ────────────────────────────────────────────────────────────────────────────
+// POST /deposit — signature-authenticated
+// ────────────────────────────────────────────────────────────────────────────
+
+describe("POST /deposit", () => {
+  it("accepts deposit for new user (auto-creates)", async () => {
+    const pk = "0x4444444444444444444444444444444444444444444444444444444444444444" as Hex;
+    const account = privateKeyToAccount(pk);
+
+    const { status, data } = await signedPost("/deposit", account, {
+      txHash: "0x0000000000000000000000000000000000000000000000000000000000000001",
+      amount: "5000000",
+    });
+    assert.equal(status, 200);
+    assert.ok(data.userId);
+    assert.equal(data.amount, "5000000");
+    assert.equal(data.status, "pending");
+  });
+
+  it("accepts deposit for existing user", async () => {
+    await signedPost("/user", ALICE);
+
+    const { status, data } = await signedPost("/deposit", ALICE, {
+      txHash: "0x0000000000000000000000000000000000000000000000000000000000000002",
+      amount: "10000000",
+    });
+    assert.equal(status, 200);
+    assert.ok(data.userId);
+    assert.equal(data.amount, "10000000");
+    assert.equal(data.status, "pending");
+  });
+
+  it("rejects invalid amount", async () => {
+    const { status, data } = await signedPost("/deposit", ALICE, {
+      txHash: "0x0000000000000000000000000000000000000000000000000000000000000003",
+      amount: "abc",
+    });
+    assert.equal(status, 400);
+    assert.equal(data.error, "Invalid amount");
+  });
+
+  it("rejects zero amount", async () => {
+    const { status, data } = await signedPost("/deposit", ALICE, {
+      txHash: "0x0000000000000000000000000000000000000000000000000000000000000004",
+      amount: "0",
+    });
+    assert.equal(status, 400);
+    assert.ok((data.error as string).includes("greater than 0"));
+  });
+
+  it("rejects without signature", async () => {
+    const { status } = await api("POST", "/deposit", {
+      txHash: "0x0000000000000000000000000000000000000000000000000000000000000005",
+      amount: "5000000",
+      timestamp: Math.floor(Date.now() / 1000),
+    });
+    assert.equal(status, 400);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
 // Balance (on-chain — returns "0" when no contract configured)
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -648,7 +708,7 @@ describe("POST /bids", () => {
 // ────────────────────────────────────────────────────────────────────────────
 
 describe("POST /seller", () => {
-  it("returns isSeller false for non-seller (no contract)", async () => {
+  it("returns isSeller false for non-seller", async () => {
     const res = await signedPost("/seller", ALICE);
     assert.equal(res.status, 200);
     assert.equal(res.data.isSeller, false);
@@ -724,14 +784,15 @@ describe("POST /dashboard", () => {
 });
 
 // ────────────────────────────────────────────────────────────────────────────
-// POST /faucet — mint test USDC (no contract configured in tests)
+// POST /faucet — mint test USDC
 // ────────────────────────────────────────────────────────────────────────────
 
 describe("POST /faucet", () => {
-  it("returns 503 when faucet not configured", async () => {
+  it("returns 500 when daemon is not the token owner", async () => {
+    // ADMIN_PK is set to a test account that is NOT the MockUSDC owner,
+    // so the mint() call reverts with OwnableUnauthorizedAccount.
     const res = await signedPost("/faucet", ALICE);
-    assert.equal(res.status, 503);
-    assert.ok((res.data.error as string).includes("not configured"));
+    assert.equal(res.status, 500);
   });
 
   it("rejects without signature", async () => {

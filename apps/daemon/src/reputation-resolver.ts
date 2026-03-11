@@ -15,13 +15,14 @@
  * Run: pnpm resolver (or tsx src/reputation-resolver.ts)
  */
 
-import { ethers } from "ethers";
+import { examplePredictionMarketAbi, fheSecretMarketplaceAbi } from "@private-streams/common";
 import { config, requireConfig } from "./config.js";
-import { getProvider, getWallet } from "./provider.js";
-import { ExamplePredictionMarketABI, FHESecretMarketplaceABI } from "./abis.js";
+import { getPublicClient, getWalletClient, getAccount } from "./provider.js";
 import { sendNotification } from "./notify.js";
 
 const ETHERSCAN_URL = "https://sepolia.etherscan.io/tx";
+const marketplaceAddress = config.secretMarketplaceAddress as `0x${string}`;
+const pmAddress = config.predictionMarketAddress as `0x${string}`;
 
 // ExamplePredictionMarket Outcome enum
 const PM_OUTCOME = { None: 0, No: 1, Yes: 2, Inconclusive: 3 } as const;
@@ -32,37 +33,39 @@ async function handleSettlementResponse(
 ): Promise<void> {
   console.log(`\n[resolver] Processing settlement for event ${eventId}, outcome=${outcome}`);
 
-  const wallet = getWallet();
-  const marketplace = new ethers.Contract(config.secretMarketplaceAddress, FHESecretMarketplaceABI, wallet);
+  const publicClient = getPublicClient();
 
   // Check if event already resolved on marketplace
-  const alreadyResolved = await marketplace.eventResolved(eventId);
+  const alreadyResolved = await publicClient.readContract({
+    address: marketplaceAddress,
+    abi: fheSecretMarketplaceAbi,
+    functionName: "eventResolved",
+    args: [eventId],
+  });
   if (alreadyResolved) {
     console.log(`[resolver] Event ${eventId} already resolved, skipping`);
     return;
   }
 
   // Check if there are auctions for this event
-  const auctionIds: bigint[] = await marketplace.getEventAuctions(eventId);
+  const auctionIds = await publicClient.readContract({
+    address: marketplaceAddress,
+    abi: fheSecretMarketplaceAbi,
+    functionName: "getEventAuctions",
+    args: [eventId],
+  });
   if (auctionIds.length === 0) {
     console.log(`[resolver] No auctions for event ${eventId}, skipping`);
     return;
   }
 
   // Determine if outcome is YES
-  // For INCONCLUSIVE, we treat all predictions as wrong (same as CRE workflow)
   let actualOutcomeIsYes: boolean;
   if (outcome === PM_OUTCOME.Yes) {
     actualOutcomeIsYes = true;
   } else if (outcome === PM_OUTCOME.No) {
     actualOutcomeIsYes = false;
   } else {
-    // INCONCLUSIVE: pass false, which means predictions of YES are "wrong"
-    // and predictions of NO are "correct" — but the CRE workflow treated
-    // all INCONCLUSIVE as PredictionWrong. In FHE, the comparison will
-    // naturally handle this since we compare encrypted prediction to a bool.
-    // To match CRE behavior (all predictions wrong on INCONCLUSIVE),
-    // we'd need special handling. For now, pass false and log a note.
     console.log(`[resolver] INCONCLUSIVE outcome for event ${eventId} — treating as NO`);
     actualOutcomeIsYes = false;
   }
@@ -70,14 +73,19 @@ async function handleSettlementResponse(
   console.log(`[resolver] Resolving ${auctionIds.length} auction(s) for event ${eventId} (outcomeIsYes=${actualOutcomeIsYes})`);
 
   try {
-    const tx = await marketplace.resolveEventPredictions(eventId, actualOutcomeIsYes);
-    const receipt = await tx.wait();
-    console.log(`[resolver] Resolved event ${eventId}: ${receipt.hash}`);
+    const hash = await getWalletClient().writeContract({
+      address: marketplaceAddress,
+      abi: fheSecretMarketplaceAbi,
+      functionName: "resolveEventPredictions",
+      args: [eventId, actualOutcomeIsYes],
+    });
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    console.log(`[resolver] Resolved event ${eventId}: ${receipt.transactionHash}`);
 
     await sendNotification(
       `Reputation Resolved: Event ${eventId}`,
-      `Event ${eventId}: ${auctionIds.length} auction(s) resolved.\ntx: ${ETHERSCAN_URL}/${receipt.hash}`,
-      `${ETHERSCAN_URL}/${receipt.hash}`,
+      `Event ${eventId}: ${auctionIds.length} auction(s) resolved.\ntx: ${ETHERSCAN_URL}/${receipt.transactionHash}`,
+      `${ETHERSCAN_URL}/${receipt.transactionHash}`,
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -89,27 +97,35 @@ async function handleSettlementResponse(
 export async function startReputationResolver(): Promise<void> {
   requireConfig(["privateKey"]);
 
-  const provider = getProvider();
-  const pm = new ethers.Contract(config.predictionMarketAddress, ExamplePredictionMarketABI, provider);
+  const publicClient = getPublicClient();
 
   console.log(`[resolver] Watching SettlementResponse on ${config.predictionMarketAddress}`);
   console.log(`[resolver] Marketplace: ${config.secretMarketplaceAddress}`);
-  console.log(`[resolver] Resolver address: ${getWallet().address}`);
+  console.log(`[resolver] Resolver address: ${getAccount().address}`);
 
   // Watch for SettlementResponse events
-  pm.on("SettlementResponse", async (eventId: bigint, status: number, outcome: number) => {
-    try {
-      await handleSettlementResponse(eventId, outcome);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[resolver] Error processing event ${eventId}:`, msg);
-      await sendNotification("Reputation Resolution FAILED", `Event ${eventId}: ${msg}`);
-    }
+  publicClient.watchContractEvent({
+    address: pmAddress,
+    abi: examplePredictionMarketAbi,
+    eventName: "SettlementResponse",
+    onLogs: (logs) => {
+      for (const log of logs) {
+        const { eventId, outcome } = log.args as { eventId: bigint; status: number; outcome: number };
+        handleSettlementResponse(eventId, outcome).catch((err) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(`[resolver] Error processing event ${eventId}:`, msg);
+          sendNotification("Reputation Resolution FAILED", `Event ${eventId}: ${msg}`);
+        });
+      }
+    },
   });
 
   // Also check for any unresolved events on startup
-  const marketplace = new ethers.Contract(config.secretMarketplaceAddress, FHESecretMarketplaceABI, provider);
-  const unresolvedEvents: bigint[] = await marketplace.getUnresolvedEvents();
+  const unresolvedEvents = await publicClient.readContract({
+    address: marketplaceAddress,
+    abi: fheSecretMarketplaceAbi,
+    functionName: "getUnresolvedEvents",
+  });
 
   if (unresolvedEvents.length > 0) {
     console.log(`[resolver] Found ${unresolvedEvents.length} unresolved event(s) on startup: ${unresolvedEvents.join(", ")}`);
@@ -117,13 +133,16 @@ export async function startReputationResolver(): Promise<void> {
     for (const eventId of unresolvedEvents) {
       try {
         // Check if event is settled on the prediction market
-        const marketEvent = await pm.getMarketEvent(eventId);
-        const status = marketEvent[4]; // status field
-        const outcome = marketEvent[5]; // outcome field
+        const marketEvent = await publicClient.readContract({
+          address: pmAddress,
+          abi: examplePredictionMarketAbi,
+          functionName: "getMarketEvent",
+          args: [eventId],
+        });
 
         // Status 3 = Settled
-        if (status === 3n || status === 3) {
-          await handleSettlementResponse(eventId, Number(outcome));
+        if (marketEvent.status === 3) {
+          await handleSettlementResponse(eventId, Number(marketEvent.outcome));
         }
       } catch (err) {
         console.warn(`[resolver] Error checking event ${eventId}:`, err instanceof Error ? err.message : err);

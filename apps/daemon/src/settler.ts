@@ -9,10 +9,9 @@
  * Run: pnpm settler (or tsx src/settler.ts)
  */
 
-import { ethers } from "ethers";
+import { examplePredictionMarketAbi } from "@private-streams/common";
 import { config, requireConfig } from "./config.js";
-import { getProvider, getWallet } from "./provider.js";
-import { ExamplePredictionMarketABI } from "./abis.js";
+import { getPublicClient, getWalletClient, getAccount } from "./provider.js";
 import { sendNotification } from "./notify.js";
 
 const ETHERSCAN_URL = "https://sepolia.etherscan.io/tx";
@@ -173,18 +172,16 @@ async function handleSettlementRequest(eventId: bigint, question: string): Promi
   console.log(`[settler] Gemini result: ${geminiResult.result} (confidence: ${geminiResult.confidence})`);
 
   // Step 2: Settle on-chain
-  const wallet = getWallet();
-  const pm = new ethers.Contract(config.predictionMarketAddress, ExamplePredictionMarketABI, wallet);
-
+  const pmAddress = config.predictionMarketAddress as `0x${string}`;
   const outcome = OutcomeMap[geminiResult.result];
-  const tx = await pm.settleEvent(
-    eventId,
-    outcome,
-    geminiResult.confidence,
-    geminiResult.responseId,
-  );
-  const receipt = await tx.wait();
-  const txHash = receipt.hash;
+  const hash = await getWalletClient().writeContract({
+    address: pmAddress,
+    abi: examplePredictionMarketAbi,
+    functionName: "settleEvent",
+    args: [eventId, outcome, geminiResult.confidence, geminiResult.responseId],
+  });
+  const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
+  const txHash = receipt.transactionHash;
   console.log(`[settler] Settlement tx: ${txHash}`);
 
   // Step 3: Write Firestore audit
@@ -198,21 +195,27 @@ async function handleSettlementRequest(eventId: bigint, question: string): Promi
 export async function startSettler(): Promise<void> {
   requireConfig(["privateKey", "geminiApiKey"]);
 
-  const provider = getProvider();
-  const pm = new ethers.Contract(config.predictionMarketAddress, ExamplePredictionMarketABI, provider);
+  const publicClient = getPublicClient();
+  const pmAddress = config.predictionMarketAddress as `0x${string}`;
 
   console.log(`[settler] Watching SettlementRequested on ${config.predictionMarketAddress}`);
-  console.log(`[settler] Settler address: ${getWallet().address}`);
+  console.log(`[settler] Settler address: ${getAccount().address}`);
 
-  // Process events as they arrive
-  pm.on("SettlementRequested", async (eventId: bigint, question: string) => {
-    try {
-      await handleSettlementRequest(eventId, question);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[settler] Error processing event ${eventId}:`, msg);
-      await sendNotification("Settlement FAILED", `Event ${eventId}: ${msg}`);
-    }
+  // Watch for events as they arrive
+  publicClient.watchContractEvent({
+    address: pmAddress,
+    abi: examplePredictionMarketAbi,
+    eventName: "SettlementRequested",
+    onLogs: (logs) => {
+      for (const log of logs) {
+        const { eventId, question } = log.args as { eventId: bigint; question: string };
+        handleSettlementRequest(eventId, question).catch((err) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(`[settler] Error processing event ${eventId}:`, msg);
+          sendNotification("Settlement FAILED", `Event ${eventId}: ${msg}`);
+        });
+      }
+    },
   });
 
   console.log("[settler] Listening for events...");

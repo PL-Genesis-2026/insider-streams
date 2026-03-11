@@ -4,25 +4,26 @@
  * Polls getOpenAuctions() to find expired auctions, closes them on-chain.
  * After closing, the auction is marked for async decryption (pending close).
  *
- * NOTE: The async decryption relay (publicDecrypt + finalizeAuctionClose) requires
- * the Zama Relayer SDK and will be implemented when the frontend integration is done.
- * For now, this daemon handles the on-chain close step.
- *
  * Replaces: cre-workflows/secret-marketplace-auction-closer
  *
  * Run: pnpm closer (or tsx src/auction-closer.ts)
  */
 
-import { ethers } from "ethers";
+import { fheSecretMarketplaceAbi } from "@private-streams/common";
 import { config, requireConfig } from "./config.js";
-import { getProvider, getWallet } from "./provider.js";
-import { FHESecretMarketplaceABI } from "./abis.js";
+import { getPublicClient, getWalletClient, getAccount } from "./provider.js";
 import { sendNotification } from "./notify.js";
 
 const ETHERSCAN_URL = "https://sepolia.etherscan.io/tx";
+const marketplaceAddress = config.secretMarketplaceAddress as `0x${string}`;
 
-async function findExpiredAuctions(marketplace: ethers.Contract): Promise<bigint[]> {
-  const openAuctions: bigint[] = await marketplace.getOpenAuctions();
+async function findExpiredAuctions(): Promise<bigint[]> {
+  const publicClient = getPublicClient();
+  const openAuctions = await publicClient.readContract({
+    address: marketplaceAddress,
+    abi: fheSecretMarketplaceAbi,
+    functionName: "getOpenAuctions",
+  });
   if (openAuctions.length === 0) return [];
 
   const now = BigInt(Math.floor(Date.now() / 1000));
@@ -30,8 +31,13 @@ async function findExpiredAuctions(marketplace: ethers.Contract): Promise<bigint
 
   for (const auctionId of openAuctions) {
     try {
-      const auction = await marketplace.getAuction(auctionId);
-      const endTime = auction[1]; // endTime is 2nd return value (after sellerId)
+      const auction = await publicClient.readContract({
+        address: marketplaceAddress,
+        abi: fheSecretMarketplaceAbi,
+        functionName: "getAuction",
+        args: [auctionId],
+      });
+      const endTime = auction[1]; // endTime
       if (endTime <= now) {
         expired.push(auctionId);
       }
@@ -43,13 +49,18 @@ async function findExpiredAuctions(marketplace: ethers.Contract): Promise<bigint
   return expired;
 }
 
-async function closeAuction(marketplace: ethers.Contract, auctionId: bigint): Promise<string | null> {
+async function closeAuction(auctionId: bigint): Promise<string | null> {
   try {
     console.log(`[closer] Closing auction ${auctionId}...`);
-    const tx = await marketplace.closeAuction(auctionId);
-    const receipt = await tx.wait();
-    console.log(`[closer] Closed auction ${auctionId}: ${receipt.hash}`);
-    return receipt.hash;
+    const hash = await getWalletClient().writeContract({
+      address: marketplaceAddress,
+      abi: fheSecretMarketplaceAbi,
+      functionName: "closeAuction",
+      args: [auctionId],
+    });
+    const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
+    console.log(`[closer] Closed auction ${auctionId}: ${receipt.transactionHash}`);
+    return receipt.transactionHash;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[closer] Failed to close auction ${auctionId}:`, msg);
@@ -58,19 +69,14 @@ async function closeAuction(marketplace: ethers.Contract, auctionId: bigint): Pr
 }
 
 async function runCloserCycle(): Promise<void> {
-  const wallet = getWallet();
-  const marketplace = new ethers.Contract(config.secretMarketplaceAddress, FHESecretMarketplaceABI, wallet);
-
-  const expired = await findExpiredAuctions(
-    new ethers.Contract(config.secretMarketplaceAddress, FHESecretMarketplaceABI, getProvider()),
-  );
+  const expired = await findExpiredAuctions();
 
   if (expired.length === 0) return;
 
   console.log(`[closer] Found ${expired.length} expired auction(s): ${expired.join(", ")}`);
 
   for (const auctionId of expired) {
-    const txHash = await closeAuction(marketplace, auctionId);
+    const txHash = await closeAuction(auctionId);
     if (txHash) {
       await sendNotification(
         `Auction Closed: #${auctionId}`,
@@ -86,7 +92,7 @@ export async function startAuctionCloser(): Promise<void> {
 
   console.log(`[closer] Watching ${config.secretMarketplaceAddress}`);
   console.log(`[closer] Poll interval: ${config.auctionCloserIntervalMs}ms`);
-  console.log(`[closer] Closer address: ${getWallet().address}`);
+  console.log(`[closer] Closer address: ${getAccount().address}`);
 
   // Run immediately, then on interval
   await runCloserCycle();

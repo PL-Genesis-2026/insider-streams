@@ -9,18 +9,15 @@
     "settler": "tsx src/settler.ts",
     "closer": "tsx src/auction-closer.ts",
     "resolver": "tsx src/reputation-resolver.ts",
-    "deposit-watcher": "tsx src/deposit-watcher.ts",
     "api": "tsx src/api.ts",
     "test:e2e": "node --import tsx --test src/e2e-api.test.ts",
     "test:sepolia": "node --import tsx --test src/e2e-sepolia.test.ts"
   },
   "dependencies": {
-    "@private-streams/chainlink-private-token-api-client": "workspace:*",
     "@private-streams/common": "workspace:*",
     "@zama-fhe/relayer-sdk": "^0.4.2",
     "better-sqlite3": "^12.6.2",
     "dotenv": "^17.3.1",
-    "ethers": "^6.16.0",
     "express": "^5.2.1",
     "fast-json-stable-stringify": "^2.1.0",
     "viem": "^2.47.0"

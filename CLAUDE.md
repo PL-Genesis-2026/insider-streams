@@ -225,7 +225,7 @@ Private keys are in `.env` files (never committed).
 ### `insider-streams-zama` (FHE contract — active)
 - **Subgraph name**: `insider-streams-zama` (Subgraph Studio)
 - **Studio URL** (codegen/testing): `https://api.studio.thegraph.com/query/1743303/insider-streams-zama/version/latest`
-- **Contract**: `FHESecretMarketplace` at `0x0056F94eCC59B918a225B433401EE5121506171B`
+- **Contract**: `FHESecretMarketplace` at `0xf74884348F7153c63A46a1e362ec6D90E754Cf15`
 - **Deploy**: `cd subgraphs/secrets-marketplace && npx graph deploy insider-streams-zama`
 - Version tracked in `subgraphs/secrets-marketplace/package.json`
 

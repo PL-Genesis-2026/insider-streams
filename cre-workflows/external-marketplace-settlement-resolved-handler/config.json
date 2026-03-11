@@ -3,8 +3,8 @@
   "subgraphUrl": "https://gateway.thegraph.com/api/a075bc6e2e48577d2588bb458b939bdc/subgraphs/id/2vVUkMCH5m48s8Qj1ChgR2z3c98vAX3raBoJoYZ9RrBW",
   "evms": [
     {
-      "secretMarketplaceAddress": "0x1f903548234b15C4d955Cce79beaaC853A98C514",
-      "examplePredictionMarketAddress": "0xc0800a96EbfEEd4F7C9113C6D9D960d2D912004f",
+      "secretMarketplaceAddress": "0xf74884348F7153c63A46a1e362ec6D90E754Cf15",
+      "examplePredictionMarketAddress": "0x7C22C1b9B2a4575089a996E98c877b996eBbBAA2",
       "chainSelectorName": "ethereum-testnet-sepolia",
       "gasLimit": "800000"
     }
