@@ -1,3 +1,6 @@
+/*
+NOTE TO CLAUDE: This code relates to the old CRE based system. It's being kept in until you've confirmed the Zama port works end to end. You can use it as reference for how the old system used to work, but you should not update or maintain these files.
+*/
 import { cre, type Runtime, Runner, getNetwork, bytesToHex, type EVMLog } from "@chainlink/cre-sdk";
 import { keccak256, toHex, decodeEventLog, parseAbi } from "viem";
 import { configSchema, type Config, OUTCOME_YES, OUTCOME_NO, OUTCOME_INCONCLUSIVE } from "./types";

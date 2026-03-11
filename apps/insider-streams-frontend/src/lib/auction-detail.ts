@@ -93,9 +93,10 @@ function mapClosedAuction(record: ClosedAuctionRecord): AuctionDetailClose {
 
 function mapCancelledAuction(
   record: CancelledAuctionRecord,
+  currentBid: bigint,
 ): AuctionDetailCancelledAuction {
   return {
-    refundedAmountUsdc: bigintToUsdc(scalarToBigInt(record.cancelledBidAmount)),
+    refundedAmountUsdc: currentBid > BigInt(0) ? bigintToUsdc(currentBid) : 0,
     timestamp: scalarToIso(record.blockTimestamp),
   };
 }
@@ -146,7 +147,7 @@ export async function getAuctionDetail({
     bids: result.bids.map(mapBid),
     closedAuction: closedAuction ? mapClosedAuction(closedAuction) : undefined,
     cancelledAuction: cancelledAuction
-      ? mapCancelledAuction(cancelledAuction)
+      ? mapCancelledAuction(cancelledAuction, currentBidBigInt)
       : undefined,
     reputationUpdates: result.reputationUpdates.map(mapReputationUpdate),
     sellerReputationScore: Number(auction.seller.reputationScore),

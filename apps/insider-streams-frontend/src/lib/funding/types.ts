@@ -1,8 +1,4 @@
-import type { Database } from "@private-streams/common";
 import type { Address } from "viem";
-
-export type BalanceRow = Database["public"]["Views"]["balances"]["Row"];
-export type TransferRow = Database["public"]["Tables"]["transfers"]["Row"];
 
 export type FundingStatus =
   | "wallet_required"
@@ -15,30 +11,20 @@ export type FundingStatus =
   | "withdrawal_available";
 
 export type FundingServerSnapshot = {
-  platformRecipientAddress?: string;
-  balance?: BalanceRow | null;
-  transfers: TransferRow[];
+  userId: string | null;
+  balance: string;
 };
 
 export type FundingSnapshotResponse = {
-  data: FundingServerSnapshot;
-};
-
-export type FundingReconcileResponse = {
-  data: FundingServerSnapshot;
-  reconciledCount: number;
-  scannedCount: number;
+  userId: string | null;
+  balance: string;
 };
 
 export type FundingWithdrawResponse = {
-  data: FundingServerSnapshot;
-  transactionId: string;
-};
-
-export type FundingFinalizeWithdrawalResponse = {
-  data: FundingServerSnapshot;
-  transactionId: string;
-  withdrawalId: string;
+  withdrawalId: number;
+  userId: string;
+  amount: string;
+  status: string;
 };
 
 export type FundingSnapshot = {
@@ -46,9 +32,7 @@ export type FundingSnapshot = {
   address?: Address;
   currentChainName?: string;
   requiredChainName: string;
-  platformRecipientAddress?: string;
   canPlaceBid: boolean;
   isReconciling: boolean;
-  balance?: BalanceRow | null;
-  transfers: TransferRow[];
+  balance: string;
 };

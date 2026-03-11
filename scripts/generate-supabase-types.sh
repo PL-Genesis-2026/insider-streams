@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# NOTE TO CLAUDE: This code relates to the old CRE based system. It's being kept
+# in until you've confirmed the Zama port works end to end. You can use it as
+# reference for how the old system used to work, but you should not update or
+# maintain these files.
+
 # generate-supabase-types.sh — Regenerate Supabase TypeScript types from the live database
 #
 # Requires: supabase CLI, DATABASE_URL in .env

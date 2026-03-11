@@ -83,8 +83,8 @@ export function AuctionBidGate({
             {statusCopy.description}
           </p>
         </div>
-        {fundingSnapshot.balance?.available_balance &&
-          BigInt(fundingSnapshot.balance.available_balance) > BigInt(0) && (
+        {fundingSnapshot.balance &&
+          BigInt(fundingSnapshot.balance) > BigInt(0) && (
             <div className="flex items-center justify-between rounded-lg border border-border/50 bg-muted/30 px-4 py-2.5">
               <span className="text-xs text-muted-foreground">
                 Available balance
@@ -92,7 +92,7 @@ export function AuctionBidGate({
               <span className="text-sm font-medium text-foreground">
                 {Number(
                   formatUnits(
-                    BigInt(fundingSnapshot.balance.available_balance),
+                    BigInt(fundingSnapshot.balance),
                     CONFIDENTIAL_USDC_DECIMALS,
                   ),
                 ).toLocaleString("en-US", {
@@ -246,7 +246,7 @@ export function AuctionBidGate({
               auctionId={auctionId}
               currentBidUsdc={currentBidUsdc}
               availableBalance={
-                fundingSnapshot.balance?.available_balance ?? null
+                fundingSnapshot.balance ?? null
               }
               onBidSuccess={handleBidSuccess}
             />

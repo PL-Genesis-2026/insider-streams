@@ -1,14 +1,14 @@
 {
   "name": "insider-streams",
-  "version": "0.0.25",
+  "version": "0.0.29",
   "license": "UNLICENSED",
   "scripts": {
     "codegen": "graph codegen",
     "build": "graph build",
-    "deploy": "graph deploy insider-streams-2",
-    "create-local": "graph create --node http://localhost:8020/insider-streams-2",
-    "remove-local": "graph remove --node http://localhost:8020/insider-streams-2",
-    "deploy-local": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001/insider-streams-2",
+    "deploy": "graph deploy insider-streams-zama",
+    "create-local": "graph create --node http://localhost:8020/insider-streams-zama",
+    "remove-local": "graph remove --node http://localhost:8020/insider-streams-zama",
+    "deploy-local": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001/insider-streams-zama",
     "test": "graph test"
   },
   "dependencies": {

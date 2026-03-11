@@ -9,8 +9,8 @@ query AuctionDetailSubgraph(
     eventId
     eventTitle
     endTime
-    currentBid
     bidCount
+    currentBid
     status
     predictionOutcome
     scoreChange
@@ -45,7 +45,6 @@ query AuctionDetailSubgraph(
     first: 1
     where: { auctionId: $auctionIdBigInt }
   ) {
-    cancelledBidAmount
     blockTimestamp
   }
   reputationUpdates: sellerReputationScoreUpdateds(

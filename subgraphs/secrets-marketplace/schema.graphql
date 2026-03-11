@@ -1,7 +1,17 @@
 type AuctionClosed @entity(immutable: true) {
   id: Bytes!
   auctionId: BigInt! # uint256
-  winningBid: BigInt! # uint256
+  winningBid: BigInt! # uint64
+  sellerId: String! # string
+  eventId: BigInt! # uint256
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type AuctionClosePending @entity(immutable: true) {
+  id: Bytes!
+  auctionId: BigInt! # uint256
   sellerId: String! # string
   eventId: BigInt! # uint256
   blockNumber: BigInt!
@@ -16,6 +26,7 @@ type AuctionCreated @entity(immutable: true) {
   sellerId: String! # string
   eventTitle: String! # string
   endTime: BigInt! # uint256
+  secretDataCid: Bytes! # bytes32
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!
@@ -24,7 +35,6 @@ type AuctionCreated @entity(immutable: true) {
 type AuctionCancelled @entity(immutable: true) {
   id: Bytes!
   auctionId: BigInt! # uint256
-  cancelledBidAmount: BigInt! # uint256
   sellerId: String! # string
   eventId: BigInt! # uint256
   blockNumber: BigInt!
@@ -35,36 +45,25 @@ type AuctionCancelled @entity(immutable: true) {
 type BidPlaced @entity(immutable: true) {
   id: Bytes!
   auctionId: BigInt! # uint256
-  bidAmount: BigInt! # uint256
-  previousBid: BigInt! # uint256
+  bidAmount: BigInt! # uint64
+  previousBid: BigInt! # uint64
   auction: Auction # FK for @derivedFrom on Auction.bids
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!
 }
 
-type ExpectedAuthorUpdated @entity(immutable: true) {
+type DepositedFor @entity(immutable: true) {
   id: Bytes!
-  previousAuthor: Bytes! # address
-  newAuthor: Bytes! # address
+  userId: String! # pseudonymous user ID
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!
 }
 
-type ExpectedWorkflowIdUpdated @entity(immutable: true) {
+type WithdrawnFor @entity(immutable: true) {
   id: Bytes!
-  previousId: Bytes! # bytes32
-  newId: Bytes! # bytes32
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type ExpectedWorkflowNameUpdated @entity(immutable: true) {
-  id: Bytes!
-  previousName: Bytes! # bytes10
-  newName: Bytes! # bytes10
+  userId: String! # pseudonymous user ID
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!
@@ -74,16 +73,6 @@ type ExternalEventResolved @entity(immutable: true) {
   id: Bytes!
   externalEventId: BigInt! # uint256
   auctionsAffected: BigInt! # uint256
-  resultsApplied: BigInt! # uint256
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
-type ForwarderAddressUpdated @entity(immutable: true) {
-  id: Bytes!
-  previousForwarder: Bytes! # address
-  newForwarder: Bytes! # address
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!
@@ -110,14 +99,6 @@ type SellerReputationScoreUpdated @entity(immutable: true) {
   transactionHash: Bytes!
 }
 
-type SecurityWarning @entity(immutable: true) {
-  id: Bytes!
-  message: String! # string
-  blockNumber: BigInt!
-  blockTimestamp: BigInt!
-  transactionHash: Bytes!
-}
-
 type SellerRegistered @entity(immutable: true) {
   id: Bytes!
   sellerId: String! # string
@@ -126,10 +107,10 @@ type SellerRegistered @entity(immutable: true) {
   transactionHash: Bytes!
 }
 
-type MarketplaceUpdated @entity(immutable: true) {
+type SettlerUpdated @entity(immutable: true) {
   id: Bytes!
-  previousMarketplace: Bytes! # address
-  newMarketplace: Bytes! # address
+  previousSettler: Bytes! # address
+  newSettler: Bytes! # address
   blockNumber: BigInt!
   blockTimestamp: BigInt!
   transactionHash: Bytes!
@@ -173,8 +154,9 @@ type Auction @entity(immutable: false) {
   seller: Seller!
   eventTitle: String!
   endTime: BigInt!
-  currentBid: BigInt!
+  secretDataCid: Bytes!
   bidCount: Int!
+  currentBid: BigInt!
   status: AuctionStatus!
   predictionOutcome: Int
   scoreChange: Int
@@ -183,6 +165,7 @@ type Auction @entity(immutable: false) {
   blockTimestamp: BigInt!
   transactionHash: Bytes!
 }
+
 type EventAdminClosed @entity(immutable: true) {
   id: Bytes!
   eventId: BigInt! # uint256

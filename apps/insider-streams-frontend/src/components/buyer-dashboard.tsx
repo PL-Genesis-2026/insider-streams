@@ -806,7 +806,7 @@ export function BuyerDashboard({ activeTab }: { activeTab: DashboardTab }) {
         }}
         auctionId={activeAuction?.auctionId ?? ""}
         currentBidUsdc={rawUsdcToNumber(activeAuction?.currentBid)}
-        availableBalance={fundingSnapshot.balance?.available_balance ?? null}
+        availableBalance={fundingSnapshot.balance ?? null}
         onBidSuccess={() => {
           void Promise.all([dashboardQuery.refetch(), fundingSnapshot.refresh()]);
         }}

@@ -12,9 +12,7 @@ import {
   useSignTypedData,
   useWriteContract,
 } from "wagmi";
-import { reconcileFunding } from "@/lib/funding/api";
 import { getFundingSnapshotQueryKey } from "@/lib/funding/queries";
-import { useSignedWalletSession } from "@/lib/wallet/use-signed-wallet-session";
 import {
   getBalances,
   isPrivateAccountNotFoundError,
@@ -159,7 +157,6 @@ export function usePrivateBalancesMutation(address?: Address) {
 export function usePrivateTransferFundingMutation(address?: Address) {
   const queryClient = useQueryClient();
   const signTypedData = usePrivateTokenSigner();
-  const { getSignedSession } = useSignedWalletSession();
 
   return useMutation({
     mutationFn: async (
@@ -188,24 +185,8 @@ export function usePrivateTransferFundingMutation(address?: Address) {
         throw error;
       }
 
-      try {
-        const signedSession = await getSignedSession();
-        const reconcileResponse = await reconcileFunding(signedSession);
-
-        queryClient.setQueryData(
-          getFundingSnapshotQueryKey(address),
-          reconcileResponse.data,
-        );
-      } catch (error) {
-        return {
-          transactionId: transferResponse.transaction_id,
-          reconcileErrorMessage:
-            error instanceof Error
-              ? error.message
-              : "Private transfer submitted, but funding reconciliation failed.",
-        };
-      }
-
+      // Daemon's deposit watcher handles reconciliation automatically.
+      // Just invalidate the local cache so the next query fetches fresh data.
       await queryClient.invalidateQueries({
         queryKey: getFundingSnapshotQueryKey(address),
       });

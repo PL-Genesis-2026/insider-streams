@@ -17,8 +17,8 @@ query HomepageAuctions(
     eventId
     eventTitle
     endTime
-    currentBid
     bidCount
+    currentBid
     status
     seller {
       reputationScore
