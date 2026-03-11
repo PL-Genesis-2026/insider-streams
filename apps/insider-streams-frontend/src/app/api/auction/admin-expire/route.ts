@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { secretMarketplaceAbi } from "@private-streams/common";
-import { verifySignedRequest } from "@/lib/signed-request";
+import { verifyPrivateDataRequest } from "@/lib/signed-request";
 import { SECRET_MARKETPLACE_ADDRESS } from "@/lib/contract-addresses";
 import { getOwnerAddress } from "@/lib/admin";
 import { getAdminWalletClient, getPublicClient } from "@/lib/viem";
@@ -21,7 +21,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const verified = await verifySignedRequest(body);
+  const verified = await verifyPrivateDataRequest<{ auctionId: string }>(body, [
+    "auctionId",
+  ]);
   if (!verified.ok) return verified.response;
 
   const parsed = requestSchema.safeParse(verified.payload);
@@ -43,9 +45,14 @@ export async function POST(request: Request) {
     );
   }
 
-  if (verified.payload.userAddress !== ownerAddress) {
+  if (verified.payload.userAddress.toLowerCase() !== ownerAddress.toLowerCase()) {
     return NextResponse.json(
-      { error: "Only the marketplace admin can expire auctions", code: "UNAUTHORIZED" },
+      {
+        error: "Only the marketplace admin can expire auctions",
+        code: "UNAUTHORIZED",
+        configuredOwnerAddress: ownerAddress,
+        connectedAddress: verified.payload.userAddress,
+      },
       { status: 403 },
     );
   }
