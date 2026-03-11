@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSignMessage } from "wagmi";
-import { Gavel, Loader2 } from "lucide-react";
+import { Check, Gavel, Loader2 } from "lucide-react";
 import stringify from "fast-json-stable-stringify";
 import {
   Dialog,
@@ -16,7 +16,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-type Phase = "idle" | "signing" | "submitting" | "success" | "error";
+type Phase =
+  | "idle"
+  | "checking-approval"
+  | "approving"
+  | "signing"
+  | "submitting"
+  | "success"
+  | "error";
 
 type BidModalProps = {
   open: boolean;
@@ -49,6 +56,7 @@ export function BidModal({
   const [amountUsdc, setAmountUsdc] = useState("");
   const [phase, setPhase] = useState<Phase>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [approvalReady, setApprovalReady] = useState(false);
 
   const minBid = currentBidUsdc !== undefined ? currentBidUsdc + 1 : 1;
   const availableBalanceRaw = availableBalance ? BigInt(availableBalance) : null;
@@ -70,6 +78,46 @@ export function BidModal({
     return null;
   }
 
+  async function signPayload(payload: Record<string, string | number>) {
+    return signMessageAsync({ message: stringify(payload) });
+  }
+
+  async function checkApproval(rawAmount: bigint) {
+    setPhase("checking-approval");
+    const timestamp = Math.floor(Date.now() / 1000);
+    const payload = { amount: rawAmount.toString(), timestamp };
+    const signature = await signPayload(payload);
+    const response = await fetch("/api/bid/approval-status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...payload, signature }),
+    });
+    const data = (await response.json()) as { approved?: boolean; error?: string };
+    if (!response.ok) {
+      throw new Error(data.error ?? `Approval check failed (${response.status})`);
+    }
+    setApprovalReady(Boolean(data.approved));
+    return Boolean(data.approved);
+  }
+
+  async function handleApprove(rawAmount: bigint) {
+    setPhase("approving");
+    const timestamp = Math.floor(Date.now() / 1000);
+    const payload = { amount: rawAmount.toString(), timestamp };
+    const signature = await signPayload(payload);
+    const response = await fetch("/api/bid/approve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...payload, signature }),
+    });
+    const data = (await response.json()) as { error?: string };
+    if (!response.ok) {
+      throw new Error(data.error ?? `Approval failed (${response.status})`);
+    }
+    setApprovalReady(true);
+    setPhase("idle");
+  }
+
   async function handleSubmit() {
     const validationError = validate();
     if (validationError) {
@@ -84,10 +132,16 @@ export function BidModal({
     const payload = { auctionId, amount: rawAmount.toString(), timestamp };
 
     try {
-      setPhase("signing");
       setErrorMessage(null);
-      const signature = await signMessageAsync({ message: stringify(payload) });
 
+      const approved = approvalReady || (await checkApproval(rawAmount));
+      if (!approved) {
+        await handleApprove(rawAmount);
+        return;
+      }
+
+      setPhase("signing");
+      const signature = await signPayload(payload);
       setPhase("submitting");
       const res = await fetch("/api/bid", {
         method: "POST",
@@ -122,11 +176,16 @@ export function BidModal({
       setAmountUsdc("");
       setPhase("idle");
       setErrorMessage(null);
+      setApprovalReady(false);
     }
     onOpenChange(next);
   }
 
-  const isLoading = phase === "signing" || phase === "submitting";
+  const isLoading =
+    phase === "checking-approval" ||
+    phase === "approving" ||
+    phase === "signing" ||
+    phase === "submitting";
 
   const availableBalanceUsdc =
     availableBalanceRaw !== null ? Number(availableBalanceRaw) / 1_000_000 : null;
@@ -156,6 +215,7 @@ export function BidModal({
                   onChange={(e) => {
                     setAmountUsdc(e.target.value);
                     setErrorMessage(null);
+                    setApprovalReady(false);
                   }}
                   disabled={isLoading}
                 />
@@ -174,6 +234,24 @@ export function BidModal({
               {errorMessage ? (
                 <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
                   {errorMessage}
+                </p>
+              ) : null}
+
+              {approvalReady ? (
+                <div className="rounded-md bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
+                  Marketplace approval is ready.
+                </div>
+              ) : null}
+
+              {phase === "checking-approval" ? (
+                <p className="text-sm text-muted-foreground">
+                  Checking marketplace approval…
+                </p>
+              ) : null}
+
+              {phase === "approving" ? (
+                <p className="text-sm text-muted-foreground">
+                  Approving marketplace spending…
                 </p>
               ) : null}
 
@@ -208,12 +286,23 @@ export function BidModal({
             {isLoading ? (
               <>
                 <Loader2 className="size-4 animate-spin" />
-                {phase === "signing" ? "Signing…" : "Placing bid…"}
+                {phase === "checking-approval"
+                  ? "Checking approval…"
+                  : phase === "approving"
+                    ? "Approving…"
+                    : phase === "signing"
+                      ? "Signing…"
+                      : "Placing bid…"}
               </>
-            ) : (
+            ) : approvalReady ? (
               <>
                 Place Bid
                 <Gavel className="size-4" />
+              </>
+            ) : (
+              <>
+                Approve Marketplace
+                <Check className="size-4" />
               </>
             )}
           </Button>
