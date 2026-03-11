@@ -27,6 +27,12 @@ export type FundingWithdrawResponse = {
   status: string;
 };
 
+export type FundingDepositResponse = {
+  userId: string;
+  amount: string;
+  status: string;
+};
+
 export type FundingSnapshot = {
   status: FundingStatus;
   address?: Address;

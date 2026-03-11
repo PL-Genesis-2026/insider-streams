@@ -43,12 +43,6 @@ function migrate(db: Database.Database): void {
       completed_at TEXT
     );
 
-    CREATE TABLE IF NOT EXISTS deposit_cursor (
-      id INTEGER PRIMARY KEY CHECK (id = 1),
-      last_cursor TEXT,
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-
     CREATE TABLE IF NOT EXISTS secrets (
       auction_id INTEGER PRIMARY KEY,
       seller_id TEXT NOT NULL,
@@ -59,7 +53,6 @@ function migrate(db: Database.Database): void {
 
     CREATE INDEX IF NOT EXISTS idx_bids_auction_status ON bids(auction_id, status);
 
-    INSERT OR IGNORE INTO deposit_cursor (id) VALUES (1);
   `);
 }
 
@@ -251,19 +244,6 @@ export function completeWithdrawal(id: number): void {
 export function failWithdrawal(id: number): void {
   const db = getDb();
   db.prepare("UPDATE withdrawal_queue SET status = 'failed' WHERE id = ?").run(id);
-}
-
-// ── Deposit cursor helpers ──
-
-export function getDepositCursor(): string | null {
-  const db = getDb();
-  const row = db.prepare("SELECT last_cursor FROM deposit_cursor WHERE id = 1").get() as { last_cursor: string | null } | undefined;
-  return row?.last_cursor ?? null;
-}
-
-export function setDepositCursor(cursor: string): void {
-  const db = getDb();
-  db.prepare("UPDATE deposit_cursor SET last_cursor = ?, updated_at = datetime('now') WHERE id = 1").run(cursor);
 }
 
 // ── Bid query helpers ──

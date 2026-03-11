@@ -1,19 +1,38 @@
-import { ethers } from "ethers";
+import { createPublicClient, createWalletClient, http, type PublicClient, type Chain, type Transport } from "viem";
+import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
+import { sepolia } from "viem/chains";
 import { config } from "./config.js";
 
-let _provider: ethers.JsonRpcProvider | null = null;
-let _wallet: ethers.Wallet | null = null;
+type AppWalletClient = ReturnType<typeof createWalletClient<Transport, Chain, PrivateKeyAccount>>;
 
-export function getProvider(): ethers.JsonRpcProvider {
-  if (!_provider) {
-    _provider = new ethers.JsonRpcProvider(config.rpcUrl, config.chainId);
+let _publicClient: PublicClient | null = null;
+let _walletClient: AppWalletClient | null = null;
+let _account: PrivateKeyAccount | null = null;
+
+export function getAccount(): PrivateKeyAccount {
+  if (!_account) {
+    _account = privateKeyToAccount(config.privateKey as `0x${string}`);
   }
-  return _provider;
+  return _account;
 }
 
-export function getWallet(): ethers.Wallet {
-  if (!_wallet) {
-    _wallet = new ethers.Wallet(config.privateKey, getProvider());
+export function getPublicClient(): PublicClient {
+  if (!_publicClient) {
+    _publicClient = createPublicClient({
+      chain: sepolia,
+      transport: http(config.rpcUrl),
+    });
   }
-  return _wallet;
+  return _publicClient;
+}
+
+export function getWalletClient(): AppWalletClient {
+  if (!_walletClient) {
+    _walletClient = createWalletClient({
+      account: getAccount(),
+      chain: sepolia,
+      transport: http(config.rpcUrl),
+    });
+  }
+  return _walletClient;
 }

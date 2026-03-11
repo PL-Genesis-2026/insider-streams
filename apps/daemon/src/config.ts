@@ -33,8 +33,6 @@ export const config = {
   // Polling intervals
   auctionCloserIntervalMs: Number(process.env.AUCTION_CLOSER_INTERVAL_MS || 30_000),
   reputationResolverIntervalMs: Number(process.env.REPUTATION_RESOLVER_INTERVAL_MS || 60_000),
-  depositWatcherIntervalMs: Number(process.env.DEPOSIT_WATCHER_INTERVAL_MS || 30_000),
-
   // HTTP API
   apiPort: Number(process.env.API_PORT || 3001),
 

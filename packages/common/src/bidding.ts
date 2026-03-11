@@ -7,14 +7,14 @@
 
 import type { Address, Hex, PublicClient } from "viem";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { secretMarketplaceAbi } from "./__generated__/contract-types";
+import { fheSecretMarketplaceAbi } from "./__generated__/contract-types";
 import type { Database } from "./__generated__/supabase-types";
 
 // Minimal structural type — compatible with any viem WalletClient that has an account
 interface BidWalletClient {
   writeContract(args: {
     address: Address;
-    abi: typeof secretMarketplaceAbi;
+    abi: typeof fheSecretMarketplaceAbi;
     functionName: "placeBid";
     args: [bigint, bigint];
   }): Promise<Hex>;
@@ -67,68 +67,16 @@ export async function executeBid(
   let auctionSellerId: string;
   try {
     const auctionIdBigInt = BigInt(auctionId);
-    // #region agent log
     const chainId = await publicClient.getChainId();
-    fetch("http://127.0.0.1:7859/ingest/ba8f260b-7c31-4bbf-85d3-412660c8b25b", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "25cc9c" },
-      body: JSON.stringify({
-        sessionId: "25cc9c",
-        location: "bidding.ts:readContract-before",
-        message: "About to read getAuction from contract",
-        data: {
-          auctionId,
-          auctionIdBigInt: auctionIdBigInt.toString(),
-          marketplaceAddress,
-          chainId,
-          expectedSepoliaChainId: 11155111,
-        },
-        timestamp: Date.now(),
-        hypothesisId: "B,C,D",
-      }),
-    }).catch(() => {});
-    // #endregion
-    const auctionData = await publicClient.readContract({
+    const auctionTuple = await publicClient.readContract({
       address: marketplaceAddress,
-      abi: secretMarketplaceAbi,
+      abi: fheSecretMarketplaceAbi,
       functionName: "getAuction",
       args: [auctionIdBigInt],
     });
-    // #region agent log
-    fetch("http://127.0.0.1:7859/ingest/ba8f260b-7c31-4bbf-85d3-412660c8b25b", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "25cc9c" },
-      body: JSON.stringify({
-        sessionId: "25cc9c",
-        location: "bidding.ts:getAuction-result",
-        message: "getAuction returned",
-        data: {
-          auctionId,
-          endTime: auctionData.endTime.toString(),
-          endTimeIsZero: auctionData.endTime === BigInt(0),
-          status: auctionData.status,
-          currentBid: auctionData.currentBid.toString(),
-        },
-        timestamp: Date.now(),
-        hypothesisId: "C,E",
-      }),
-    }).catch(() => {});
-    // #endregion
-    if (auctionData.endTime === BigInt(0)) {
-      // #region agent log
-      fetch("http://127.0.0.1:7859/ingest/ba8f260b-7c31-4bbf-85d3-412660c8b25b", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "25cc9c" },
-        body: JSON.stringify({
-          sessionId: "25cc9c",
-          location: "bidding.ts:AUCTION_NOT_FOUND",
-          message: "Returning Auction does not exist (endTime=0)",
-          data: { auctionId, chainId },
-          timestamp: Date.now(),
-          hypothesisId: "C",
-        }),
-      }).catch(() => {});
-      // #endregion
+    // FHE getAuction returns: [sellerId, endTime, currentBid(encrypted), currentBidderId, eventId, eventTitle, status, reputationResolved, secretDataCid, currentBidPlaintext]
+    const [sellerId, endTime, , , , , status, , , currentBidPlaintext] = auctionTuple;
+    if (endTime === BigInt(0)) {
       const sepoliaChainId = 11155111;
       const rpcMismatchHint =
         chainId !== sepoliaChainId
@@ -141,25 +89,11 @@ export async function executeBid(
         code: "AUCTION_NOT_FOUND",
       };
     }
-    auctionStatus = auctionData.status;
-    contractCurrentBid = auctionData.currentBid;
-    auctionSellerId = auctionData.sellerId;
+    auctionStatus = status;
+    contractCurrentBid = BigInt(currentBidPlaintext);
+    auctionSellerId = sellerId;
   } catch (err) {
-    // #region agent log
     const errMsg = err instanceof Error ? err.message : String(err);
-    fetch("http://127.0.0.1:7859/ingest/ba8f260b-7c31-4bbf-85d3-412660c8b25b", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "25cc9c" },
-      body: JSON.stringify({
-        sessionId: "25cc9c",
-        location: "bidding.ts:readContract-catch",
-        message: "readContract threw",
-        data: { auctionId, error: errMsg },
-        timestamp: Date.now(),
-        hypothesisId: "B,E",
-      }),
-    }).catch(() => {});
-    // #endregion
     return {
       ok: false,
       status: 500,
@@ -261,7 +195,7 @@ export async function executeBid(
   try {
     txHash = await walletClient.writeContract({
       address: marketplaceAddress,
-      abi: secretMarketplaceAbi,
+      abi: fheSecretMarketplaceAbi,
       functionName: "placeBid",
       args: [BigInt(auctionId), bidAmount],
     });

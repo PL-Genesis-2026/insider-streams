@@ -53,12 +53,12 @@ We were asked frequently "why would someone sell their secret" when designing th
 
 ## Deployed Contracts (Eth Sepolia)
 
-| Contract                   | Source                                                                       | Address                                                                                                                         |
-| -------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| ConfidentialUSDC (clear)   | [`ConfidentialUSDC.sol`](./contracts/src/ConfidentialUSDC.sol)               | [`0xee3A0Cccb31fF816615C18E1d1DB480df8a0f9F1`](https://sepolia.etherscan.io/address/0xee3A0Cccb31fF816615C18E1d1DB480df8a0f9F1) |
-| ConfidentialUSDC (private) | [`ConfidentialUSDC.sol`](./contracts/src/ConfidentialUSDC.sol)               | [`0x38EDa3F7b7649CE3f8534C59a40132bE347E750A`](https://sepolia.etherscan.io/address/0x38EDa3F7b7649CE3f8534C59a40132bE347E750A) |
-| ExamplePredictionMarket    | [`ExamplePredictionMarket.sol`](./contracts/src/ExamplePredictionMarket.sol) | [`0xc0800a96EbfEEd4F7C9113C6D9D960d2D912004f`](https://sepolia.etherscan.io/address/0xc0800a96EbfEEd4F7C9113C6D9D960d2D912004f) |
-| SecretMarketplace          | [`SecretMarketplace.sol`](./contracts/src/SecretMarketplace.sol)             | [`0x1f903548234b15C4d955Cce79beaaC853A98C514`](https://sepolia.etherscan.io/address/0x1f903548234b15C4d955Cce79beaaC853A98C514) |
+| Contract                | Source                                                                                       | Address                                                                                                                         |
+| ----------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| MockUSDC                | [`MockUSDC.sol`](./contracts-fhe/contracts/test/MockUSDC.sol)                                | [`0x1Cd05cf3c20Cd64f6803C1777C6373e47872944c`](https://sepolia.etherscan.io/address/0x1Cd05cf3c20Cd64f6803C1777C6373e47872944c) |
+| FHEConfidentialUSDC     | [`FHEConfidentialUSDC.sol`](./contracts-fhe/contracts/FHEConfidentialUSDC.sol)                | [`0x1f54Afd38756089cd2B8852e5014C6ccf1299b57`](https://sepolia.etherscan.io/address/0x1f54Afd38756089cd2B8852e5014C6ccf1299b57) |
+| ExamplePredictionMarket | [`ExamplePredictionMarket.sol`](./contracts-fhe/contracts/ExamplePredictionMarket.sol)        | [`0x7C22C1b9B2a4575089a996E98c877b996eBbBAA2`](https://sepolia.etherscan.io/address/0x7C22C1b9B2a4575089a996E98c877b996eBbBAA2) |
+| FHESecretMarketplace    | [`FHESecretMarketplace.sol`](./contracts-fhe/contracts/FHESecretMarketplace.sol)              | [`0xf74884348F7153c63A46a1e362ec6D90E754Cf15`](https://sepolia.etherscan.io/address/0xf74884348F7153c63A46a1e362ec6D90E754Cf15) |
 
 ## Quick Start
 
@@ -89,7 +89,7 @@ See [CRE Workflows README](cre-workflows/README.md) for details.
 cd contracts
 
 # Create a market
-EXAMPLE_PREDICTION_MARKET_ADDRESS=0xc0800a96EbfEEd4F7C9113C6D9D960d2D912004f \
+EXAMPLE_PREDICTION_MARKET_ADDRESS=0x7C22C1b9B2a4575089a996E98c877b996eBbBAA2 \
 QUESTION="The New York Yankees won the 2009 World Series." \
 forge script script/CreateMarket.s.sol --rpc-url $RPC_URL --broadcast
 ```
@@ -99,7 +99,7 @@ forge script script/CreateMarket.s.sol --rpc-url $RPC_URL --broadcast
 ```bash
 cd contracts
 
-SECRET_MARKETPLACE_ADDRESS=0x1f903548234b15C4d955Cce79beaaC853A98C514 \
+SECRET_MARKETPLACE_ADDRESS=0xf74884348F7153c63A46a1e362ec6D90E754Cf15 \
 EXTERNAL_MARKET_ID=0 \
 RESERVE_PRICE=1000000 \
 AUCTION_DURATION=120 \
@@ -122,7 +122,7 @@ cre workflow simulate secret-marketplace-auction-closer --target local-simulatio
 ```bash
 cd contracts
 
-SECRET_MARKETPLACE_ADDRESS=0x1f903548234b15C4d955Cce79beaaC853A98C514 \
+SECRET_MARKETPLACE_ADDRESS=0xf74884348F7153c63A46a1e362ec6D90E754Cf15 \
 AUCTION_ID=0 \
 forge script script/secret-marketplace/CloseAuction.s.sol --rpc-url $RPC_URL --broadcast
 ```
@@ -134,7 +134,7 @@ Cancels an auction regardless of expiry. Refunds the highest bidder and records 
 ```bash
 cd contracts
 
-SECRET_MARKETPLACE_ADDRESS=0x1f903548234b15C4d955Cce79beaaC853A98C514 \
+SECRET_MARKETPLACE_ADDRESS=0xf74884348F7153c63A46a1e362ec6D90E754Cf15 \
 AUCTION_ID=0 \
 PREDICTION_OUTCOME=0 \
 forge script script/secret-marketplace/CancelAuction.s.sol --rpc-url $RPC_URL --broadcast

@@ -56,9 +56,11 @@ export async function pollExpiredAuctions(
     for (let i = 0; i < openAuctions.length; i++) {
       const result = auctionResults[i];
       if (result.status !== "success") continue;
-      const auction = result.result as { endTime: bigint };
-      if (Number(auction.endTime) <= now) {
-        log("auction-closed", `Auction ${openAuctions[i]} expired (endTime=${auction.endTime}, now=${now})`);
+      // FHE getAuction returns tuple: [sellerId, endTime, currentBid, currentBidderId, eventId, eventTitle, status, ...]
+      const auctionTuple = result.result as readonly [string, bigint, ...unknown[]];
+      const endTime = auctionTuple[1];
+      if (Number(endTime) <= now) {
+        log("auction-closed", `Auction ${openAuctions[i]} expired (endTime=${endTime}, now=${now})`);
         expiredIds.push(openAuctions[i]);
       }
     }

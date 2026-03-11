@@ -14,9 +14,8 @@
  */
 
 import express, { type Request, type Response } from "express";
-import { verifySignedRequest } from "@private-streams/common";
+import { verifySignedRequest, mockUsdcAbi } from "@private-streams/common";
 import { config } from "./config.js";
-import { ethers } from "ethers";
 import {
   getOrCreateUser,
   getUserByAddress,
@@ -29,8 +28,7 @@ import {
   getSecretsByAuctionIds,
 } from "./db.js";
 import * as marketplace from "./marketplace.js";
-import { getWallet, getProvider } from "./provider.js";
-import { MockUsdcABI } from "./abis.js";
+import { getPublicClient, getWalletClient } from "./provider.js";
 
 export function startApi(): void {
   const app = express();
@@ -147,8 +145,9 @@ export function startApi(): void {
       // Read previous bidder from contract (always correct, free view call)
       let previousBidderId = "";
       try {
-        const auction = await marketplace.getMarketplace().getAuction(Number(auctionId));
-        previousBidderId = auction.currentBidderId || "";
+        const mp = marketplace.getMarketplace();
+        const auction = await mp.read.getAuction([BigInt(auctionId)]);
+        previousBidderId = auction[3] || ""; // currentBidderId
       } catch {
         // Auction may not exist yet — proceed without previousBidderId
       }
@@ -311,6 +310,58 @@ export function startApi(): void {
   });
 
   // ---------------------------------------------------------------------------
+  // POST /deposit — signature-authenticated
+  //
+  // Body: { txHash, amount, timestamp, signature }
+  // User-initiated deposit: user sends FHEConfidentialUSDC to platform EOA,
+  // then calls this endpoint to trigger depositFor on the marketplace.
+  // ---------------------------------------------------------------------------
+  app.post("/deposit", async (req: Request, res: Response) => {
+    try {
+      const result = await verifySignedRequest<{ txHash: string; amount: string }>(req.body);
+      if (!result.ok) {
+        res.status(result.status).json({ error: result.error, code: result.code });
+        return;
+      }
+
+      const { userAddress, amount } = result.payload;
+
+      let parsedAmount: bigint;
+      try {
+        parsedAmount = BigInt(amount);
+      } catch {
+        res.status(400).json({ error: "Invalid amount" });
+        return;
+      }
+      if (parsedAmount <= 0n) {
+        res.status(400).json({ error: "Amount must be greater than 0" });
+        return;
+      }
+
+      const user = getOrCreateUser(userAddress);
+
+      // Submit on-chain asynchronously
+      marketplace
+        .depositFor(user.userId, parsedAmount)
+        .then((txHash) => {
+          console.log(`[api] Deposit for ${user.userId} confirmed on-chain: ${txHash}`);
+        })
+        .catch((err) => {
+          console.error(`[api] Deposit for ${user.userId} on-chain failed:`, err);
+        });
+
+      res.json({
+        userId: user.userId,
+        amount: parsedAmount.toString(),
+        status: "pending",
+      });
+    } catch (err) {
+      console.error("[api] POST /deposit error:", err);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
   // POST /bids — signature-authenticated
   //
   // Body: { timestamp, signature }
@@ -359,7 +410,7 @@ export function startApi(): void {
       }
 
       const mp = marketplace.getMarketplace();
-      const seller = await mp.getSeller(user.userId);
+      const seller = await mp.read.getSeller([user.userId]);
       res.json({
         isSeller: seller.registered,
         userId: user.userId,
@@ -472,13 +523,16 @@ export function startApi(): void {
       }
 
       const mintAmount = BigInt(1000) * BigInt(10 ** 6); // 1000 USDC (6 decimals)
-      const usdc = new ethers.Contract(config.confidentialUsdcAddress, MockUsdcABI, getWallet());
-
-      const tx = await usdc.mint(result.payload.userAddress, mintAmount);
-      const receipt = await tx.wait();
+      const hash = await getWalletClient().writeContract({
+        address: config.confidentialUsdcAddress as `0x${string}`,
+        abi: mockUsdcAbi,
+        functionName: "mint",
+        args: [result.payload.userAddress as `0x${string}`, mintAmount],
+      });
+      const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
 
       res.json({
-        txHash: receipt.hash,
+        txHash: receipt.transactionHash,
         amount: mintAmount.toString(),
         address: result.payload.userAddress,
       });

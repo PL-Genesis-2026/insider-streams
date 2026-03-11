@@ -1,8 +1,13 @@
 // Shared constants, utilities, and generated ABIs for private-streams
 export {
-  confidentialUsdcAbi,
+  fheConfidentialUsdcAbi,
+  fheSecretMarketplaceAbi,
   examplePredictionMarketAbi,
-  secretMarketplaceAbi,
+  mockUsdcAbi,
+  // Backward-compatible aliases (old Foundry contract names → new FHE contracts).
+  // Consumers should migrate to fheConfidentialUsdcAbi / fheSecretMarketplaceAbi.
+  fheConfidentialUsdcAbi as confidentialUsdcAbi,
+  fheSecretMarketplaceAbi as secretMarketplaceAbi,
 } from "./__generated__/contract-types";
 
 export type { Database } from "./__generated__/supabase-types";

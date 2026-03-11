@@ -36,7 +36,7 @@ export async function GET() {
         const event = await publicClient.readContract({
           address: marketAddress,
           abi: examplePredictionMarketAbi,
-          functionName: "getEvent",
+          functionName: "getMarketEvent",
           args: [eventId],
         });
 

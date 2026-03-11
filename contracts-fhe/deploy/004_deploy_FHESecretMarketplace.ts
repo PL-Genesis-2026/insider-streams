@@ -5,17 +5,10 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const { deployer } = await hre.getNamedAccounts();
   const { deploy } = hre.deployments;
 
-  // FHESecretMarketplace uses ConfidentialERC20 (FHEConfidentialUSDC) as payment token.
-  // On live networks (Sepolia), prefer env var to avoid accidental redeployment of USDC.
-  // On local hardhat network, always use the deployment artifact.
-  const isLocalNetwork = hre.network.name === "hardhat" || hre.network.name === "localhost";
-  let confidentialUSDCAddress: string;
-  if (!isLocalNetwork && process.env.CONFIDENTIAL_USDC_ADDRESS) {
-    confidentialUSDCAddress = process.env.CONFIDENTIAL_USDC_ADDRESS;
-  } else {
-    const confidentialUSDC = await hre.deployments.get("FHEConfidentialUSDC");
-    confidentialUSDCAddress = confidentialUSDC.address;
-  }
+  // FHESecretMarketplace uses FHEConfidentialUSDC as payment token.
+  // Always use the deployment artifact (all 4 contracts deploy in one session).
+  const confidentialUSDC = await hre.deployments.get("FHEConfidentialUSDC");
+  const confidentialUSDCAddress = confidentialUSDC.address;
 
   // Settler = deployer for initial deployment (can be changed later via setSettler)
   const settlerAddress = process.env.SETTLER_ADDRESS || deployer;

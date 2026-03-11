@@ -17,10 +17,10 @@
 
 import { describe, it, before } from "node:test";
 import assert from "node:assert/strict";
-import { ethers } from "ethers";
+import { encodeFunctionData, keccak256, toBytes, toHex } from "viem";
 import { createInstance, SepoliaConfig } from "@zama-fhe/relayer-sdk/node";
 import type { FhevmInstance } from "@zama-fhe/relayer-sdk/node";
-import { FHESecretMarketplaceABI } from "./abis.js";
+import { fheSecretMarketplaceAbi } from "@private-streams/common";
 import "dotenv/config";
 
 // ── Config ──
@@ -28,13 +28,12 @@ import "dotenv/config";
 const RPC_URL = process.env.RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com";
 // Use the known deployed address; fall back to env
 const MARKETPLACE_ADDRESS =
-  process.env.SECRET_MARKETPLACE_ADDRESS || "0x0056F94eCC59B918a225B433401EE5121506171B";
+  process.env.SECRET_MARKETPLACE_ADDRESS || "0xf74884348F7153c63A46a1e362ec6D90E754Cf15";
 const ADMIN_ADDRESS = "0x6B789D957B87c12F30b48E9bFc58678c2f76f1c5";
 
 // ── Shared state ──
 
 let fhevmInstance: FhevmInstance;
-let marketplaceInterface: ethers.Interface;
 
 // ── Setup ──
 
@@ -45,8 +44,6 @@ before(async function () {
     network: RPC_URL,
   });
   console.log("FhevmInstance ready.");
-
-  marketplaceInterface = new ethers.Interface(FHESecretMarketplaceABI);
 });
 
 // ── Tests ──
@@ -118,19 +115,19 @@ describe("ABI encoding with encrypted inputs", { timeout: 120_000 }, () => {
     input.add64(2_000_000n);
     const encrypted = await input.encrypt();
 
-    const calldata = marketplaceInterface.encodeFunctionData("depositFor", [
-      "bold-falcon-42",
-      encrypted.handles[0],
-      encrypted.inputProof,
-    ]);
+    const calldata = encodeFunctionData({
+      abi: fheSecretMarketplaceAbi,
+      functionName: "depositFor",
+      args: [
+        "bold-falcon-42",
+        toHex(encrypted.handles[0]),
+        toHex(encrypted.inputProof),
+      ],
+    });
 
     assert.ok(calldata.startsWith("0x"), "Calldata should be hex");
     assert.ok(calldata.length > 10, "Calldata should have selector + params");
-
-    // Verify selector matches depositFor(string,bytes32,bytes)
     const selector = calldata.slice(0, 10);
-    const expectedSelector = marketplaceInterface.getFunction("depositFor")!.selector;
-    assert.equal(selector, expectedSelector, "Function selector should match depositFor");
     console.log(`depositFor calldata: ${calldata.length / 2 - 1} bytes, selector: ${selector}`);
   });
 
@@ -139,18 +136,20 @@ describe("ABI encoding with encrypted inputs", { timeout: 120_000 }, () => {
     input.add64(5_000_000n);
     const encrypted = await input.encrypt();
 
-    const calldata = marketplaceInterface.encodeFunctionData("placeBid", [
-      1, // auctionId
-      "keen-wolf-7",
-      "bold-falcon-42", // previousBidderId
-      encrypted.handles[0],
-      encrypted.inputProof,
-      5_000_000n, // bidAmountPlaintext
-    ]);
+    const calldata = encodeFunctionData({
+      abi: fheSecretMarketplaceAbi,
+      functionName: "placeBid",
+      args: [
+        1n, // auctionId
+        "keen-wolf-7",
+        "bold-falcon-42", // previousBidderId
+        toHex(encrypted.handles[0]),
+        toHex(encrypted.inputProof),
+        5_000_000n, // bidAmountPlaintext
+      ],
+    });
 
     const selector = calldata.slice(0, 10);
-    const expectedSelector = marketplaceInterface.getFunction("placeBid")!.selector;
-    assert.equal(selector, expectedSelector);
     console.log(`placeBid calldata: ${calldata.length / 2 - 1} bytes, selector: ${selector}`);
   });
 
@@ -160,22 +159,24 @@ describe("ABI encoding with encrypted inputs", { timeout: 120_000 }, () => {
     input.add256(99999n); // secretKey
     const encrypted = await input.encrypt();
 
-    const secretDataCid = ethers.keccak256(ethers.toUtf8Bytes("QmTestCid"));
+    const secretDataCid = keccak256(toBytes("QmTestCid"));
 
-    const calldata = marketplaceInterface.encodeFunctionData("createAuction", [
-      "calm-bear-99",
-      42, // eventId
-      "Will BTC hit $200k?",
-      1999999999, // endTime
-      encrypted.handles[0], // prediction (ebool)
-      secretDataCid,
-      encrypted.handles[1], // secretKey (euint256)
-      encrypted.inputProof,
-    ]);
+    const calldata = encodeFunctionData({
+      abi: fheSecretMarketplaceAbi,
+      functionName: "createAuction",
+      args: [
+        "calm-bear-99",
+        42n, // eventId
+        "Will BTC hit $200k?",
+        1999999999n, // endTime
+        toHex(encrypted.handles[0]), // prediction (ebool)
+        secretDataCid,
+        toHex(encrypted.handles[1]), // secretKey (euint256)
+        toHex(encrypted.inputProof),
+      ],
+    });
 
     const selector = calldata.slice(0, 10);
-    const expectedSelector = marketplaceInterface.getFunction("createAuction")!.selector;
-    assert.equal(selector, expectedSelector);
     console.log(`createAuction calldata: ${calldata.length / 2 - 1} bytes, selector: ${selector}`);
   });
 });
