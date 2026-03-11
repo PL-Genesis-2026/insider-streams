@@ -27,6 +27,9 @@ const {
   getActiveBid,
   markBidsForAuction,
   getBidsByUserId,
+  insertSecret,
+  insertSecretWithFilecoin,
+  getSecretsByAuctionIds,
 } = await import("./db.js");
 
 after(() => {
@@ -196,6 +199,105 @@ describe("markBidsForAuction — auction cancel (cancelled)", () => {
 
     assert.equal(u1Bids[0].status, "outbid", "outbid stays outbid");
     assert.equal(u2Bids[0].status, "cancelled", "active becomes cancelled");
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// Secret + Filecoin attachment tests
+// ════════════════════════════════════════════════════════════════════════════
+
+describe("insertSecret — basic secret storage", () => {
+  it("inserts and retrieves a simple secret", () => {
+    const user = getOrCreateUser("0xeeee000000000000000000000000000000000001");
+    insertSecret(5000, user.userId, "0xabc123", "0xkey456", "my secret text", '{"event":"test"}');
+
+    const secrets = getSecretsByAuctionIds([5000]);
+    assert.equal(secrets.length, 1);
+    assert.equal(secrets[0].auctionId, 5000);
+    assert.equal(secrets[0].sellerId, user.userId);
+    assert.equal(secrets[0].secretDataCid, "0xabc123");
+    assert.equal(secrets[0].secretDataKey, "0xkey456");
+    assert.equal(secrets[0].secretData, "my secret text");
+    assert.equal(secrets[0].eventData, '{"event":"test"}');
+    // Filecoin fields should be null
+    assert.equal(secrets[0].pieceCid, null);
+    assert.equal(secrets[0].retrievalUrl, null);
+    assert.equal(secrets[0].fileName, null);
+    assert.equal(secrets[0].encryptedSecretKey, null);
+  });
+});
+
+describe("insertSecretWithFilecoin — full Filecoin metadata", () => {
+  it("stores and retrieves all Filecoin fields", () => {
+    const user = getOrCreateUser("0xeeee000000000000000000000000000000000002");
+    insertSecretWithFilecoin(
+      5001,
+      user.userId,
+      "0xsha256hash",
+      "0xsecretkey",
+      "plain text payload",
+      '{"event":"filecoin-test"}',
+      {
+        pieceCid: "bafypiece123",
+        retrievalUrl: "https://filecoin.example/retrieve/abc",
+        copiesJson: '[{"providerId":"sp1","role":"primary"}]',
+        fileName: "report.txt",
+        contentType: "text/plain",
+        fileSizeBytes: 1024,
+        encryptedFileSizeBytes: 2048,
+        encryptedSecretKey: "base64encryptedkey==",
+        encryptionAlgorithm: "AES-256-GCM+scrypt envelope v1",
+        encryptedFileName: "report.txt.enc",
+        fileMd5: "d41d8cd98f00b204e9800998ecf8427e",
+      },
+    );
+
+    const secrets = getSecretsByAuctionIds([5001]);
+    assert.equal(secrets.length, 1);
+    const s = secrets[0];
+    assert.equal(s.auctionId, 5001);
+    assert.equal(s.sellerId, user.userId);
+    assert.equal(s.secretDataCid, "0xsha256hash");
+    assert.equal(s.secretData, "plain text payload");
+    assert.equal(s.pieceCid, "bafypiece123");
+    assert.equal(s.retrievalUrl, "https://filecoin.example/retrieve/abc");
+    assert.equal(s.fileName, "report.txt");
+    assert.equal(s.contentType, "text/plain");
+    assert.equal(s.fileSizeBytes, 1024);
+    assert.equal(s.encryptedFileSizeBytes, 2048);
+    assert.equal(s.encryptedSecretKey, "base64encryptedkey==");
+    assert.equal(s.encryptionAlgorithm, "AES-256-GCM+scrypt envelope v1");
+    assert.equal(s.encryptedFileName, "report.txt.enc");
+    assert.equal(s.fileMd5, "d41d8cd98f00b204e9800998ecf8427e");
+    assert.equal(s.copiesJson, '[{"providerId":"sp1","role":"primary"}]');
+  });
+
+  it("retrieves multiple secrets including mixed types", () => {
+    const user = getOrCreateUser("0xeeee000000000000000000000000000000000003");
+    insertSecret(5002, user.userId, "0xplain", "0xkey");
+    insertSecretWithFilecoin(5003, user.userId, "0xfile", "0xkey2", undefined, undefined, {
+      pieceCid: "bafypiece456",
+      retrievalUrl: "https://filecoin.example/retrieve/def",
+      copiesJson: "[]",
+      fileName: "data.txt",
+      contentType: "text/plain",
+      fileSizeBytes: 512,
+      encryptedFileSizeBytes: 1024,
+      encryptedSecretKey: "enc==",
+      encryptionAlgorithm: "AES-256-GCM+scrypt envelope v1",
+      encryptedFileName: "data.txt.enc",
+      fileMd5: "abc123",
+    });
+
+    const secrets = getSecretsByAuctionIds([5002, 5003, 9999]);
+    assert.equal(secrets.length, 2);
+
+    const plain = secrets.find((s) => s.auctionId === 5002)!;
+    assert.equal(plain.pieceCid, null);
+
+    const filecoin = secrets.find((s) => s.auctionId === 5003)!;
+    assert.equal(filecoin.pieceCid, "bafypiece456");
+    assert.equal(filecoin.fileName, "data.txt");
   });
 });
 

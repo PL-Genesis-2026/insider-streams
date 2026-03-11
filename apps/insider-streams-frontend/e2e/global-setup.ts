@@ -27,6 +27,7 @@ import {
 import { TEST_ACCOUNTS } from "./fixtures";
 import {
   createTestAuction,
+  createTestAuctionWithFile,
   depositFunds,
   waitForBalance,
   signedDaemonRequest,
@@ -108,6 +109,8 @@ export type TestState = {
   eventTitle: string;
   bidAuctionId: string;
   closeAuctionId: string;
+  fileAuctionId: string;
+  fileAuctionContent: string;
 };
 
 const STATE_PATH = resolve(__dirname, ".test-state.json");
@@ -321,6 +324,39 @@ export default async function globalSetup() {
     );
   }
 
+  // File auction — with .txt file attachment (1h duration)
+  let fileAuctionId = "";
+  const fileAuctionContent = `E2E test file content — created at ${new Date().toISOString()}`;
+  try {
+    console.log("[global-setup] Creating file test auction (1h duration)...");
+    const fileAuctionResult = await createTestAuctionWithFile(auctionCreatorAccount, {
+      eventId: usableEventId,
+      eventTitle: usableEventTitle,
+      privateLeg: "yes",
+      fileContent: fileAuctionContent,
+      fileName: "e2e-test-secret.txt",
+      durationSeconds: 3600,
+    });
+
+    fileAuctionId =
+      fileAuctionResult.status === 200
+        ? String(fileAuctionResult.data.auctionId ?? "")
+        : "";
+
+    if (fileAuctionId) {
+      console.log(`[global-setup] File auction created: #${fileAuctionId}`);
+    } else {
+      console.warn(
+        `[global-setup] File auction creation returned status ${fileAuctionResult.status}:`,
+        fileAuctionResult.data,
+      );
+    }
+  } catch (err) {
+    console.warn(
+      `[global-setup] File auction creation failed: ${err instanceof Error ? err.message : err}`,
+    );
+  }
+
   // ── Step 3: Fund bidder accounts ───────────────────────────────────────
   //
   // The deposit flow: daemon calls marketplace.depositFor() which does
@@ -423,6 +459,8 @@ export default async function globalSetup() {
     eventTitle: usableEventTitle,
     bidAuctionId,
     closeAuctionId,
+    fileAuctionId,
+    fileAuctionContent,
   };
 
   writeFileSync(STATE_PATH, JSON.stringify(testState, null, 2));

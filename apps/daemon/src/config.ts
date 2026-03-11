@@ -45,6 +45,11 @@ export const config = {
   // SQLite
   dbPath: process.env.DB_PATH || "",
 
+  // Filecoin
+  filecoinWalletPrivateKey: process.env.FILECOIN_WALLET_PRIVATE_KEY || process.env.PRIVATE_KEY || "",
+  filecoinRpcUrl: process.env.FILECOIN_RPC_URL || "",
+  maxUploadBytes: Number(process.env.MAX_UPLOAD_BYTES || 10_485_760), // 10 MB
+
   // Demo populator (opt-in)
   demoMode: process.env.DEMO_MODE === "true",
   veniceApiKey: process.env.VENICE_API_KEY || "",

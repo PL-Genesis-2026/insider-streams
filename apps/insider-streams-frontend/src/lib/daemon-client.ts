@@ -19,3 +19,23 @@ export async function proxyToDaemon(
     throw err;
   }
 }
+
+export async function proxyFormDataToDaemon(
+  path: string,
+  formData: FormData,
+): Promise<Response> {
+  const url = `${DAEMON_URL}${path}`;
+  console.log(`[daemon-client] POST ${url} (multipart)`);
+  try {
+    // Let fetch set the Content-Type with boundary automatically
+    const res = await fetch(url, {
+      method: "POST",
+      body: formData,
+    });
+    console.log(`[daemon-client] POST ${url} → ${res.status}`);
+    return res;
+  } catch (err) {
+    console.error(`[daemon-client] POST ${url} failed:`, err);
+    throw err;
+  }
+}

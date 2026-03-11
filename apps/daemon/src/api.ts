@@ -14,6 +14,8 @@
  */
 
 import express, { type Request, type Response } from "express";
+import multer from "multer";
+import { createHash, randomBytes } from "node:crypto";
 import { verifySignedRequest, fheConfidentialUsdcAbi } from "@private-streams/common";
 import { config } from "./config.js";
 import {
@@ -25,15 +27,27 @@ import {
   markBidFailed,
   getBidsByUserId,
   insertSecret,
+  insertSecretWithFilecoin,
   getSecretsByAuctionIds,
 } from "./db.js";
 import * as marketplace from "./marketplace.js";
 import { getPublicClient, getWalletClient, waitForReceipt } from "./provider.js";
 import { withAdminLock } from "./admin-lock.js";
+import { validateUploadedFile } from "./file-validation.js";
+import { isFilecoinConfigured, uploadEncryptedToFilecoin } from "./filecoin.js";
+import { encryptWithKek, decryptWithKek } from "./crypto.js";
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: config.maxUploadBytes },
+});
+
+const jsonMiddleware = express.json();
 
 export function startApi(): void {
   const app = express();
-  app.use(express.json());
+  // NOTE: No global express.json() — applied per-route to avoid consuming
+  // the body stream before multer can parse multipart requests.
 
   // Request logging
   app.use((req: Request, res: Response, next) => {
@@ -69,7 +83,7 @@ export function startApi(): void {
   // Body: { timestamp, signature }
   // Returns the caller's pseudonymous ID (creates one if new).
   // ---------------------------------------------------------------------------
-  app.post("/user", async (req: Request, res: Response) => {
+  app.post("/user", jsonMiddleware, async (req: Request, res: Response) => {
     try {
       const result = await verifySignedRequest(req.body);
       if (!result.ok) {
@@ -96,7 +110,7 @@ export function startApi(): void {
   // Body: { timestamp, signature }
   // Returns the caller's on-chain encrypted balance (decrypted by daemon).
   // ---------------------------------------------------------------------------
-  app.post("/balance", async (req: Request, res: Response) => {
+  app.post("/balance", jsonMiddleware, async (req: Request, res: Response) => {
     try {
       const result = await verifySignedRequest(req.body);
       if (!result.ok) {
@@ -134,7 +148,7 @@ export function startApi(): void {
   //
   // Body: { auctionId, amount, timestamp, signature }
   // ---------------------------------------------------------------------------
-  app.post("/bid", async (req: Request, res: Response) => {
+  app.post("/bid", jsonMiddleware, async (req: Request, res: Response) => {
     try {
       const result = await verifySignedRequest<{ auctionId: string; amount: string }>(req.body);
       if (!result.ok) {
@@ -210,15 +224,24 @@ export function startApi(): void {
   // ---------------------------------------------------------------------------
   // POST /create-auction — signature-authenticated
   //
-  // Body: { eventId, eventTitle, endTime, prediction,
-  //         [secretDataCid, secretDataKey] | [secretPayload],
-  //         timestamp, signature }
-  //
-  // Either provide (secretDataCid + secretDataKey) for pre-encrypted data,
-  // or (secretPayload) for plaintext — daemon generates CID/key from plaintext.
+  // Accepts either:
+  //   - Multipart FormData: file field + form fields
+  //   - JSON body: { eventId, eventTitle, endTime, prediction,
+  //                  [secretDataCid, secretDataKey] | [secretPayload],
+  //                  timestamp, signature }
   // ---------------------------------------------------------------------------
-  app.post("/create-auction", async (req: Request, res: Response) => {
+  app.post("/create-auction", upload.single("file"), jsonMiddleware, async (req: Request, res: Response) => {
     try {
+      // For multipart requests, multer populates req.body with form fields.
+      // For JSON requests, express.json() populates req.body.
+      // In both cases, req.body is an object. FormData fields arrive as strings.
+      const rawBody = req.body ?? {};
+
+      // Coerce timestamp to number (FormData sends strings)
+      if (typeof rawBody.timestamp === "string") {
+        rawBody.timestamp = Number(rawBody.timestamp);
+      }
+
       const result = await verifySignedRequest<{
         eventId: string;
         eventTitle: string;
@@ -227,7 +250,7 @@ export function startApi(): void {
         secretDataCid?: string;
         secretDataKey?: string;
         secretPayload?: string;
-      }>(req.body);
+      }>(rawBody);
       if (!result.ok) {
         res.status(result.status).json({ error: result.error, code: result.code });
         return;
@@ -250,13 +273,172 @@ export function startApi(): void {
       }
 
       const user = getOrCreateUser(userAddress);
+      const file = (req as Request & { file?: Express.Multer.File }).file;
 
-      // If secretPayload is provided (plaintext), generate CID/key from it
-      if (secretPayload && !secretDataCid) {
-        const { createHash, randomBytes } = await import("node:crypto");
+      // ── File upload path ──
+      if (file) {
+        const validation = validateUploadedFile(
+          file.buffer,
+          file.originalname,
+          file.mimetype,
+        );
+        if (!validation.ok) {
+          res.status(400).json({ error: validation.error, code: "FILE_VALIDATION_FAILED" });
+          return;
+        }
+
+        // SHA256 of plaintext → on-chain commitment
+        secretDataCid = "0x" + createHash("sha256").update(file.buffer).digest("hex");
         const keyBytes = randomBytes(32);
         secretDataKey = "0x" + keyBytes.toString("hex");
-        secretDataCid = "0x" + createHash("sha256").update(secretPayload).digest("hex");
+
+        // Try Filecoin upload
+        if (isFilecoinConfigured()) {
+          try {
+            const metadata = await uploadEncryptedToFilecoin(
+              file.buffer,
+              file.originalname,
+              file.mimetype,
+            );
+
+            // Submit on-chain
+            if (prediction != null) {
+              const { txHash, auctionId } = await marketplace.createAuction(
+                user.userId,
+                Number(eventId),
+                eventTitle,
+                Number(endTime),
+                prediction === "true" || prediction === "1",
+                secretDataCid,
+                BigInt(secretDataKey),
+              );
+
+              const eventDataJson = JSON.stringify({
+                marketplace: "insider-streams",
+                event: eventTitle,
+                marketId: Number(eventId),
+                outcome: prediction === "true" || prediction === "1" ? "yes" : "no",
+              });
+
+              insertSecretWithFilecoin(
+                auctionId,
+                user.userId,
+                secretDataCid,
+                secretDataKey,
+                secretPayload ?? undefined,
+                eventDataJson,
+                {
+                  pieceCid: metadata.pieceCid,
+                  retrievalUrl: metadata.retrievalUrl,
+                  copiesJson: JSON.stringify(metadata.copies),
+                  fileName: metadata.fileName,
+                  contentType: metadata.contentType,
+                  fileSizeBytes: Number(metadata.fileSizeBytes),
+                  encryptedFileSizeBytes: Number(metadata.encryptedFileSizeBytes),
+                  encryptedSecretKey: encryptWithKek(metadata.encryptionKey),
+                  encryptionAlgorithm: metadata.encryptionAlgorithm,
+                  encryptedFileName: metadata.encryptedFileName,
+                  fileMd5: metadata.fileMd5,
+                },
+              );
+
+              res.json({
+                success: true,
+                auctionId: String(auctionId),
+                sellerId: user.userId,
+                txHash,
+              });
+              return;
+            }
+          } catch (err) {
+            console.error("[api] Filecoin upload failed:", err);
+            res.status(502).json({
+              success: false,
+              error: `Filecoin upload failed: ${err instanceof Error ? err.message : String(err)}`,
+              code: "FILECOIN_UPLOAD_FAILED",
+            });
+            return;
+          }
+        }
+        // Filecoin not configured — fall through to text path with file content as secretPayload
+        // Use the file content as the secret text
+        if (!secretPayload) {
+          (result.payload as { secretPayload?: string }).secretPayload = file.buffer.toString("utf8");
+        }
+      }
+
+      // ── Text payload path (or file without Filecoin) ──
+      const effectiveSecretPayload = secretPayload || (file ? file.buffer.toString("utf8") : undefined);
+
+      // If secretPayload is provided (plaintext), generate CID/key from it
+      if (effectiveSecretPayload && !secretDataCid) {
+        const keyBytes = randomBytes(32);
+        secretDataKey = "0x" + keyBytes.toString("hex");
+        secretDataCid = "0x" + createHash("sha256").update(effectiveSecretPayload).digest("hex");
+      }
+
+      // If we have Filecoin and text payload, upload as .txt file
+      if (effectiveSecretPayload && isFilecoinConfigured() && !file) {
+        try {
+          const textBuffer = Buffer.from(effectiveSecretPayload, "utf8");
+          const metadata = await uploadEncryptedToFilecoin(
+            textBuffer,
+            "secret.txt",
+            "text/plain",
+          );
+
+          if (prediction != null && secretDataCid && secretDataKey) {
+            const { txHash, auctionId } = await marketplace.createAuction(
+              user.userId,
+              Number(eventId),
+              eventTitle,
+              Number(endTime),
+              prediction === "true" || prediction === "1",
+              secretDataCid,
+              BigInt(secretDataKey),
+            );
+
+            const eventDataJson = JSON.stringify({
+              marketplace: "insider-streams",
+              event: eventTitle,
+              marketId: Number(eventId),
+              outcome: prediction === "true" || prediction === "1" ? "yes" : "no",
+            });
+
+            insertSecretWithFilecoin(
+              auctionId,
+              user.userId,
+              secretDataCid,
+              secretDataKey,
+              effectiveSecretPayload,
+              eventDataJson,
+              {
+                pieceCid: metadata.pieceCid,
+                retrievalUrl: metadata.retrievalUrl,
+                copiesJson: JSON.stringify(metadata.copies),
+                fileName: "secret.txt",
+                contentType: "text/plain",
+                fileSizeBytes: textBuffer.byteLength,
+                encryptedFileSizeBytes: Number(metadata.encryptedFileSizeBytes),
+                encryptedSecretKey: encryptWithKek(metadata.encryptionKey),
+                encryptionAlgorithm: metadata.encryptionAlgorithm,
+                encryptedFileName: "secret.txt.enc",
+                fileMd5: metadata.fileMd5,
+              },
+            );
+
+            res.json({
+              success: true,
+              auctionId: String(auctionId),
+              sellerId: user.userId,
+              txHash,
+            });
+            return;
+          }
+        } catch (err) {
+          // Filecoin failed for text — fall through to non-Filecoin path
+          console.warn("[api] Filecoin text upload failed, falling back:", err);
+        }
       }
 
       // Submit on-chain — wait for the tx so we can return auctionId + txHash
@@ -278,7 +460,7 @@ export function startApi(): void {
             marketId: Number(eventId),
             outcome: prediction === "true" || prediction === "1" ? "yes" : "no",
           });
-          insertSecret(auctionId, user.userId, secretDataCid!, secretDataKey, secretPayload ?? undefined, eventDataJson);
+          insertSecret(auctionId, user.userId, secretDataCid!, secretDataKey, effectiveSecretPayload ?? undefined, eventDataJson);
 
           res.json({
             success: true,
@@ -314,7 +496,7 @@ export function startApi(): void {
   //
   // Body: { amount, timestamp, signature }
   // ---------------------------------------------------------------------------
-  app.post("/withdraw", async (req: Request, res: Response) => {
+  app.post("/withdraw", jsonMiddleware, async (req: Request, res: Response) => {
     try {
       const result = await verifySignedRequest<{ amount: string }>(req.body);
       if (!result.ok) {
@@ -384,7 +566,7 @@ export function startApi(): void {
   // User-initiated deposit: user sends FHEConfidentialUSDC to platform EOA,
   // then calls this endpoint to trigger depositFor on the marketplace.
   // ---------------------------------------------------------------------------
-  app.post("/deposit", async (req: Request, res: Response) => {
+  app.post("/deposit", jsonMiddleware, async (req: Request, res: Response) => {
     try {
       const result = await verifySignedRequest<{ txHash: string; amount: string }>(req.body);
       if (!result.ok) {
@@ -437,7 +619,7 @@ export function startApi(): void {
   // Body: { timestamp, signature }
   // Returns the caller's bid history from SQLite.
   // ---------------------------------------------------------------------------
-  app.post("/bids", async (req: Request, res: Response) => {
+  app.post("/bids", jsonMiddleware, async (req: Request, res: Response) => {
     try {
       // Strip unsigned fields before verification — frontend signs only { timestamp }
       const { auctionIds: _unused, ...signedBody } = req.body;
@@ -468,7 +650,7 @@ export function startApi(): void {
   // Body: { timestamp, signature }
   // Returns whether the caller is a registered seller (on-chain check).
   // ---------------------------------------------------------------------------
-  app.post("/seller", async (req: Request, res: Response) => {
+  app.post("/seller", jsonMiddleware, async (req: Request, res: Response) => {
     try {
       const result = await verifySignedRequest(req.body);
       if (!result.ok) {
@@ -499,7 +681,7 @@ export function startApi(): void {
   // Returns secret data for auctions the caller created or won.
   // The secretDataKey is only included if the caller is the seller or winning bidder.
   // ---------------------------------------------------------------------------
-  app.post("/secrets", async (req: Request, res: Response) => {
+  app.post("/secrets", jsonMiddleware, async (req: Request, res: Response) => {
     try {
       // Extract auctionIds before signature verification — the frontend signs
       // only { timestamp } and passes auctionIds as an unsigned extra field.
@@ -530,6 +712,40 @@ export function startApi(): void {
         const isWinner = activeBid?.bidderId === user.userId;
         const hasAccess = isSeller || isWinner;
 
+        // Build file metadata if Filecoin data exists
+        let file = null;
+        if (s.retrievalUrl && s.fileName) {
+          let decryptedKey: string | null = null;
+          if (hasAccess && s.encryptedSecretKey) {
+            try {
+              decryptedKey = decryptWithKek(s.encryptedSecretKey);
+            } catch (err) {
+              console.warn(`[api] Failed to decrypt secret key for auction ${s.auctionId}:`, err);
+            }
+          }
+
+          let copies: unknown[] = [];
+          if (s.copiesJson) {
+            try {
+              copies = JSON.parse(s.copiesJson);
+            } catch { /* ignore */ }
+          }
+
+          file = {
+            encryptionKey: hasAccess ? decryptedKey : null,
+            encryptionAlgorithm: s.encryptionAlgorithm,
+            fileName: s.fileName,
+            encryptedFileName: s.encryptedFileName,
+            contentType: s.contentType,
+            fileMd5: s.fileMd5,
+            fileSizeBytes: s.fileSizeBytes != null ? String(s.fileSizeBytes) : null,
+            encryptedFileSizeBytes: s.encryptedFileSizeBytes != null ? String(s.encryptedFileSizeBytes) : null,
+            pieceCid: s.pieceCid,
+            retrievalUrl: s.retrievalUrl,
+            copies,
+          };
+        }
+
         return {
           auctionId: s.auctionId,
           secretDataCid: s.secretDataCid,
@@ -537,6 +753,7 @@ export function startApi(): void {
           secretData: hasAccess ? s.secretData : null,
           eventData: hasAccess ? s.eventData : null,
           hasAccess,
+          file,
         };
       });
 
@@ -554,7 +771,7 @@ export function startApi(): void {
   // Body: { timestamp, signature }
   // Returns the caller's bid history (from SQLite).
   // ---------------------------------------------------------------------------
-  app.post("/dashboard", async (req: Request, res: Response) => {
+  app.post("/dashboard", jsonMiddleware, async (req: Request, res: Response) => {
     try {
       const result = await verifySignedRequest(req.body);
       if (!result.ok) {
@@ -583,7 +800,7 @@ export function startApi(): void {
   // Body: { timestamp, signature }
   // Mints test MockUSDC to the caller's address. Development only.
   // ---------------------------------------------------------------------------
-  app.post("/faucet", async (req: Request, res: Response) => {
+  app.post("/faucet", jsonMiddleware, async (req: Request, res: Response) => {
     try {
       const result = await verifySignedRequest(req.body);
       if (!result.ok) {

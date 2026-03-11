@@ -20,10 +20,34 @@ export type EventData = {
   outcome: "yes" | "no";
 };
 
+export type PrivateFilecoinCopy = {
+  providerId: string;
+  dataSetId: string;
+  pieceId: string;
+  role: "primary" | "secondary";
+  retrievalUrl: string;
+  isNewDataSet: boolean;
+};
+
+export type PrivateFileAttachment = {
+  encryptionKey: string;
+  encryptionAlgorithm: string | null;
+  fileName: string;
+  encryptedFileName: string | null;
+  contentType: string | null;
+  fileMd5: string | null;
+  fileSizeBytes: string | null;
+  encryptedFileSizeBytes: string | null;
+  pieceCid: string | null;
+  retrievalUrl: string;
+  copies: PrivateFilecoinCopy[];
+};
+
 type AccessiblePrivateSecretState = {
   kind: "accessible";
   secret_data: string;
   event_data: EventData | null;
+  file: PrivateFileAttachment | null;
 };
 
 export type PrivateSecretState =

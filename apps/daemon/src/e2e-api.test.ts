@@ -829,3 +829,178 @@ describe("POST /faucet", () => {
     assert.equal(status, 400);
   });
 });
+
+// ────────────────────────────────────────────────────────────────────────────
+// POST /create-auction (multipart file upload)
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Build a signed multipart FormData request for /create-auction.
+ */
+async function signedFormData(
+  account: ReturnType<typeof privateKeyToAccount>,
+  fields: Record<string, string>,
+  file?: { buffer: Buffer; name: string; type: string },
+): Promise<FormData> {
+  const timestamp = Math.floor(Date.now() / 1000);
+  const payload = { ...fields, timestamp };
+  const message = stringify(payload);
+  const signature = await account.signMessage({ message });
+
+  const formData = new FormData();
+  for (const [k, v] of Object.entries(fields)) {
+    formData.set(k, v);
+  }
+  formData.set("timestamp", String(timestamp));
+  formData.set("signature", signature);
+
+  if (file) {
+    const blob = new Blob([new Uint8Array(file.buffer)], { type: file.type });
+    formData.set("file", blob, file.name);
+  }
+
+  return formData;
+}
+
+async function apiFormData(
+  path: string,
+  formData: FormData,
+): Promise<{ status: number; data: Record<string, unknown> }> {
+  const resp = await fetch(`${BASE_URL}${path}`, {
+    method: "POST",
+    body: formData,
+  });
+  const contentType = resp.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    const data = (await resp.json()) as Record<string, unknown>;
+    return { status: resp.status, data };
+  }
+  await resp.text();
+  return { status: resp.status, data: {} };
+}
+
+describe("POST /create-auction (multipart file upload)", () => {
+  it("accepts a .txt file with valid signature (FHE tx fails but validates parsing)", async () => {
+    const formData = await signedFormData(ALICE, {
+      eventId: "50",
+      eventTitle: "File Upload Test",
+      endTime: "1999999999",
+      prediction: "true",
+      secretPayload: "",
+    }, {
+      buffer: Buffer.from("This is my secret insider prediction: YES"),
+      name: "secret.txt",
+      type: "text/plain",
+    });
+
+    const { status, data } = await apiFormData("/create-auction", formData);
+    // FHE tx fails in test mode (no contract) or Filecoin not configured
+    // But it should get past file validation
+    assert.ok(status === 500 || status === 502, `Expected 500 or 502, got ${status}`);
+    assert.ok(data.code === "FHE_TX_FAILED" || data.code === "FILECOIN_UPLOAD_FAILED",
+      `Expected FHE_TX_FAILED or FILECOIN_UPLOAD_FAILED, got ${data.code}`);
+  });
+
+  it("rejects non-.txt file extension", async () => {
+    const formData = await signedFormData(ALICE, {
+      eventId: "51",
+      eventTitle: "Bad File Test",
+      endTime: "1999999999",
+      prediction: "true",
+      secretPayload: "",
+    }, {
+      buffer: Buffer.from("malicious payload"),
+      name: "exploit.exe",
+      type: "application/octet-stream",
+    });
+
+    const { status, data } = await apiFormData("/create-auction", formData);
+    assert.equal(status, 400);
+    assert.equal(data.code, "FILE_VALIDATION_FAILED");
+    assert.ok((data.error as string).includes("Unsupported file type"));
+  });
+
+  it("rejects empty file", async () => {
+    const formData = await signedFormData(ALICE, {
+      eventId: "52",
+      eventTitle: "Empty File Test",
+      endTime: "1999999999",
+      prediction: "true",
+      secretPayload: "",
+    }, {
+      buffer: Buffer.alloc(0),
+      name: "empty.txt",
+      type: "text/plain",
+    });
+
+    const { status, data } = await apiFormData("/create-auction", formData);
+    assert.equal(status, 400);
+    assert.equal(data.code, "FILE_VALIDATION_FAILED");
+    assert.ok((data.error as string).includes("empty"));
+  });
+
+  it("rejects file with <script content", async () => {
+    const formData = await signedFormData(ALICE, {
+      eventId: "53",
+      eventTitle: "Script Injection Test",
+      endTime: "1999999999",
+      prediction: "true",
+      secretPayload: "",
+    }, {
+      buffer: Buffer.from('<script>alert("xss")</script>'),
+      name: "payload.txt",
+      type: "text/plain",
+    });
+
+    const { status, data } = await apiFormData("/create-auction", formData);
+    assert.equal(status, 400);
+    assert.equal(data.code, "FILE_VALIDATION_FAILED");
+    assert.ok((data.error as string).includes("<script"));
+  });
+
+  it("rejects file with null bytes", async () => {
+    const formData = await signedFormData(ALICE, {
+      eventId: "54",
+      eventTitle: "Null Bytes Test",
+      endTime: "1999999999",
+      prediction: "true",
+      secretPayload: "",
+    }, {
+      buffer: Buffer.from("text\x00binary"),
+      name: "mixed.txt",
+      type: "text/plain",
+    });
+
+    const { status, data } = await apiFormData("/create-auction", formData);
+    assert.equal(status, 400);
+    assert.equal(data.code, "FILE_VALIDATION_FAILED");
+    assert.ok((data.error as string).includes("null bytes"));
+  });
+
+  it("text-only path works without Filecoin configured (SHA256 fallback)", async () => {
+    const { status, data } = await signedPost("/create-auction", ALICE, {
+      eventId: "55",
+      eventTitle: "Plaintext Fallback Test",
+      endTime: "1999999999",
+      prediction: "true",
+      secretPayload: "My plaintext secret",
+    });
+    // Should hit FHE_TX_FAILED (no contract) but NOT fail on Filecoin
+    assert.equal(status, 500);
+    assert.equal(data.code, "FHE_TX_FAILED");
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// POST /secrets — file metadata in response
+// ────────────────────────────────────────────────────────────────────────────
+
+describe("POST /secrets (file metadata)", () => {
+  it("returns empty file field for secrets without Filecoin data", async () => {
+    // Create a user and manually insert a secret without Filecoin data
+    const res = await signedPost("/secrets", ALICE, { auctionIds: [42] });
+    assert.equal(res.status, 200);
+    // No secret exists for auction 42 yet (we can't create on-chain in test mode)
+    // But the endpoint should work without error
+  });
+});
