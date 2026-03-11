@@ -27,7 +27,10 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "better-sqlite3"
-    ]
+    ],
+    "patchedDependencies": {
+      "@johanneskares/wallet-mock@1.4.1": "patches/@johanneskares__wallet-mock@1.4.1.patch"
+    }
   },
   "packageManager": "pnpm@10.28.1",
   "engines": {

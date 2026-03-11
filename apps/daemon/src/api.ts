@@ -183,8 +183,12 @@ export function startApi(): void {
   // ---------------------------------------------------------------------------
   // POST /create-auction — signature-authenticated
   //
-  // Body: { eventId, eventTitle, endTime, [prediction, secretDataCid,
-  //         secretDataKey], timestamp, signature }
+  // Body: { eventId, eventTitle, endTime, prediction,
+  //         [secretDataCid, secretDataKey] | [secretPayload],
+  //         timestamp, signature }
+  //
+  // Either provide (secretDataCid + secretDataKey) for pre-encrypted data,
+  // or (secretPayload) for plaintext — daemon generates CID/key from plaintext.
   // ---------------------------------------------------------------------------
   app.post("/create-auction", async (req: Request, res: Response) => {
     try {
@@ -195,13 +199,15 @@ export function startApi(): void {
         prediction?: string;
         secretDataCid?: string;
         secretDataKey?: string;
+        secretPayload?: string;
       }>(req.body);
       if (!result.ok) {
         res.status(result.status).json({ error: result.error, code: result.code });
         return;
       }
 
-      const { userAddress, eventId, eventTitle, endTime, prediction, secretDataCid, secretDataKey } = result.payload;
+      const { userAddress, eventId, eventTitle, endTime, prediction, secretPayload } = result.payload;
+      let { secretDataCid, secretDataKey } = result.payload;
 
       if (eventId == null) {
         res.status(400).json({ error: "Missing eventId" });
@@ -218,10 +224,18 @@ export function startApi(): void {
 
       const user = getOrCreateUser(userAddress);
 
-      // Submit on-chain asynchronously if FHE fields are provided
+      // If secretPayload is provided (plaintext), generate CID/key from it
+      if (secretPayload && !secretDataCid) {
+        const { createHash, randomBytes } = await import("node:crypto");
+        const keyBytes = randomBytes(32);
+        secretDataKey = "0x" + keyBytes.toString("hex");
+        secretDataCid = "0x" + createHash("sha256").update(secretPayload).digest("hex");
+      }
+
+      // Submit on-chain — wait for the tx so we can return auctionId + txHash
       if (prediction != null && secretDataCid && secretDataKey) {
-        marketplace
-          .createAuction(
+        try {
+          const { txHash, auctionId } = await marketplace.createAuction(
             user.userId,
             Number(eventId),
             eventTitle,
@@ -229,23 +243,31 @@ export function startApi(): void {
             prediction === "true" || prediction === "1",
             secretDataCid,
             BigInt(secretDataKey),
-          )
-          .then(({ txHash, auctionId }) => {
-            console.log(`[api] Auction created on-chain: auctionId=${auctionId}, tx=${txHash}`);
-            // Store secret data in SQLite for later retrieval
-            insertSecret(auctionId, user.userId, secretDataCid, secretDataKey);
-          })
-          .catch((err) => {
-            console.error(`[api] Auction creation on-chain failed:`, err);
+          );
+          console.log(`[api] Auction created on-chain: auctionId=${auctionId}, tx=${txHash}`);
+          insertSecret(auctionId, user.userId, secretDataCid!, secretDataKey);
+
+          res.json({
+            success: true,
+            auctionId: String(auctionId),
+            sellerId: user.userId,
+            txHash,
           });
+        } catch (err) {
+          console.error(`[api] Auction creation on-chain failed:`, err);
+          res.status(500).json({
+            success: false,
+            error: err instanceof Error ? err.message : "On-chain auction creation failed",
+            code: "FHE_TX_FAILED",
+          });
+        }
+        return;
       }
 
       res.json({
-        userId: user.userId,
-        eventId,
-        eventTitle,
-        endTime,
-        status: "pending_fhe",
+        success: false,
+        error: "Missing prediction or secret data",
+        code: "MISSING_FIELDS",
       });
     } catch (err) {
       console.error("[api] POST /create-auction error:", err);
