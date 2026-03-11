@@ -41,7 +41,9 @@ import { z } from "zod";
 
 import { withAdminLock } from "./admin-lock.js";
 import { config } from "./config.js";
-import { getOrCreateUser, insertSecret, recordBid } from "./db.js";
+import { encryptWithKek } from "./crypto.js";
+import { getOrCreateUser, insertSecret, insertSecretWithFilecoin, recordBid } from "./db.js";
+import { isFilecoinConfigured, uploadEncryptedToFilecoin } from "./filecoin.js";
 import * as marketplace from "./marketplace.js";
 import { sendNotification } from "./notify.js";
 import { getAccount, getPublicClient, getWalletClient, waitForReceipt } from "./provider.js";
@@ -77,6 +79,91 @@ const SECRET_POOL = [
   "Prediction: YES",
   "Prediction: NO",
 ];
+
+// Output format weights for AI-researched secrets
+type SecretFormat = "text" | "txt" | "md" | "json";
+const SECRET_FORMATS: { format: SecretFormat; weight: number }[] = [
+  { format: "text", weight: 30 },
+  { format: "txt", weight: 30 },
+  { format: "md", weight: 20 },
+  { format: "json", weight: 20 },
+];
+
+function pickWeightedFormat(): SecretFormat {
+  const total = SECRET_FORMATS.reduce((sum, f) => sum + f.weight, 0);
+  let r = Math.random() * total;
+  for (const { format, weight } of SECRET_FORMATS) {
+    r -= weight;
+    if (r <= 0) return format;
+  }
+  return "text";
+}
+
+const ResearchAnswerSchema = z.object({
+  prediction: z.enum(["yes", "no"]),
+  confidence: z.number().min(0).max(100),
+  reasoning: z.string(),
+  sources: z.array(z.string()).optional(),
+});
+
+async function researchEventAnswer(
+  venice: OpenAI,
+  question: string,
+): Promise<{ prediction: boolean; content: string; format: SecretFormat }> {
+  const format = pickWeightedFormat();
+
+  const systemPrompt = `You are a research assistant that determines the actual outcome of past events phrased as prediction market questions. Search the web for the answer.
+
+Respond with a JSON object containing:
+- "prediction": "yes" or "no" — the actual outcome
+- "confidence": 0-100 — your confidence level
+- "reasoning": a detailed explanation with citations and source URLs
+- "sources": array of source URLs
+
+The events are phrased in future tense but they already happened. Determine what actually occurred.`;
+
+  try {
+    const response = await venice.chat.completions.create({
+      model: "openai-gpt-54",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: `What is the actual outcome of: "${question}"` },
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.3,
+    });
+
+    const raw = response.choices[0]?.message?.content;
+    if (!raw) throw new Error("Empty AI response");
+
+    const parsed = ResearchAnswerSchema.parse(JSON.parse(raw));
+    const prediction = parsed.prediction === "yes";
+
+    let content: string;
+    switch (format) {
+      case "json":
+        content = JSON.stringify(parsed, null, 2);
+        break;
+      case "md":
+        content = `# Research: ${question}\n\n## Prediction: ${parsed.prediction.toUpperCase()}\n\n**Confidence:** ${parsed.confidence}%\n\n## Reasoning\n\n${parsed.reasoning}\n\n## Sources\n\n${(parsed.sources ?? []).map((s) => `- ${s}`).join("\n") || "No sources cited."}`;
+        break;
+      default:
+        content = `Prediction: ${parsed.prediction.toUpperCase()}\nConfidence: ${parsed.confidence}%\n\n${parsed.reasoning}${parsed.sources?.length ? "\n\nSources:\n" + parsed.sources.join("\n") : ""}`;
+        break;
+    }
+
+    return { prediction, content, format };
+  } catch (err) {
+    // Fallback: random prediction with simple text
+    console.warn(`[demo]   AI research failed: ${err instanceof Error ? err.message : err}`);
+    const prediction = Math.random() > 0.5;
+    return {
+      prediction,
+      content: prediction ? "The answer is YES." : "The answer is NO.",
+      format: "text",
+    };
+  }
+}
 
 const BID_MIN_INCREMENT = 10_000_000n; // 10 USDC
 const BID_MAX_INCREMENT = 50_000_000n; // 50 USDC
@@ -495,6 +582,7 @@ async function runCreateEvents(
 // ─── Cycle: Spawn Auctions ─────────────────────────────────────────────────
 
 async function runSpawnAuctions(
+  venice: OpenAI,
   gqlClient: GraphQLClient,
   testAccounts: TestAccount[],
 ): Promise<void> {
@@ -521,26 +609,95 @@ async function runSpawnAuctions(
   const user = getOrCreateUser(ta.address);
 
   for (const event of candidates) {
-    const secretPayload = pickRandom(SECRET_POOL);
-    const duration = pickRandom(AUCTION_DURATIONS);
-    const durationSecs = CREATE_AUCTION_DURATION_SECONDS[duration]!;
-    const endTime = timestamp() + durationSecs;
-    const prediction = secretPayload.includes("YES");
-
-    // Generate secretDataCid and key from payload
-    const keyBytes = randomBytes(32);
-    const secretDataKey = BigInt("0x" + keyBytes.toString("hex"));
-    const secretDataCid =
-      "0x" + createHash("sha256").update(secretPayload).digest("hex");
-
     console.log(
       `[demo]   Trying event ${event.eventId} — "${event.question.slice(0, 50)}..."`,
     );
+
+    // Research the actual answer using AI
+    const research = await researchEventAnswer(venice, event.question);
+    const { prediction, content: secretContent, format } = research;
+
+    const duration = pickRandom(AUCTION_DURATIONS);
+    const durationSecs = AUCTION_DURATION_SECONDS[duration]!;
+    const endTime = timestamp() + durationSecs;
+
+    // Generate secretDataCid and key from content
+    const keyBytes = randomBytes(32);
+    const secretDataKey = BigInt("0x" + keyBytes.toString("hex"));
+    const secretDataCid =
+      "0x" + createHash("sha256").update(secretContent).digest("hex");
+
     console.log(
-      `[demo]   Signer: ${ta.address.slice(0, 10)}..., secret: "${secretPayload}", duration: ${duration}`,
+      `[demo]   Signer: ${ta.address.slice(0, 10)}..., format: ${format}, prediction: ${prediction ? "YES" : "NO"}, duration: ${duration}`,
     );
 
     try {
+      // Determine if we should upload to Filecoin (file-based formats when configured)
+      const useFilecoin = isFilecoinConfigured() && (format === "txt" || format === "md" || format === "json");
+
+      if (useFilecoin) {
+        const ext = format === "txt" ? ".txt" : format === "md" ? ".md" : ".json";
+        const mimeType = format === "json" ? "application/json" : "text/plain";
+        const fileName = `research${ext}`;
+        const textBuffer = Buffer.from(secretContent, "utf8");
+
+        try {
+          const metadata = await uploadEncryptedToFilecoin(textBuffer, fileName, mimeType);
+
+          const { txHash, auctionId } = await marketplace.createAuction(
+            user.userId,
+            Number(event.eventId),
+            event.question,
+            endTime,
+            prediction,
+            secretDataCid,
+            secretDataKey,
+          );
+
+          const eventDataJson = JSON.stringify({
+            marketplace: "insider-streams",
+            event: event.question,
+            marketId: Number(event.eventId),
+            outcome: prediction ? "yes" : "no",
+          });
+
+          insertSecretWithFilecoin(
+            auctionId,
+            user.userId,
+            secretDataCid,
+            "0x" + keyBytes.toString("hex"),
+            secretContent,
+            eventDataJson,
+            {
+              pieceCid: metadata.pieceCid,
+              retrievalUrl: metadata.retrievalUrl,
+              copiesJson: JSON.stringify(metadata.copies),
+              fileName,
+              contentType: mimeType,
+              fileSizeBytes: textBuffer.byteLength,
+              encryptedFileSizeBytes: Number(metadata.encryptedFileSizeBytes),
+              encryptedSecretKey: encryptWithKek(metadata.encryptionKey),
+              encryptionAlgorithm: metadata.encryptionAlgorithm,
+              encryptedFileName: `${fileName}.enc`,
+              fileMd5: metadata.fileMd5,
+            },
+          );
+
+          console.log(
+            `[demo]   Auction ${auctionId} created with Filecoin attachment (tx: ${txHash.slice(0, 10)}...)`,
+          );
+          await sendNotification(
+            "Auction Created (Filecoin)",
+            `Auction ${auctionId} (${duration}) for event ${event.eventId}\n"${event.question}"\nFormat: ${format}, CID: ${metadata.pieceCid.slice(0, 20)}...`,
+          );
+          return;
+        } catch (filecoinErr) {
+          console.warn(`[demo]   Filecoin upload failed, falling back to text: ${filecoinErr instanceof Error ? filecoinErr.message : filecoinErr}`);
+          // Fall through to text path
+        }
+      }
+
+      // Text-only path (no Filecoin or fallback)
       const { txHash, auctionId } = await marketplace.createAuction(
         user.userId,
         Number(event.eventId),
@@ -562,7 +719,7 @@ async function runSpawnAuctions(
         user.userId,
         secretDataCid,
         "0x" + keyBytes.toString("hex"),
-        secretPayload,
+        secretContent,
         eventDataJson,
       );
 
@@ -850,7 +1007,7 @@ export async function startDemoPopulator(): Promise<void> {
 
   setInterval(async () => {
     try {
-      await runSpawnAuctions(gqlClient, testAccounts);
+      await runSpawnAuctions(venice, gqlClient, testAccounts);
     } catch (err) {
       console.error(
         "[demo] spawn-auctions cycle error:",

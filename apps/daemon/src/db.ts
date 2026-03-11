@@ -66,6 +66,26 @@ function migrate(db: Database.Database): void {
   if (!colNames.has("event_data")) {
     db.exec("ALTER TABLE secrets ADD COLUMN event_data TEXT");
   }
+
+  // Filecoin attachment columns
+  const filecoinCols = [
+    ["piece_cid", "TEXT"],
+    ["retrieval_url", "TEXT"],
+    ["copies_json", "TEXT"],
+    ["file_name", "TEXT"],
+    ["content_type", "TEXT"],
+    ["file_size_bytes", "INTEGER"],
+    ["encrypted_file_size_bytes", "INTEGER"],
+    ["encrypted_secret_key", "TEXT"],
+    ["encryption_algorithm", "TEXT"],
+    ["encrypted_file_name", "TEXT"],
+    ["file_md5", "TEXT"],
+  ] as const;
+  for (const [col, type] of filecoinCols) {
+    if (!colNames.has(col)) {
+      db.exec(`ALTER TABLE secrets ADD COLUMN ${col} ${type}`);
+    }
+  }
 }
 
 // ── Pseudonymous ID generation ──
@@ -299,6 +319,18 @@ export interface Secret {
   secretDataKey: string | null;
   secretData: string | null;
   eventData: string | null;
+  // Filecoin attachment fields
+  pieceCid: string | null;
+  retrievalUrl: string | null;
+  copiesJson: string | null;
+  fileName: string | null;
+  contentType: string | null;
+  fileSizeBytes: number | null;
+  encryptedFileSizeBytes: number | null;
+  encryptedSecretKey: string | null;
+  encryptionAlgorithm: string | null;
+  encryptedFileName: string | null;
+  fileMd5: string | null;
 }
 
 interface SecretRow {
@@ -308,6 +340,17 @@ interface SecretRow {
   secret_data_key: string | null;
   secret_data: string | null;
   event_data: string | null;
+  piece_cid: string | null;
+  retrieval_url: string | null;
+  copies_json: string | null;
+  file_name: string | null;
+  content_type: string | null;
+  file_size_bytes: number | null;
+  encrypted_file_size_bytes: number | null;
+  encrypted_secret_key: string | null;
+  encryption_algorithm: string | null;
+  encrypted_file_name: string | null;
+  file_md5: string | null;
 }
 
 export function insertSecret(
@@ -329,7 +372,11 @@ export function getSecretsByAuctionIds(auctionIds: number[]): Secret[] {
   const db = getDb();
   const placeholders = auctionIds.map(() => "?").join(",");
   const rows = db.prepare(
-    `SELECT auction_id, seller_id, secret_data_cid, secret_data_key, secret_data, event_data FROM secrets WHERE auction_id IN (${placeholders})`,
+    `SELECT auction_id, seller_id, secret_data_cid, secret_data_key, secret_data, event_data,
+            piece_cid, retrieval_url, copies_json, file_name, content_type,
+            file_size_bytes, encrypted_file_size_bytes, encrypted_secret_key,
+            encryption_algorithm, encrypted_file_name, file_md5
+     FROM secrets WHERE auction_id IN (${placeholders})`,
   ).all(...auctionIds) as SecretRow[];
   return rows.map((r) => ({
     auctionId: r.auction_id,
@@ -338,6 +385,67 @@ export function getSecretsByAuctionIds(auctionIds: number[]): Secret[] {
     secretDataKey: r.secret_data_key,
     secretData: r.secret_data,
     eventData: r.event_data,
+    pieceCid: r.piece_cid,
+    retrievalUrl: r.retrieval_url,
+    copiesJson: r.copies_json,
+    fileName: r.file_name,
+    contentType: r.content_type,
+    fileSizeBytes: r.file_size_bytes,
+    encryptedFileSizeBytes: r.encrypted_file_size_bytes,
+    encryptedSecretKey: r.encrypted_secret_key,
+    encryptionAlgorithm: r.encryption_algorithm,
+    encryptedFileName: r.encrypted_file_name,
+    fileMd5: r.file_md5,
   }));
+}
+
+export function insertSecretWithFilecoin(
+  auctionId: number,
+  sellerId: string,
+  secretDataCid: string,
+  secretDataKey: string | undefined,
+  secretData: string | undefined,
+  eventData: string | undefined,
+  filecoin: {
+    pieceCid: string;
+    retrievalUrl: string;
+    copiesJson: string;
+    fileName: string;
+    contentType: string | null;
+    fileSizeBytes: number;
+    encryptedFileSizeBytes: number;
+    encryptedSecretKey: string;
+    encryptionAlgorithm: string;
+    encryptedFileName: string;
+    fileMd5: string;
+  },
+): void {
+  const db = getDb();
+  db.prepare(
+    `INSERT OR REPLACE INTO secrets (
+      auction_id, seller_id, secret_data_cid, secret_data_key, secret_data, event_data,
+      piece_cid, retrieval_url, copies_json, file_name, content_type,
+      file_size_bytes, encrypted_file_size_bytes, encrypted_secret_key,
+      encryption_algorithm, encrypted_file_name, file_md5
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    auctionId,
+    sellerId,
+    secretDataCid,
+    secretDataKey ?? null,
+    secretData ?? null,
+    eventData ?? null,
+    filecoin.pieceCid,
+    filecoin.retrievalUrl,
+    filecoin.copiesJson,
+    filecoin.fileName,
+    filecoin.contentType,
+    filecoin.fileSizeBytes,
+    filecoin.encryptedFileSizeBytes,
+    filecoin.encryptedSecretKey,
+    filecoin.encryptionAlgorithm,
+    filecoin.encryptedFileName,
+    filecoin.fileMd5,
+  );
 }
 
