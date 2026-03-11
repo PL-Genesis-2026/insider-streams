@@ -1,36 +1,32 @@
 import {
   AuctionClosed as AuctionClosedEvent,
+  AuctionClosePending as AuctionClosePendingEvent,
   AuctionCreated as AuctionCreatedEvent,
   AuctionCancelled as AuctionCancelledEvent,
   AuctionAdminExpired as AuctionAdminExpiredEvent,
   BidPlaced as BidPlacedEvent,
-  ExpectedAuthorUpdated as ExpectedAuthorUpdatedEvent,
-  ExpectedWorkflowIdUpdated as ExpectedWorkflowIdUpdatedEvent,
-  ExpectedWorkflowNameUpdated as ExpectedWorkflowNameUpdatedEvent,
+  DepositedFor as DepositedForEvent,
+  WithdrawnFor as WithdrawnForEvent,
   ExternalEventResolved as ExternalEventResolvedEvent,
-  ForwarderAddressUpdated as ForwarderAddressUpdatedEvent,
   OwnershipTransferred as OwnershipTransferredEvent,
   SellerReputationScoreUpdated as SellerReputationScoreUpdatedEvent,
-  SecurityWarning as SecurityWarningEvent,
   SellerRegistered as SellerRegisteredEvent,
-  MarketplaceUpdated as MarketplaceUpdatedEvent
-} from "../generated/SecretMarketplace/SecretMarketplace"
+  SettlerUpdated as SettlerUpdatedEvent
+} from "../generated/FHESecretMarketplace/FHESecretMarketplace"
 import {
   AuctionClosed,
+  AuctionClosePending,
   AuctionCreated,
   AuctionCancelled,
   AuctionAdminExpired,
   BidPlaced,
-  ExpectedAuthorUpdated,
-  ExpectedWorkflowIdUpdated,
-  ExpectedWorkflowNameUpdated,
+  DepositedFor,
+  WithdrawnFor,
   ExternalEventResolved,
-  ForwarderAddressUpdated,
   OwnershipTransferred,
   SellerReputationScoreUpdated,
-  SecurityWarning,
   SellerRegistered,
-  MarketplaceUpdated,
+  SettlerUpdated,
   Auction,
   Seller
 } from "../generated/schema"
@@ -67,6 +63,21 @@ export function handleAuctionClosed(event: AuctionClosedEvent): void {
   }
 }
 
+export function handleAuctionClosePending(event: AuctionClosePendingEvent): void {
+  let entity = new AuctionClosePending(
+    event.transaction.hash.concatI32(event.logIndex.toI32())
+  )
+  entity.auctionId = event.params.auctionId
+  entity.sellerId = event.params.sellerId
+  entity.eventId = event.params.eventId
+
+  entity.blockNumber = event.block.number
+  entity.blockTimestamp = event.block.timestamp
+  entity.transactionHash = event.transaction.hash
+
+  entity.save()
+}
+
 export function handleAuctionCreated(event: AuctionCreatedEvent): void {
   let entity = new AuctionCreated(
     event.transaction.hash.concatI32(event.logIndex.toI32())
@@ -76,6 +87,7 @@ export function handleAuctionCreated(event: AuctionCreatedEvent): void {
   entity.sellerId = event.params.sellerId
   entity.eventTitle = event.params.eventTitle
   entity.endTime = event.params.endTime
+  entity.secretDataCid = event.params.secretDataCid
 
   entity.blockNumber = event.block.number
   entity.blockTimestamp = event.block.timestamp
@@ -83,7 +95,7 @@ export function handleAuctionCreated(event: AuctionCreatedEvent): void {
 
   entity.save()
 
-  // Upsert Seller — may not exist if registered before startBlock
+  // Upsert Seller
   let sellerId = event.params.sellerId
   let seller = Seller.load(sellerId)
   if (seller == null) {
@@ -110,8 +122,9 @@ export function handleAuctionCreated(event: AuctionCreatedEvent): void {
   auction.seller = sellerId
   auction.eventTitle = event.params.eventTitle
   auction.endTime = event.params.endTime
-  auction.currentBid = BigInt.fromI32(0)
+  auction.secretDataCid = event.params.secretDataCid
   auction.bidCount = 0
+  auction.currentBid = BigInt.fromI32(0)
   auction.status = "Open"
   auction.blockNumber = event.block.number
   auction.blockTimestamp = event.block.timestamp
@@ -129,7 +142,6 @@ export function handleAuctionCancelled(event: AuctionCancelledEvent): void {
     event.transaction.hash.concatI32(event.logIndex.toI32())
   )
   entity.auctionId = event.params.auctionId
-  entity.cancelledBidAmount = event.params.cancelledBidAmount
   entity.sellerId = event.params.sellerId
   entity.eventId = event.params.eventId
 
@@ -172,20 +184,17 @@ export function handleBidPlaced(event: BidPlacedEvent): void {
   // Update Auction summary
   let auction = Auction.load(event.params.auctionId.toString())
   if (auction != null) {
-    auction.currentBid = event.params.bidAmount
     auction.bidCount = auction.bidCount + 1
+    auction.currentBid = event.params.bidAmount
     auction.save()
   }
 }
 
-export function handleExpectedAuthorUpdated(
-  event: ExpectedAuthorUpdatedEvent
-): void {
-  let entity = new ExpectedAuthorUpdated(
+export function handleDepositedFor(event: DepositedForEvent): void {
+  let entity = new DepositedFor(
     event.transaction.hash.concatI32(event.logIndex.toI32())
   )
-  entity.previousAuthor = event.params.previousAuthor
-  entity.newAuthor = event.params.newAuthor
+  entity.userId = event.params.userId
 
   entity.blockNumber = event.block.number
   entity.blockTimestamp = event.block.timestamp
@@ -194,30 +203,11 @@ export function handleExpectedAuthorUpdated(
   entity.save()
 }
 
-export function handleExpectedWorkflowIdUpdated(
-  event: ExpectedWorkflowIdUpdatedEvent
-): void {
-  let entity = new ExpectedWorkflowIdUpdated(
+export function handleWithdrawnFor(event: WithdrawnForEvent): void {
+  let entity = new WithdrawnFor(
     event.transaction.hash.concatI32(event.logIndex.toI32())
   )
-  entity.previousId = event.params.previousId
-  entity.newId = event.params.newId
-
-  entity.blockNumber = event.block.number
-  entity.blockTimestamp = event.block.timestamp
-  entity.transactionHash = event.transaction.hash
-
-  entity.save()
-}
-
-export function handleExpectedWorkflowNameUpdated(
-  event: ExpectedWorkflowNameUpdatedEvent
-): void {
-  let entity = new ExpectedWorkflowNameUpdated(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
-  )
-  entity.previousName = event.params.previousName
-  entity.newName = event.params.newName
+  entity.userId = event.params.userId
 
   entity.blockNumber = event.block.number
   entity.blockTimestamp = event.block.timestamp
@@ -234,23 +224,6 @@ export function handleExternalEventResolved(
   )
   entity.externalEventId = event.params.externalEventId
   entity.auctionsAffected = event.params.auctionsAffected
-  entity.resultsApplied = event.params.resultsApplied
-
-  entity.blockNumber = event.block.number
-  entity.blockTimestamp = event.block.timestamp
-  entity.transactionHash = event.transaction.hash
-
-  entity.save()
-}
-
-export function handleForwarderAddressUpdated(
-  event: ForwarderAddressUpdatedEvent
-): void {
-  let entity = new ForwarderAddressUpdated(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
-  )
-  entity.previousForwarder = event.params.previousForwarder
-  entity.newForwarder = event.params.newForwarder
 
   entity.blockNumber = event.block.number
   entity.blockTimestamp = event.block.timestamp
@@ -317,19 +290,6 @@ export function handleSellerReputationScoreUpdated(event: SellerReputationScoreU
   }
 }
 
-export function handleSecurityWarning(event: SecurityWarningEvent): void {
-  let entity = new SecurityWarning(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
-  )
-  entity.message = event.params.message
-
-  entity.blockNumber = event.block.number
-  entity.blockTimestamp = event.block.timestamp
-  entity.transactionHash = event.transaction.hash
-
-  entity.save()
-}
-
 export function handleSellerRegistered(event: SellerRegisteredEvent): void {
   let entity = new SellerRegistered(
     event.transaction.hash.concatI32(event.logIndex.toI32())
@@ -362,12 +322,12 @@ export function handleSellerRegistered(event: SellerRegisteredEvent): void {
   }
 }
 
-export function handleMarketplaceUpdated(event: MarketplaceUpdatedEvent): void {
-  let entity = new MarketplaceUpdated(
+export function handleSettlerUpdated(event: SettlerUpdatedEvent): void {
+  let entity = new SettlerUpdated(
     event.transaction.hash.concatI32(event.logIndex.toI32())
   )
-  entity.previousMarketplace = event.params.previousMarketplace
-  entity.newMarketplace = event.params.newMarketplace
+  entity.previousSettler = event.params.previousSettler
+  entity.newSettler = event.params.newSettler
 
   entity.blockNumber = event.block.number
   entity.blockTimestamp = event.block.timestamp

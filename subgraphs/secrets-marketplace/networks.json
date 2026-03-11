@@ -1,11 +1,12 @@
 {
   "sepolia": {
-    "SecretMarketplace": {
-      "address": "0x1f903548234b15C4d955Cce79beaaC853A98C514",
-      "startBlock": 10405764
+    "FHESecretMarketplace": {
+      "address": "0x0056F94eCC59B918a225B433401EE5121506171B",
+      "startBlock": 10427715
     },
     "ExamplePredictionMarket": {
-      "address": "0xc0800a96EbfEEd4F7C9113C6D9D960d2D912004f"
+      "address": "0x791550c705B2272E1D6EC617AB18337f4E5712E8",
+      "startBlock": 10424201
     }
   }
 }

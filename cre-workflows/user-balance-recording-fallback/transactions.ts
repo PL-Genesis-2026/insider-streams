@@ -1,3 +1,6 @@
+/*
+NOTE TO CLAUDE: This code relates to the old CRE based system. It's being kept in until you've confirmed the Zama port works end to end. You can use it as reference for how the old system used to work, but you should not update or maintain these files.
+*/
 // transactions.ts
 // EIP-712 signed POST /transactions to the Private Token API.
 // Uses CRE HTTPClient to poll for incoming transfers to the platform EOA.

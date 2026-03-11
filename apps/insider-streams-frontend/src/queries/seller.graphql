@@ -13,8 +13,8 @@ query SellerDetail($sellerId: ID!) {
       eventId
       eventTitle
       endTime
-      currentBid
       bidCount
+      currentBid
       status
       predictionOutcome
       scoreChange

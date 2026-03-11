@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import stringify from "fast-json-stable-stringify";
 import {
   CONFIDENTIAL_USDC_DECIMALS,
+  PLATFORM_EOA_ADDRESS,
   PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
 } from "@private-streams/common";
 import {
@@ -37,15 +38,11 @@ import { ConfidentialUsdcFaucetButton } from "@/components/funding/confidential-
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  finalizeFundingWithdrawal,
-  requestFundingWithdrawal,
-} from "@/lib/funding/api";
+import { requestFundingWithdrawal } from "@/lib/funding/api";
 import {
   formatFundingBalance,
   getDisplayFundingBalance,
 } from "@/lib/funding/format-funding-balance";
-import { inferTransferDirection } from "@/lib/funding/transfer-direction";
 import { useFundingSnapshot } from "@/lib/funding/use-funding-snapshot";
 import { findUsdcBalance } from "@/lib/private-token/find-usdc-balance";
 import {
@@ -74,12 +71,6 @@ type WalletActionCenterProps = {
   isRevealing: boolean;
   onReveal: () => void;
 };
-
-function sleep(milliseconds: number) {
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, milliseconds);
-  });
-}
 
 function DiagnosticRow({
   label,
@@ -130,28 +121,6 @@ function CompactMetric({
     </div>
   );
 }
-
-function getTransferLabel(
-  status: string,
-  direction: "deposit" | "withdrawal" | "unknown",
-) {
-  if (direction === "deposit") {
-    if (status === "confirmed") return "Deposited";
-    if (status === "pending") return "Deposit pending";
-    if (status === "failed") return "Deposit failed";
-  }
-
-  if (direction === "withdrawal") {
-    if (status === "requested" || status === "transferring") {
-      return "Pending withdrawal";
-    }
-    if (status === "completed") return "Withdrawn";
-    if (status === "failed") return "Withdrawal failed";
-  }
-
-  return "Activity";
-}
-
 
 export function WalletActionCenter({
   id = "wallet",
@@ -229,24 +198,10 @@ export function WalletActionCenter({
       ),
     [privateBalanceLookup],
   );
-  const latestTransfer = fundingSnapshot.transfers[0];
-  const pendingWithdrawalTransfer = useMemo(
-    () =>
-      fundingSnapshot.transfers.find(
-        (transfer) =>
-          transfer.status === "requested" || transfer.status === "transferring",
-      ) ?? null,
-    [fundingSnapshot.transfers],
-  );
-
-  const availableBalanceRaw = fundingSnapshot.balance?.available_balance
-    ? BigInt(fundingSnapshot.balance.available_balance)
-    : BigInt(0);
-  const lockedBalanceRaw = fundingSnapshot.balance?.locked_balance
-    ? BigInt(fundingSnapshot.balance.locked_balance)
+  const availableBalanceRaw = fundingSnapshot.balance
+    ? BigInt(fundingSnapshot.balance)
     : BigInt(0);
   const displayAvailable = formatFundingBalance(availableBalanceRaw.toString());
-  const displayLocked = formatFundingBalance(lockedBalanceRaw.toString());
   const displayPublicWallet =
     publicWalletBalanceQuery.data !== undefined
       ? formatFundingBalance(publicWalletBalanceQuery.data.toString())
@@ -270,63 +225,6 @@ export function WalletActionCenter({
     }
     return null;
   }, [availableBalanceRaw, parsedWithdrawAmount, withdrawAmount]);
-
-  async function finalizePublicWithdrawal(input: {
-    amount: string;
-    transactionId: string;
-  }) {
-    let withdrawalResponse:
-      | Awaited<ReturnType<typeof privateWithdrawMutation.mutateAsync>>
-      | undefined;
-
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      try {
-        withdrawalResponse = await privateWithdrawMutation.mutateAsync({
-          amount: input.amount,
-        });
-        break;
-      } catch (withdrawError) {
-        const message =
-          withdrawError instanceof Error ? withdrawError.message.toLowerCase() : "";
-        const shouldRetry =
-          message.includes("insufficient") ||
-          message.includes("not find a funded account");
-
-        if (!shouldRetry || attempt === 2) {
-          throw withdrawError;
-        }
-
-        await sleep(1500 * (attempt + 1));
-      }
-    }
-
-    if (!withdrawalResponse) {
-      throw new Error("Failed to submit the public withdrawal.");
-    }
-
-    await redeemWithdrawalTicketMutation.mutateAsync({
-      amount: input.amount,
-      ticket: withdrawalResponse.ticket as Hex,
-    });
-
-    const timestamp = Math.floor(Date.now() / 1000);
-    const payload = {
-      amount: input.amount,
-      transactionId: input.transactionId,
-      withdrawalId: withdrawalResponse.id,
-      ticket: withdrawalResponse.ticket,
-      deadline: withdrawalResponse.deadline,
-      timestamp,
-    };
-    const signature = await signMessageAsync({
-      message: stringify(payload),
-    });
-
-    await finalizeFundingWithdrawal({
-      ...payload,
-      signature,
-    });
-  }
 
   async function handleFund() {
     if (!parsedAmount) return;
@@ -371,7 +269,7 @@ export function WalletActionCenter({
   }
 
   async function handleActivate() {
-    if (!privateUsdcBalance || !fundingSnapshot.platformRecipientAddress) {
+    if (!privateUsdcBalance) {
       return;
     }
 
@@ -379,7 +277,7 @@ export function WalletActionCenter({
     try {
       setStep("activating");
       await privateTransferMutation.mutateAsync({
-        recipient: fundingSnapshot.platformRecipientAddress as Address,
+        recipient: PLATFORM_EOA_ADDRESS as Address,
         amount: privateUsdcBalance.amount,
       });
       await Promise.all([
@@ -420,16 +318,11 @@ export function WalletActionCenter({
       const signature = await signMessageAsync({
         message: stringify(payload),
       });
-      const response = await requestFundingWithdrawal({
+      await requestFundingWithdrawal({
         ...payload,
         signature,
       });
 
-      await fundingSnapshot.refresh();
-      await finalizePublicWithdrawal({
-        amount: parsedWithdrawAmount.toString(),
-        transactionId: response.transactionId,
-      });
       await Promise.all([
         fundingSnapshot.refresh(),
         publicWalletBalanceQuery.refetch(),
@@ -442,37 +335,6 @@ export function WalletActionCenter({
         withdrawError instanceof Error
           ? withdrawError.message
           : "Failed to submit withdrawal.",
-      );
-    } finally {
-      setIsWithdrawing(false);
-    }
-  }
-
-  async function handleFinalizePendingWithdrawal() {
-    if (!pendingWithdrawalTransfer) return;
-
-    setIsWithdrawing(true);
-    setError(null);
-    setWithdrawSuccessMessage(null);
-
-    try {
-      await finalizePublicWithdrawal({
-        amount: pendingWithdrawalTransfer.amount,
-        transactionId: pendingWithdrawalTransfer.transaction_id,
-      });
-      await Promise.all([
-        fundingSnapshot.refresh(),
-        publicWalletBalanceQuery.refetch(),
-        loadPrivateBalances({ forceFresh: true }),
-      ]);
-      setWithdrawSuccessMessage(
-        "Pending withdrawal completed to your public wallet.",
-      );
-    } catch (resumeError) {
-      setError(
-        resumeError instanceof Error
-          ? resumeError.message
-          : "Failed to finalize withdrawal.",
       );
     } finally {
       setIsWithdrawing(false);
@@ -518,13 +380,11 @@ export function WalletActionCenter({
       ? "unavailable"
       : fundingSnapshot.status === "reconciling_transfer"
         ? "reconciling"
-        : pendingWithdrawalTransfer
-          ? "resume_withdrawal"
-          : canWithdraw
-            ? "withdraw"
-            : fundingSnapshot.status === "not_funded_yet"
-              ? "deposit"
-              : "ready";
+        : canWithdraw
+          ? "withdraw"
+          : fundingSnapshot.status === "not_funded_yet"
+            ? "deposit"
+            : "ready";
 
   const actionCopy = {
     unlock: {
@@ -563,13 +423,6 @@ export function WalletActionCenter({
         "Deposit more to increase your bidding power, or withdraw to your public wallet.",
       helper: "Withdrawals require two signatures and one on-chain confirmation.",
     },
-    resume_withdrawal: {
-      badge: "Action needed",
-      title: "Complete your withdrawal",
-      description:
-        "Funds have been released. One more step moves them into your public wallet.",
-      helper: null,
-    },
     ready: {
       badge: "Wallet ready",
       title: "Your wallet",
@@ -592,12 +445,6 @@ export function WalletActionCenter({
     parsedWithdrawAmount && parsedWithdrawAmount <= availableBalanceRaw
       ? formatFundingBalance((availableBalanceRaw - parsedWithdrawAmount).toString())
       : displayAvailable;
-
-  useEffect(() => {
-    if (actionState === "resume_withdrawal") {
-      setWalletMode("withdraw");
-    }
-  }, [actionState]);
 
   const resetActionInputs = () => {
     setAmount("");
@@ -687,9 +534,8 @@ export function WalletActionCenter({
           </div>
 
           <div className="space-y-2">
-            <div className="grid gap-3 md:grid-cols-3">
-              <CompactMetric label="Available" value={displayAvailable} accent />
-              <CompactMetric label="Locked in bids" value={displayLocked} />
+            <div className="grid gap-3 md:grid-cols-2">
+              <CompactMetric label="Bidding balance" value={displayAvailable} accent />
               <CompactMetric label="Public wallet" value={displayPublicWallet} />
             </div>
             {isRevealed && !hasDetectedPrivateBalance ? (
@@ -790,38 +636,6 @@ export function WalletActionCenter({
                 </div>
               ) : null}
 
-              {actionState === "resume_withdrawal" ? (
-                <div className="flex flex-col gap-4 rounded-[calc(var(--radius)-2px)] border border-accent/30 bg-accent/6 p-5 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium text-foreground">
-                      Finish your pending withdrawal
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {pendingWithdrawalTransfer
-                        ? formatFundingBalance(pendingWithdrawalTransfer.amount)
-                        : "Your funds"}{" "}
-                      are ready to move to your public wallet.
-                    </p>
-                  </div>
-                  <Button
-                    className="w-full sm:w-auto"
-                    disabled={isWithdrawing}
-                    onClick={() => {
-                      void handleFinalizePendingWithdrawal();
-                    }}
-                  >
-                    {isWithdrawing ? (
-                      <>
-                        <Loader2 className="size-4 animate-spin" />
-                        Finalizing...
-                      </>
-                    ) : (
-                      "Complete withdrawal"
-                    )}
-                  </Button>
-                </div>
-              ) : null}
-
               <Tabs
                 value={walletMode}
                 onValueChange={(value) =>
@@ -860,7 +674,6 @@ export function WalletActionCenter({
                         className="w-full sm:w-auto"
                         disabled={
                           !privateUsdcBalance ||
-                          !fundingSnapshot.platformRecipientAddress ||
                           step === "activating" ||
                           isWithdrawing
                         }
@@ -1123,41 +936,6 @@ export function WalletActionCenter({
         <div className="space-y-5 border-t border-border/70 px-5 py-4">
           <div className="space-y-4">
             <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground/70">
-              Recent activity
-            </p>
-            {fundingSnapshot.transfers.length === 0 ? (
-              <p className="text-sm leading-7 text-muted-foreground">
-                No wallet activity has been recorded for this address yet.
-              </p>
-            ) : (
-              fundingSnapshot.transfers.slice(0, 4).map((transfer) => {
-                const direction = inferTransferDirection(transfer);
-                return (
-                  <div
-                    key={transfer.id}
-                    className="rounded-[calc(var(--radius)-6px)] border border-border/70 bg-card/80 p-4"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-medium text-foreground">
-                          {getTransferLabel(transfer.status, direction)}
-                        </p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {new Date(transfer.created_at).toLocaleString()}
-                        </p>
-                      </div>
-                      <Badge variant="outline">
-                        {formatFundingBalance(transfer.amount)}
-                      </Badge>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-
-          <div className="space-y-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground/70">
               Wallet details
             </p>
             <DiagnosticRow
@@ -1188,11 +966,7 @@ export function WalletActionCenter({
             />
             <DiagnosticRow
               label="Platform recipient"
-              value={fundingSnapshot.platformRecipientAddress ?? "Unavailable"}
-            />
-            <DiagnosticRow
-              label="Latest transfer"
-              value={latestTransfer ? latestTransfer.transaction_id : "Unavailable"}
+              value={PLATFORM_EOA_ADDRESS}
             />
             {balanceCheckEmpty ? (
               <p className="text-sm text-muted-foreground">

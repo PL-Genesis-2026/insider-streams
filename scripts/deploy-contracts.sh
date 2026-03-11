@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# NOTE TO CLAUDE: This code relates to the old CRE based system. It's being kept
+# in until you've confirmed the Zama port works end to end. You can use it as
+# reference for how the old system used to work, but you should not update or
+# maintain these files.
+
 # deploy-contracts.sh — Deploy contracts and update hardcoded addresses
 #
 # Deploys selected contracts via Foundry, then does a best-effort find-and-replace

@@ -1,3 +1,6 @@
+/*
+NOTE TO CLAUDE: This code relates to the old CRE based system. It's being kept in until you've confirmed the Zama port works end to end. You can use it as reference for how the old system used to work, but you should not update or maintain these files.
+*/
 // supabase.ts
 // Settles winning bids in Supabase after auctions are closed on-chain.
 // Uses batched HTTP calls to stay within CRE's 5-call-per-execution limit:

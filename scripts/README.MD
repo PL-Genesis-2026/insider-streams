@@ -27,8 +27,6 @@ TODO WE NEED TO RENAME SIMPLEMARKET TO SOMETHING ELSE SINCE ITS NOW SUBSTANTIALL
 
 codegen.ts: Generates graphql-request types + SDK so scripts can do typed queries to the subgraph.
 
-demo-query.ts & demo.graphql: Demo query to verify graphql-codegen setup is working for use as initial reference code. Delete these once any script is added that uses the subgraph
-
 `pnpm frontend-api`: CLI for calling `apps/insider-streams-frontend` Next API routes outside the browser. Supports `events`, `secrets`, `snapshot`, `reconcile`, `private-balances`, `private-transfer`, `faucet`, `bid`, and `create-auction`.
 
 Examples:

@@ -222,12 +222,16 @@ Private keys are in `.env` files (never committed).
 
 ## Subgraph (The Graph)
 
-- **Subgraph name**: `insider-streams2` (Subgraph Studio)
-- **Studio URL** (codegen/testing): `https://api.studio.thegraph.com/query/1743303/insider-streams-2/version/latest`
+### `insider-streams-zama` (FHE contract — active)
+- **Subgraph name**: `insider-streams-zama` (Subgraph Studio)
+- **Studio URL** (codegen/testing): `https://api.studio.thegraph.com/query/1743303/insider-streams-zama/version/latest`
+- **Contract**: `FHESecretMarketplace` at `0x0056F94eCC59B918a225B433401EE5121506171B`
+- **Deploy**: `cd subgraphs/secrets-marketplace && npx graph deploy insider-streams-zama`
+- Version tracked in `subgraphs/secrets-marketplace/package.json`
+
+### `insider-streams-2` (old CRE contract — legacy, do not modify)
+- **Studio URL**: `https://api.studio.thegraph.com/query/1743303/insider-streams-2/version/latest`
 - **Production URL**: `https://gateway.thegraph.com/api/subgraphs/id/2vVUkMCH5m48s8Qj1ChgR2z3c98vAX3raBoJoYZ9RrBW`
-- **Deploy**: `npx graph auth --studio <KEY>` then `./scripts/deploy-subgraph.sh` (prompts for contract address, auto-fetches start block)
-- **Deploy with new address**: `./scripts/deploy-subgraph.sh --address 0x...` (non-interactive)
-- Version tracked in `subgraphs/secrets-marketplace/package.json`; bumped automatically by `deploy-subgraph.sh` after successful deploy
 
 ## GraphQL Codegen
 
