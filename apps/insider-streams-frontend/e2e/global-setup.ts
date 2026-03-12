@@ -110,7 +110,7 @@ export default async function globalSetup() {
       const event = await publicClient.readContract({
         address: EXAMPLE_PREDICTION_MARKET_ADDRESS as Address,
         abi: examplePredictionMarketAbi,
-        functionName: "getEvent",
+        functionName: "getMarketEvent",
         args: [BigInt(i)],
       });
       const endTime = Number((event as any)[1] ?? (event as any).endTime);
