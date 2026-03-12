@@ -10,16 +10,8 @@
     "codegen:insider-streams": "turbo run codegen --filter=insider-streams-frontend",
     "wagmi": "turbo run wagmi",
     "e2e": "turbo run e2e",
-    "dev:prediction-market": "turbo run dev --filter=prediction-market-frontend",
     "dev:insider-streams": "turbo run dev --filter=insider-streams-frontend",
-    "build:prediction-market": "turbo run build --filter=prediction-market-frontend",
-    "build:insider-streams": "turbo run build --filter=insider-streams-frontend",
-    "frontend-api": "pnpm --dir scripts run frontend-api",
-    "private-token-api": "pnpm --dir scripts run private-token-api",
-    "watch": "pnpm --dir apps/event-watcher run start",
-    "build:contracts": "cd contracts && forge build --via-ir --skip SetupAll DeployPolicyEngine",
-    "test:contracts": "cd contracts && forge test --via-ir --skip SetupAll DeployPolicyEngine",
-    "generate:supabase-types": "./scripts/generate-supabase-types.sh"
+    "build:insider-streams": "turbo run build --filter=insider-streams-frontend"
   },
   "devDependencies": {
     "turbo": "^2.8.14"
