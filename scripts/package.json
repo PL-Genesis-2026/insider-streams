@@ -7,10 +7,6 @@
     "build": "tsc --noEmit",
     "e2e": "tsx e2e_tests/secret-marketplace-e2e.ts",
     "e2e:secret-marketplace": "tsx e2e_tests/secret-marketplace-e2e.ts",
-    "e2e:secret-marketplace-auction-closer": "tsx e2e_tests/secret-marketplace-auction-closer-e2e.ts",
-    "e2e:external-prediction-market-settler": "tsx e2e_tests/simple-market-e2e.ts",
-    "e2e:external-marketplace-settlement-resolved-handler": "tsx e2e_tests/external-marketplace-settlement-resolved-handler-e2e.ts",
-    "e2e:auction-cancelled-handler": "tsx e2e_tests/auction-cancelled-handler-e2e.ts",
     "codegen": "graphql-codegen --config codegen.ts",
     "create-events": "tsx --env-file=.env create-events.ts",
     "spawn-auctions": "tsx --env-file=.env spawn-auctions.ts",
@@ -20,7 +16,6 @@
   },
   "dependencies": {
     "@private-streams/common": "workspace:*",
-    "@supabase/supabase-js": "^2.98.0",
     "fast-json-stable-stringify": "^2.1.0",
     "graphql": "^16.13.1",
     "graphql-request": "^7.4.0",

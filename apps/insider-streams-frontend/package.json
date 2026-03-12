@@ -20,7 +20,6 @@
     "@private-streams/common": "workspace:*",
     "@reown/appkit": "^1.8.19",
     "@reown/appkit-adapter-wagmi": "^1.8.19",
-    "@supabase/supabase-js": "^2.98.0",
     "@t3-oss/env-nextjs": "^0.13.10",
     "@tanstack/react-query": "^5.90.21",
     "class-variance-authority": "^0.7.1",
