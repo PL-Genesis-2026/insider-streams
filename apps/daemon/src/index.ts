@@ -16,6 +16,7 @@ import { startSettler } from "./settler.js";
 import { startAuctionCloser } from "./auction-closer.js";
 import { startReputationResolver } from "./reputation-resolver.js";
 import { startApi } from "./api.js";
+import { startDemoPopulator } from "./demo-populator.js";
 
 async function main() {
   console.log("=== Private Streams Daemon ===");
@@ -39,6 +40,13 @@ async function main() {
 
   // Start reputation resolver
   services.push(startReputationResolver());
+
+  // Start demo populator if enabled
+  if (config.demoMode) {
+    services.push(startDemoPopulator());
+  } else {
+    console.log("[daemon] Demo populator disabled — set DEMO_MODE=true to enable");
+  }
 
   // Always start HTTP API
   startApi();
