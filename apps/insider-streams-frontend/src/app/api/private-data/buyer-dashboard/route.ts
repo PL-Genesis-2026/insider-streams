@@ -9,7 +9,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const res = await proxyToDaemon("/dashboard", body);
-  const data = await res.json();
-  return NextResponse.json(data, { status: res.status });
+  try {
+    const res = await proxyToDaemon("/dashboard", body);
+    const data = await res.json();
+    return NextResponse.json(data, { status: res.status });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[api/buyer-dashboard] proxy error:", msg);
+    return NextResponse.json({ error: `Daemon unreachable: ${msg}` }, { status: 502 });
+  }
 }

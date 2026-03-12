@@ -35,6 +35,15 @@ export function startApi(): void {
   const app = express();
   app.use(express.json());
 
+  // Request logging
+  app.use((req: Request, res: Response, next) => {
+    const start = Date.now();
+    res.on("finish", () => {
+      console.log(`[api] ${req.method} ${req.path} → ${res.statusCode} (${Date.now() - start}ms)`);
+    });
+    next();
+  });
+
   // CORS for development (frontend on :3000, daemon on :3001)
   app.use((_req: Request, res: Response, next) => {
     res.header("Access-Control-Allow-Origin", "*");
@@ -103,6 +112,7 @@ export function startApi(): void {
 
       // Read on-chain encrypted balance and decrypt via Zama relayer
       const balance = await marketplace.getOnChainBalance(user.userId);
+      console.log(`[api] Balance for ${user.userId}: ${balance}`);
       res.json({ userId: user.userId, balance: balance.toString() });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -319,16 +329,27 @@ export function startApi(): void {
         return;
       }
 
-      // Submit on-chain directly (async — like /bid)
-      let withdrawalId = `wd-${Date.now()}`;
-      marketplace
-        .withdrawFor(user.userId, parsedAmount)
-        .then((txHash) => {
-          console.log(`[api] Withdrawal ${withdrawalId} confirmed on-chain: ${txHash}`);
-        })
-        .catch((err) => {
-          console.error(`[api] Withdrawal ${withdrawalId} on-chain failed:`, err);
+      // Step 1: withdrawFor moves cUSDC from marketplace → admin wallet (async)
+      // Step 2: mintPlaintext sends cUSDC to user's wallet
+      const withdrawalId = `wd-${Date.now()}`;
+      (async () => {
+        const txHash = await marketplace.withdrawFor(user.userId, parsedAmount);
+        console.log(`[api] Withdrawal ${withdrawalId} step 1 (marketplace→admin) confirmed: ${txHash}`);
+
+        // Send cUSDC from admin to user's wallet
+        await withAdminLock(async () => {
+          const sendHash = await getWalletClient().writeContract({
+            address: config.confidentialUsdcAddress as `0x${string}`,
+            abi: fheConfidentialUsdcAbi,
+            functionName: "mintPlaintext",
+            args: [userAddress as `0x${string}`, parsedAmount],
+          });
+          await getPublicClient().waitForTransactionReceipt({ hash: sendHash });
+          console.log(`[api] Withdrawal ${withdrawalId} step 2 (admin→user wallet) confirmed: ${sendHash}`);
         });
+      })().catch((err) => {
+        console.error(`[api] Withdrawal ${withdrawalId} failed:`, err);
+      });
 
       res.json({
         withdrawalId,
@@ -374,7 +395,8 @@ export function startApi(): void {
 
       const user = getOrCreateUser(userAddress);
 
-      // Submit on-chain asynchronously
+      // User must have already transferred cUSDC to admin EOA on-chain.
+      // depositFor transfers from admin → marketplace contract and credits user's balance.
       marketplace
         .depositFor(user.userId, parsedAmount)
         .then((txHash) => {
@@ -563,7 +585,7 @@ export function startApi(): void {
         return;
       }
 
-      const mintAmount = BigInt(1000) * BigInt(10 ** 6); // 1000 cUSDC (6 decimals)
+      const mintAmount = BigInt(25) * BigInt(10 ** 6); // 25 cUSDC (6 decimals)
       const txHash = await withAdminLock(async () => {
         const hash = await getWalletClient().writeContract({
           address: config.confidentialUsdcAddress as `0x${string}`,

@@ -14,22 +14,11 @@
  */
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import { CONFIDENTIAL_USDC_ADDRESS } from "@private-streams/common";
+import { CONFIDENTIAL_USDC_ADDRESS, fheConfidentialUsdcAbi } from "@private-streams/common";
 import { zeroHash } from "viem";
 import { useAccount, useReadContract } from "wagmi";
 import { useFhevm } from "./use-fhevm";
 import { useWagmiEthers } from "./use-wagmi-ethers";
-
-// Minimal ABI for the one function we need — avoids importing the full ABI
-const confidentialBalanceOfAbi = [
-  {
-    type: "function",
-    name: "confidentialBalanceOf",
-    inputs: [{ name: "account", type: "address", internalType: "address" }],
-    outputs: [{ name: "", type: "uint256", internalType: "euint64" }],
-    stateMutability: "view",
-  },
-] as const;
 
 type DecryptState = "idle" | "decrypting" | "done" | "error";
 
@@ -46,7 +35,7 @@ export function useConfidentialBalance() {
   // Step 1: Read the encrypted balance handle from the contract
   const balanceQuery = useReadContract({
     address: CONFIDENTIAL_USDC_ADDRESS as `0x${string}`,
-    abi: confidentialBalanceOfAbi,
+    abi: fheConfidentialUsdcAbi,
     functionName: "confidentialBalanceOf",
     args: address ? [address] : undefined,
     query: {
@@ -56,8 +45,9 @@ export function useConfidentialBalance() {
   });
 
   const balanceHandle = useMemo(() => {
-    const raw = balanceQuery.data as string | undefined;
-    if (!raw || raw === "0x" || raw === zeroHash || /^0x0*$/.test(raw)) return null;
+    // ABI type is bytes32 → wagmi returns a 0x-prefixed hex string
+    const raw = balanceQuery.data as `0x${string}` | undefined;
+    if (!raw || raw === zeroHash) return null;
     return raw;
   }, [balanceQuery.data]);
 

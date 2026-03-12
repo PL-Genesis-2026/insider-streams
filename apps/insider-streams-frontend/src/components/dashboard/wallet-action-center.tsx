@@ -163,9 +163,18 @@ export function WalletActionCenter({
 
     try {
       await depositMutation.mutateAsync(amount.trim());
-      await fundingSnapshot.refresh();
       setAmount("");
-      setSuccessMessage("Deposit submitted. Your balance will update shortly.");
+      setSuccessMessage(
+        "Deposit complete! Your bidding balance will update shortly.",
+      );
+      // The daemon processes the marketplace deposit asynchronously.
+      // Poll for the updated balance.
+      let attempts = 0;
+      const poll = setInterval(async () => {
+        attempts++;
+        await fundingSnapshot.refresh();
+        if (attempts >= 8) clearInterval(poll); // stop after ~80s
+      }, 10_000);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to submit deposit.",
@@ -188,7 +197,7 @@ export function WalletActionCenter({
       await withdrawMutation.mutateAsync(withdrawAmount.trim());
       await fundingSnapshot.refresh();
       setWithdrawAmount("");
-      setSuccessMessage("Withdrawal submitted. Funds are being returned to your balance.");
+      setSuccessMessage("Withdrawal submitted. cUSDC will be sent to your wallet shortly.");
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to submit withdrawal.",
@@ -488,12 +497,13 @@ export function WalletActionCenter({
                         How it works
                       </p>
                       <ol className="mt-3 list-inside list-decimal space-y-2 text-sm leading-6 text-muted-foreground">
-                        <li>Enter a USDC amount</li>
-                        <li>Sign the deposit request</li>
+                        <li>Enter a cUSDC amount</li>
+                        <li>Approve the encrypted transfer (on-chain tx)</li>
+                        <li>Sign the deposit confirmation</li>
                         <li>Funds are added to your bidding balance</li>
                       </ol>
                       <p className="mt-3 text-xs leading-5 text-muted-foreground/60">
-                        One wallet signature. No on-chain gas required.
+                        Requires an on-chain transaction (Sepolia gas) and a wallet signature.
                       </p>
                     </div>
                   </div>
