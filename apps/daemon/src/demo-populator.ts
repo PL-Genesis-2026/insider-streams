@@ -41,7 +41,7 @@ import {
 import { config } from "./config.js";
 import { getPublicClient, getWalletClient, getAccount } from "./provider.js";
 import * as marketplace from "./marketplace.js";
-import { getOrCreateUser, recordBid, getActiveBid, getActiveBidPreviousBidderId, insertSecret } from "./db.js";
+import { getOrCreateUser, recordBid, insertSecret } from "./db.js";
 import { sendNotification } from "./notify.js";
 
 // ─── Admin Wallet Mutex ──────────────────────────────────────────────────────
@@ -546,6 +546,25 @@ async function runPlaceBids(
     const user = getOrCreateUser(ta.address);
 
     try {
+      const auctionIdNum = Number(auction.auctionId);
+
+      // Read current bid state from on-chain (source of truth)
+      let currentBidPlaintext = 0n;
+      let previousBidderId = "";
+      try {
+        const mp = marketplace.getMarketplace();
+        const auctionData = await mp.read.getAuction([BigInt(auctionIdNum)]);
+        currentBidPlaintext = BigInt(auctionData[9]); // currentBidPlaintext (uint64)
+        previousBidderId = auctionData[3] || "";       // currentBidderId
+      } catch {
+        // Auction may not exist or read failed — use defaults
+      }
+
+      // Bid = current highest + random increment (always exceeds current)
+      const range = BID_MAX_INCREMENT - BID_MIN_INCREMENT;
+      const increment = BID_MIN_INCREMENT + BigInt(Math.floor(Math.random() * Number(range)));
+      const bidAmount = currentBidPlaintext + increment;
+
       // Check balance — use on-chain decrypt
       let balance: bigint;
       try {
@@ -554,11 +573,10 @@ async function runPlaceBids(
         balance = 0n;
       }
 
-      if (balance < BID_LOW_BALANCE) {
-        // Mint MockUSDC to admin, then deposit for user
-        console.log(`[demo]   ${ta.label} balance ${balance} < threshold, topping up`);
+      if (balance < bidAmount) {
+        // Top up: mint MockUSDC to admin, then deposit for user
+        console.log(`[demo]   ${ta.label} balance ${balance} < bid ${bidAmount}, topping up`);
         try {
-          // Mint MockUSDC
           const mintHash = await getWalletClient().writeContract({
             address: MOCK_USDC_ADDRESS as Address,
             abi: mockUsdcAbi,
@@ -567,28 +585,18 @@ async function runPlaceBids(
           });
           await waitForTx(mintHash, `Mint USDC for ${ta.label}`);
 
-          // Deposit for user
           await marketplace.depositFor(user.userId, BID_DEPOSIT_AMOUNT);
-          balance = BID_DEPOSIT_AMOUNT;
+          balance += BID_DEPOSIT_AMOUNT;
         } catch (err) {
           console.warn(`[demo]   Top-up failed for ${ta.label}: ${err instanceof Error ? err.message : err}`);
           continue;
         }
       }
 
-      if (balance < BID_MIN_INCREMENT) {
-        console.log(`[demo]   Skipping auction ${auction.auctionId} — insufficient balance`);
+      if (balance < bidAmount) {
+        console.log(`[demo]   Skipping auction ${auction.auctionId} — balance ${balance} still < bid ${bidAmount}`);
         continue;
       }
-
-      // Random bid amount
-      const range = BID_MAX_INCREMENT - BID_MIN_INCREMENT;
-      const bidAmount = BID_MIN_INCREMENT + BigInt(Math.floor(Math.random() * Number(range)));
-
-      // Get previous bidder for the outbid flow
-      const auctionIdNum = Number(auction.auctionId);
-      const activeBid = getActiveBid(auctionIdNum);
-      const previousBidderId = activeBid?.bidderId ?? "";
 
       console.log(`[demo]   Bidding ${formatUnits(bidAmount, USDC_DECIMALS)} USDC on auction ${auction.auctionId} from ${ta.label}`);
 
