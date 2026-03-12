@@ -204,7 +204,7 @@ export async function startSettler(): Promise<void> {
   console.log(`[settler] Watching SettlementRequested on ${config.predictionMarketAddress}`);
   console.log(`[settler] Settler address: ${getAccount().address}`);
 
-  // Watch for new events as they arrive
+  // Watch for new SettlementRequested events
   publicClient.watchContractEvent({
     address: pmAddress,
     abi: examplePredictionMarketAbi,
@@ -220,6 +220,34 @@ export async function startSettler(): Promise<void> {
       }
     },
   });
+
+  // Watch for EventAdminClosed — immediately request settlement so the event
+  // enters the pipeline without waiting for the demo-populator's next cycle.
+  publicClient.watchContractEvent({
+    address: pmAddress,
+    abi: examplePredictionMarketAbi,
+    eventName: "EventAdminClosed",
+    onLogs: (logs) => {
+      for (const log of logs) {
+        const { eventId } = log.args as { eventId: bigint };
+        console.log(`[settler] EventAdminClosed: event ${eventId} — requesting settlement`);
+        withAdminLock(async () => {
+          const hash = await getWalletClient().writeContract({
+            address: pmAddress,
+            abi: examplePredictionMarketAbi,
+            functionName: "requestSettlement",
+            args: [eventId],
+          });
+          await publicClient.waitForTransactionReceipt({ hash });
+          console.log(`[settler] Settlement requested for admin-closed event ${eventId}`);
+        }).catch((err) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(`[settler] Failed to request settlement for event ${eventId}:`, msg);
+        });
+      }
+    },
+  });
+  console.log("[settler] Watching for EventAdminClosed events");
 
   // Catch up on any SettlementRequested events missed while the daemon was down.
   // The contract has no getter for these, so scan all events for status=1.
