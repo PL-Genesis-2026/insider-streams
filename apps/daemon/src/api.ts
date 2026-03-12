@@ -75,8 +75,9 @@ export function startApi(): void {
         created: user.created,
       });
     } catch (err) {
-      console.error("[api] POST /user error:", err);
-      res.status(500).json({ error: "Internal server error" });
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[api] POST /user error:", msg);
+      res.status(500).json({ error: msg });
     }
   });
 
@@ -104,8 +105,9 @@ export function startApi(): void {
       const balance = await marketplace.getOnChainBalance(user.userId);
       res.json({ userId: user.userId, balance: balance.toString() });
     } catch (err) {
-      console.error("[api] POST /balance error:", err);
-      res.status(500).json({ error: "Internal server error" });
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[api] POST /balance error:", msg);
+      res.status(500).json({ error: msg });
     }
   });
 
@@ -176,8 +178,9 @@ export function startApi(): void {
         status: "recorded",
       });
     } catch (err) {
-      console.error("[api] POST /bid error:", err);
-      res.status(500).json({ error: "Internal server error" });
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[api] POST /bid error:", msg);
+      res.status(500).json({ error: msg });
     }
   });
 
@@ -277,8 +280,9 @@ export function startApi(): void {
         code: "MISSING_FIELDS",
       });
     } catch (err) {
-      console.error("[api] POST /create-auction error:", err);
-      res.status(500).json({ error: "Internal server error" });
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[api] POST /create-auction error:", msg);
+      res.status(500).json({ error: msg });
     }
   });
 
@@ -333,8 +337,9 @@ export function startApi(): void {
         status: "pending",
       });
     } catch (err) {
-      console.error("[api] POST /withdraw error:", err);
-      res.status(500).json({ error: "Internal server error" });
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[api] POST /withdraw error:", msg);
+      res.status(500).json({ error: msg });
     }
   });
 
@@ -385,8 +390,9 @@ export function startApi(): void {
         status: "pending",
       });
     } catch (err) {
-      console.error("[api] POST /deposit error:", err);
-      res.status(500).json({ error: "Internal server error" });
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[api] POST /deposit error:", msg);
+      res.status(500).json({ error: msg });
     }
   });
 
@@ -413,8 +419,9 @@ export function startApi(): void {
       const bids = getBidsByUserId(user.userId);
       res.json({ bids });
     } catch (err) {
-      console.error("[api] POST /bids error:", err);
-      res.status(500).json({ error: "Internal server error" });
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[api] POST /bids error:", msg);
+      res.status(500).json({ error: msg });
     }
   });
 
@@ -446,8 +453,9 @@ export function startApi(): void {
         reputationScore: seller.reputationScore.toString(),
       });
     } catch (err) {
-      console.error("[api] POST /seller error:", err);
-      res.status(500).json({ error: "Internal server error" });
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[api] POST /seller error:", msg);
+      res.status(500).json({ error: msg });
     }
   });
 
@@ -501,8 +509,9 @@ export function startApi(): void {
 
       res.json({ secrets: results });
     } catch (err) {
-      console.error("[api] POST /secrets error:", err);
-      res.status(500).json({ error: "Internal server error" });
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[api] POST /secrets error:", msg);
+      res.status(500).json({ error: msg });
     }
   });
 
@@ -529,8 +538,9 @@ export function startApi(): void {
       const bids = getBidsByUserId(user.userId);
       res.json({ userId: user.userId, bids });
     } catch (err) {
-      console.error("[api] POST /dashboard error:", err);
-      res.status(500).json({ error: "Internal server error" });
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[api] POST /dashboard error:", msg);
+      res.status(500).json({ error: msg });
     }
   });
 
@@ -571,8 +581,9 @@ export function startApi(): void {
         address: result.payload.userAddress,
       });
     } catch (err) {
-      console.error("[api] POST /faucet error:", err);
-      res.status(500).json({ error: "Internal server error" });
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[api] POST /faucet error:", msg);
+      res.status(500).json({ error: `Faucet mint failed: ${msg}` });
     }
   });
 
