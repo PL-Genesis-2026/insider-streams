@@ -16,6 +16,15 @@ export const TEST_ACCOUNTS = {
   // TEST_ACCOUNT_3 — create-auction tests
   createAuction:
     "0x7a8ec3e637ff10271dc9521b8e0f8e19c0f195f21012f4a13b2080ddbaa3787e" as const,
+  // TEST_ACCOUNT_4 — bid tests (bidder 1)
+  bidder1:
+    "0x732d878d1d4b8bb7c61eab6f78f74b1f163aa2c59c29f181049ae3209bd8deb4" as const,
+  // TEST_ACCOUNT_5 — outbid tests (bidder 2)
+  bidder2:
+    "0xf319763080f34fc16dcc15412070dfcf29bea92c2cbf549fc8a6e87412602573" as const,
+  // TEST_ACCOUNT_6 — cancel/close viewer
+  viewer:
+    "0xf1dcd38ac8cbe9a2d622d2af8fde9397fc7995f48bdc6e18aceaaab7e2248072" as const,
 };
 
 type TestFixtures = {
