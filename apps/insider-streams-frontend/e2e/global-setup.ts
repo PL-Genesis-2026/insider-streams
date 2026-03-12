@@ -1,11 +1,12 @@
 /**
  * Playwright globalSetup — runs once before all tests.
  *
- * Creates a short-duration prediction market event on Sepolia so the
- * create-auction test has an event to select. Requires OWNER_PK env var
- * (the admin/deployer wallet).
+ * 1. Creates a prediction market event on Sepolia (or finds an existing one)
+ * 2. Creates test auctions for bid/outbid and close tests
+ * 3. Deposits funds for bidder test accounts
+ * 4. Writes state to .test-state.json for tests to read
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   createPublicClient,
@@ -21,6 +22,13 @@ import {
   mockUsdcAbi,
   examplePredictionMarketAbi,
 } from "@private-streams/common";
+import { TEST_ACCOUNTS } from "./fixtures";
+import {
+  createTestAuction,
+  depositFunds,
+  waitForBalance,
+  signedDaemonRequest,
+} from "./helpers";
 
 // Load env vars from the repo root .env (contains OWNER_PK, RPC_URL)
 function loadEnvFile(path: string) {
@@ -48,14 +56,28 @@ for (const root of [worktreeRoot, mainRepoRoot]) {
   loadEnvFile(resolve(root, "scripts/.env"));
 }
 
-const RPC_URL = process.env.RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com";
+const RPC_URL =
+  process.env.RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com";
+
+export type TestState = {
+  eventId: string;
+  eventTitle: string;
+  bidAuctionId: string;
+  closeAuctionId: string;
+};
+
+const STATE_PATH = resolve(__dirname, ".test-state.json");
+
+export function readTestState(): TestState {
+  return JSON.parse(readFileSync(STATE_PATH, "utf-8"));
+}
 
 export default async function globalSetup() {
   const ownerPk = process.env.OWNER_PK;
   if (!ownerPk) {
     console.warn(
-      "[global-setup] OWNER_PK not set — skipping event creation. " +
-        "Create-auction tests will skip if no events exist on-chain.",
+      "[global-setup] OWNER_PK not set — skipping setup. " +
+        "Auction lifecycle tests will skip.",
     );
     return;
   }
@@ -72,15 +94,17 @@ export default async function globalSetup() {
 
   console.log(`[global-setup] Admin wallet: ${account.address}`);
 
-  // Check if there are already open events we can use
+  // ── Step 1: Find or create a prediction market event ──────────────────
+
   const nextEventId = await publicClient.readContract({
     address: EXAMPLE_PREDICTION_MARKET_ADDRESS as Address,
     abi: examplePredictionMarketAbi,
     functionName: "nextEventId",
   });
 
-  // Look for an existing non-settled, non-expired event
-  let hasUsableEvent = false;
+  let usableEventId: string | null = null;
+  let usableEventTitle = "";
+
   for (let i = 0; i < Number(nextEventId); i++) {
     try {
       const event = await publicClient.readContract({
@@ -89,90 +113,209 @@ export default async function globalSetup() {
         functionName: "getEvent",
         args: [BigInt(i)],
       });
-      // event is a tuple: [question, endTime, settled, outcome, ...]
       const endTime = Number((event as any)[1] ?? (event as any).endTime);
       const settled = (event as any)[2] ?? (event as any).settled;
-      if (!settled && endTime > Math.floor(Date.now() / 1000) + 300) {
-        console.log(`[global-setup] Found usable event #${i}, skipping creation`);
-        hasUsableEvent = true;
+      const question = (event as any)[0] ?? (event as any).question;
+      if (!settled && endTime > Math.floor(Date.now() / 1000) + 600) {
+        console.log(
+          `[global-setup] Found usable event #${i}, skipping creation`,
+        );
+        usableEventId = String(i);
+        usableEventTitle = String(question);
         break;
       }
     } catch {
-      // Event may not be readable, skip
+      // skip
     }
   }
 
-  if (hasUsableEvent) return;
+  if (!usableEventId) {
+    console.log("[global-setup] No usable events found, creating one...");
 
-  console.log("[global-setup] No usable events found, creating one...");
+    const initialLiquidity = (await publicClient.readContract({
+      address: EXAMPLE_PREDICTION_MARKET_ADDRESS as Address,
+      abi: examplePredictionMarketAbi,
+      functionName: "INITIAL_LIQUIDITY",
+    })) as bigint;
 
-  // Read INITIAL_LIQUIDITY from the contract
-  const initialLiquidity = await publicClient.readContract({
-    address: EXAMPLE_PREDICTION_MARKET_ADDRESS as Address,
-    abi: examplePredictionMarketAbi,
-    functionName: "INITIAL_LIQUIDITY",
-  });
-  console.log(`[global-setup] INITIAL_LIQUIDITY = ${initialLiquidity}`);
-
-  // Check admin MockUSDC balance
-  const balance = await publicClient.readContract({
-    address: MOCK_USDC_ADDRESS as Address,
-    abi: mockUsdcAbi,
-    functionName: "balanceOf",
-    args: [account.address],
-  });
-
-  // Mint MockUSDC if needed (admin is the owner/minter)
-  if (BigInt(balance as bigint) < BigInt(initialLiquidity as bigint)) {
-    const mintAmount = BigInt(initialLiquidity as bigint) * 10n; // Mint 10x so we have surplus
-    console.log(`[global-setup] Minting ${mintAmount} MockUSDC to admin...`);
-
-    const mintHash = await walletClient.writeContract({
+    const balance = (await publicClient.readContract({
       address: MOCK_USDC_ADDRESS as Address,
       abi: mockUsdcAbi,
-      functionName: "mint",
-      args: [account.address, mintAmount],
-    });
-    console.log(`[global-setup] Mint tx: ${mintHash}`);
-    await publicClient.waitForTransactionReceipt({ hash: mintHash });
-  }
+      functionName: "balanceOf",
+      args: [account.address],
+    })) as bigint;
 
-  // Approve ExamplePredictionMarket to spend MockUSDC
-  const allowance = await publicClient.readContract({
-    address: MOCK_USDC_ADDRESS as Address,
-    abi: mockUsdcAbi,
-    functionName: "allowance",
-    args: [account.address, EXAMPLE_PREDICTION_MARKET_ADDRESS as Address],
-  });
+    if (balance < initialLiquidity) {
+      const mintAmount = initialLiquidity * 10n;
+      console.log(`[global-setup] Minting ${mintAmount} MockUSDC to admin...`);
+      const mintHash = await walletClient.writeContract({
+        address: MOCK_USDC_ADDRESS as Address,
+        abi: mockUsdcAbi,
+        functionName: "mint",
+        args: [account.address, mintAmount],
+      });
+      await publicClient.waitForTransactionReceipt({ hash: mintHash });
+    }
 
-  if (BigInt(allowance as bigint) < BigInt(initialLiquidity as bigint)) {
-    console.log("[global-setup] Approving ExamplePredictionMarket for MockUSDC...");
-    const approveHash = await walletClient.writeContract({
+    const allowance = (await publicClient.readContract({
       address: MOCK_USDC_ADDRESS as Address,
       abi: mockUsdcAbi,
-      functionName: "approve",
-      args: [
-        EXAMPLE_PREDICTION_MARKET_ADDRESS as Address,
-        BigInt(initialLiquidity as bigint) * 100n,
-      ],
+      functionName: "allowance",
+      args: [account.address, EXAMPLE_PREDICTION_MARKET_ADDRESS as Address],
+    })) as bigint;
+
+    if (allowance < initialLiquidity) {
+      console.log(
+        "[global-setup] Approving ExamplePredictionMarket for MockUSDC...",
+      );
+      const approveHash = await walletClient.writeContract({
+        address: MOCK_USDC_ADDRESS as Address,
+        abi: mockUsdcAbi,
+        functionName: "approve",
+        args: [
+          EXAMPLE_PREDICTION_MARKET_ADDRESS as Address,
+          initialLiquidity * 100n,
+        ],
+      });
+      await publicClient.waitForTransactionReceipt({ hash: approveHash });
+    }
+
+    const duration = 2n * 60n * 60n;
+    usableEventTitle = `[E2E Test] Playwright event ${new Date().toISOString()}`;
+
+    console.log(
+      `[global-setup] Creating event: "${usableEventTitle}" (${duration}s)`,
+    );
+    const createHash = await walletClient.writeContract({
+      address: EXAMPLE_PREDICTION_MARKET_ADDRESS as Address,
+      abi: examplePredictionMarketAbi,
+      functionName: "newEvent",
+      args: [usableEventTitle, duration],
     });
-    console.log(`[global-setup] Approve tx: ${approveHash}`);
-    await publicClient.waitForTransactionReceipt({ hash: approveHash });
+    await publicClient.waitForTransactionReceipt({ hash: createHash });
+
+    usableEventId = String(nextEventId);
+    console.log(`[global-setup] Created event #${usableEventId}`);
   }
 
-  // Create a prediction market event with a 2-hour duration
-  // (long enough for tests, short enough to not pollute the contract)
-  const duration = 2n * 60n * 60n; // 2 hours in seconds
-  const question = `[E2E Test] Playwright test event created at ${new Date().toISOString()}`;
+  // ── Step 2: Create test auctions via daemon ────────────────────────────
 
-  console.log(`[global-setup] Creating event: "${question}" (duration: ${duration}s)`);
-  const createHash = await walletClient.writeContract({
-    address: EXAMPLE_PREDICTION_MARKET_ADDRESS as Address,
-    abi: examplePredictionMarketAbi,
-    functionName: "newEvent",
-    args: [question, duration],
+  // We use the createAuction account for auction creation since the daemon
+  // identifies the seller by their wallet address
+  const auctionCreatorAccount = privateKeyToAccount(TEST_ACCOUNTS.createAuction);
+
+  // Bid/outbid auction — long duration (1h)
+  console.log("[global-setup] Creating bid test auction (1h duration)...");
+  const bidAuctionResult = await createTestAuction(auctionCreatorAccount, {
+    eventId: usableEventId,
+    eventTitle: usableEventTitle,
+    privateLeg: "yes",
+    secretPayload: "E2E test secret for bid auction",
+    durationSeconds: 3600,
   });
-  console.log(`[global-setup] Create event tx: ${createHash}`);
-  const receipt = await publicClient.waitForTransactionReceipt({ hash: createHash });
-  console.log(`[global-setup] Event created in block ${receipt.blockNumber}`);
+
+  const bidAuctionId =
+    bidAuctionResult.status === 200
+      ? String(bidAuctionResult.data.auctionId ?? "")
+      : "";
+
+  if (bidAuctionId) {
+    console.log(`[global-setup] Bid auction created: #${bidAuctionId}`);
+  } else {
+    console.warn(
+      `[global-setup] Bid auction creation returned status ${bidAuctionResult.status}:`,
+      bidAuctionResult.data,
+    );
+  }
+
+  // Close auction — very short duration (5 min)
+  console.log("[global-setup] Creating close test auction (5min duration)...");
+  const closeAuctionResult = await createTestAuction(auctionCreatorAccount, {
+    eventId: usableEventId,
+    eventTitle: usableEventTitle,
+    privateLeg: "no",
+    secretPayload: "E2E test secret for close auction",
+    durationSeconds: 300,
+  });
+
+  const closeAuctionId =
+    closeAuctionResult.status === 200
+      ? String(closeAuctionResult.data.auctionId ?? "")
+      : "";
+
+  if (closeAuctionId) {
+    console.log(`[global-setup] Close auction created: #${closeAuctionId}`);
+  } else {
+    console.warn(
+      `[global-setup] Close auction creation returned status ${closeAuctionResult.status}:`,
+      closeAuctionResult.data,
+    );
+  }
+
+  // ── Step 3: Fund bidder accounts ───────────────────────────────────────
+
+  const bidder1 = privateKeyToAccount(TEST_ACCOUNTS.bidder1);
+  const bidder2 = privateKeyToAccount(TEST_ACCOUNTS.bidder2);
+
+  // Check if already funded
+  const checkBalance = async (acct: typeof bidder1) => {
+    const { data } = await signedDaemonRequest("/balance", acct);
+    return BigInt((data.balance as string) ?? "0");
+  };
+
+  const b1Balance = await checkBalance(bidder1);
+  const b2Balance = await checkBalance(bidder2);
+  const minRequired = 50_000_000n; // 50 USDC
+
+  // Deposits must be sequential — daemon submits on-chain txs asynchronously
+  // from a single admin wallet. Concurrent deposits cause nonce collisions.
+  if (b1Balance < minRequired) {
+    console.log(
+      `[global-setup] Depositing 100 USDC for bidder1 (balance: ${b1Balance})...`,
+    );
+    await depositFunds(bidder1, 100);
+    console.log("[global-setup] Waiting for bidder1 deposit to confirm...");
+    try {
+      const bal = await waitForBalance(bidder1, minRequired, 180_000);
+      console.log(`[global-setup] Bidder1 balance: ${bal}`);
+    } catch (err) {
+      console.warn(`[global-setup] Bidder1 deposit may not have confirmed: ${err}`);
+    }
+  } else {
+    console.log(
+      `[global-setup] Bidder1 already funded: ${b1Balance} (${Number(b1Balance) / 1e6} USDC)`,
+    );
+  }
+
+  if (b2Balance < minRequired) {
+    console.log(
+      `[global-setup] Depositing 100 USDC for bidder2 (balance: ${b2Balance})...`,
+    );
+    await depositFunds(bidder2, 100);
+    console.log("[global-setup] Waiting for bidder2 deposit to confirm...");
+    try {
+      const bal = await waitForBalance(bidder2, minRequired, 180_000);
+      console.log(`[global-setup] Bidder2 balance: ${bal}`);
+    } catch (err) {
+      console.warn(`[global-setup] Bidder2 deposit may not have confirmed: ${err}`);
+    }
+  } else {
+    console.log(
+      `[global-setup] Bidder2 already funded: ${b2Balance} (${Number(b2Balance) / 1e6} USDC)`,
+    );
+  }
+
+  // ── Step 4: Write test state ───────────────────────────────────────────
+
+  const testState: TestState = {
+    eventId: usableEventId,
+    eventTitle: usableEventTitle,
+    bidAuctionId,
+    closeAuctionId,
+  };
+
+  writeFileSync(STATE_PATH, JSON.stringify(testState, null, 2));
+  console.log(
+    `[global-setup] Test state written: ${JSON.stringify(testState)}`,
+  );
 }

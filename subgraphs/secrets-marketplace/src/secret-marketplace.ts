@@ -76,6 +76,21 @@ export function handleAuctionClosePending(event: AuctionClosePendingEvent): void
   entity.transactionHash = event.transaction.hash
 
   entity.save()
+
+  // Update Auction status — closeAuction() sets status to Closed on-chain,
+  // so reflect that immediately (AuctionClosed fires later after FHE decryption)
+  let auction = Auction.load(event.params.auctionId.toString())
+  if (auction != null) {
+    auction.status = "Closed"
+    auction.save()
+  }
+
+  // Update Seller summary
+  let seller = Seller.load(event.params.sellerId)
+  if (seller != null) {
+    seller.openAuctionCount = seller.openAuctionCount - 1
+    seller.save()
+  }
 }
 
 export function handleAuctionCreated(event: AuctionCreatedEvent): void {
