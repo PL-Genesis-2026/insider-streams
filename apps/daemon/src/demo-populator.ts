@@ -494,7 +494,13 @@ async function runSpawnAuctions(
         secretDataKey,
       );
 
-      insertSecret(auctionId, user.userId, secretDataCid, "0x" + keyBytes.toString("hex"));
+      const eventDataJson = JSON.stringify({
+        marketplace: "insider-streams",
+        event: event.question,
+        marketId: Number(event.eventId),
+        outcome: prediction ? "yes" : "no",
+      });
+      insertSecret(auctionId, user.userId, secretDataCid, "0x" + keyBytes.toString("hex"), secretPayload, eventDataJson);
 
       console.log(`[demo]   Auction ${auctionId} created (tx: ${txHash.slice(0, 10)}...)`);
       await sendNotification("Auction Created", `Auction ${auctionId} (${duration}) for event ${event.eventId}\n"${event.question}"`);

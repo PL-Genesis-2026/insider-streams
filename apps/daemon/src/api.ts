@@ -246,7 +246,13 @@ export function startApi(): void {
             BigInt(secretDataKey),
           );
           console.log(`[api] Auction created on-chain: auctionId=${auctionId}, tx=${txHash}`);
-          insertSecret(auctionId, user.userId, secretDataCid!, secretDataKey);
+          const eventDataJson = JSON.stringify({
+            marketplace: "insider-streams",
+            event: eventTitle,
+            marketId: Number(eventId),
+            outcome: prediction === "true" || prediction === "1" ? "yes" : "no",
+          });
+          insertSecret(auctionId, user.userId, secretDataCid!, secretDataKey, secretPayload ?? undefined, eventDataJson);
 
           res.json({
             success: true,
@@ -487,6 +493,8 @@ export function startApi(): void {
           auctionId: s.auctionId,
           secretDataCid: s.secretDataCid,
           secretDataKey: hasAccess ? s.secretDataKey : null,
+          secretData: hasAccess ? s.secretData : null,
+          eventData: hasAccess ? s.eventData : null,
           hasAccess,
         };
       });

@@ -48,12 +48,24 @@ function migrate(db: Database.Database): void {
       seller_id TEXT NOT NULL,
       secret_data_cid TEXT NOT NULL,
       secret_data_key TEXT,
+      secret_data TEXT,
+      event_data TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
     CREATE INDEX IF NOT EXISTS idx_bids_auction_status ON bids(auction_id, status);
 
   `);
+
+  // Migrations for existing DBs
+  const cols = db.prepare("PRAGMA table_info(secrets)").all() as { name: string }[];
+  const colNames = new Set(cols.map((c) => c.name));
+  if (!colNames.has("secret_data")) {
+    db.exec("ALTER TABLE secrets ADD COLUMN secret_data TEXT");
+  }
+  if (!colNames.has("event_data")) {
+    db.exec("ALTER TABLE secrets ADD COLUMN event_data TEXT");
+  }
 }
 
 // ── Pseudonymous ID generation ──
@@ -285,6 +297,8 @@ export interface Secret {
   sellerId: string;
   secretDataCid: string;
   secretDataKey: string | null;
+  secretData: string | null;
+  eventData: string | null;
 }
 
 interface SecretRow {
@@ -292,13 +306,22 @@ interface SecretRow {
   seller_id: string;
   secret_data_cid: string;
   secret_data_key: string | null;
+  secret_data: string | null;
+  event_data: string | null;
 }
 
-export function insertSecret(auctionId: number, sellerId: string, secretDataCid: string, secretDataKey?: string): void {
+export function insertSecret(
+  auctionId: number,
+  sellerId: string,
+  secretDataCid: string,
+  secretDataKey?: string,
+  secretData?: string,
+  eventData?: string,
+): void {
   const db = getDb();
   db.prepare(
-    "INSERT OR REPLACE INTO secrets (auction_id, seller_id, secret_data_cid, secret_data_key) VALUES (?, ?, ?, ?)",
-  ).run(auctionId, sellerId, secretDataCid, secretDataKey ?? null);
+    "INSERT OR REPLACE INTO secrets (auction_id, seller_id, secret_data_cid, secret_data_key, secret_data, event_data) VALUES (?, ?, ?, ?, ?, ?)",
+  ).run(auctionId, sellerId, secretDataCid, secretDataKey ?? null, secretData ?? null, eventData ?? null);
 }
 
 export function getSecretsByAuctionIds(auctionIds: number[]): Secret[] {
@@ -306,13 +329,15 @@ export function getSecretsByAuctionIds(auctionIds: number[]): Secret[] {
   const db = getDb();
   const placeholders = auctionIds.map(() => "?").join(",");
   const rows = db.prepare(
-    `SELECT auction_id, seller_id, secret_data_cid, secret_data_key FROM secrets WHERE auction_id IN (${placeholders})`,
+    `SELECT auction_id, seller_id, secret_data_cid, secret_data_key, secret_data, event_data FROM secrets WHERE auction_id IN (${placeholders})`,
   ).all(...auctionIds) as SecretRow[];
   return rows.map((r) => ({
     auctionId: r.auction_id,
     sellerId: r.seller_id,
     secretDataCid: r.secret_data_cid,
     secretDataKey: r.secret_data_key,
+    secretData: r.secret_data,
+    eventData: r.event_data,
   }));
 }
 
