@@ -204,22 +204,42 @@ export async function createAuction(
 
 /**
  * Read a user's on-chain encrypted balance and decrypt it.
- * Flow: requestBalanceDecrypt (on-chain tx) → getBalance (read handle) → publicDecrypt (relayer).
+ * Flow: requestBalanceDecrypt (on-chain tx) → publicDecrypt (relayer).
+ *
+ * Deduplicates concurrent requests per userId — only one in-flight at a time.
  */
-export async function getOnChainBalance(userId: string): Promise<bigint> {
+const _balanceInflight = new Map<string, Promise<bigint>>();
+
+export function getOnChainBalance(userId: string): Promise<bigint> {
+  const existing = _balanceInflight.get(userId);
+  if (existing) {
+    console.log(`[marketplace] getOnChainBalance(${userId}) — reusing in-flight request`);
+    return existing;
+  }
+
+  const promise = _getOnChainBalanceImpl(userId).finally(() => {
+    _balanceInflight.delete(userId);
+  });
+  _balanceInflight.set(userId, promise);
+  return promise;
+}
+
+async function _getOnChainBalanceImpl(userId: string): Promise<bigint> {
   const publicClient = getPublicClient();
   const marketplaceAddress = config.secretMarketplaceAddress as `0x${string}`;
 
-  // Get the handle first — if zero, user has no balance
-  const handle = await publicClient.readContract({
+  // Get the handle — if zero, user has no balance
+  const rawHandle = await publicClient.readContract({
     address: marketplaceAddress,
     abi: fheSecretMarketplaceAbi,
     functionName: "getBalance",
     args: [userId],
   });
+  const handle = rawHandle as `0x${string}`;
   if (!handle || handle === zeroHash) return 0n;
+  console.log(`[marketplace] getOnChainBalance(${userId}) — handle: ${handle}`);
 
-  // Mark balance handle for public decryption (on-chain tx)
+  // Submit requestBalanceDecrypt on-chain (marks handle for public decryption)
   console.log(`[marketplace] requestBalanceDecrypt(${userId}) — submitting tx...`);
   await withAdminLock(async () => {
     const txHash = await getWalletClient().writeContract({
@@ -231,10 +251,35 @@ export async function getOnChainBalance(userId: string): Promise<bigint> {
     await publicClient.waitForTransactionReceipt({ hash: txHash });
   });
 
-  // Decrypt via Zama relayer
+  // Re-read handle after requestBalanceDecrypt in case a deposit landed between reads
+  const freshRawHandle = await publicClient.readContract({
+    address: marketplaceAddress,
+    abi: fheSecretMarketplaceAbi,
+    functionName: "getBalance",
+    args: [userId],
+  });
+  const freshHandle = freshRawHandle as `0x${string}`;
+  if (!freshHandle || freshHandle === zeroHash) return 0n;
+
+  if (freshHandle !== handle) {
+    // Handle changed (e.g. deposit landed) — need to requestBalanceDecrypt again
+    console.log(`[marketplace] handle changed: ${handle} → ${freshHandle}, re-submitting requestBalanceDecrypt...`);
+    await withAdminLock(async () => {
+      const txHash = await getWalletClient().writeContract({
+        address: marketplaceAddress,
+        abi: fheSecretMarketplaceAbi,
+        functionName: "requestBalanceDecrypt",
+        args: [userId],
+      });
+      await publicClient.waitForTransactionReceipt({ hash: txHash });
+    });
+  }
+
+  // Decrypt via Zama relayer using the freshest handle
   const instance = await getFhevmInstance();
-  const result = await instance.publicDecrypt([handle]);
-  // handle is already a 0x-prefixed bytes32 hex string from readContract
-  const clearValue = result.clearValues[handle as `0x${string}`];
+  const result = await instance.publicDecrypt([freshHandle]);
+  const clearValue = result.clearValues[freshHandle];
+  console.log(`[marketplace] getOnChainBalance(${userId}) — decrypted: ${String(clearValue)}`);
+  if (clearValue === undefined || clearValue === null) return 0n;
   return BigInt(clearValue as bigint);
 }

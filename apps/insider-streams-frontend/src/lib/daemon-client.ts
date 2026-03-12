@@ -4,9 +4,18 @@ export async function proxyToDaemon(
   path: string,
   body: unknown,
 ): Promise<Response> {
-  return fetch(`${DAEMON_URL}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const url = `${DAEMON_URL}${path}`;
+  console.log(`[daemon-client] POST ${url}`);
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    console.log(`[daemon-client] POST ${url} → ${res.status}`);
+    return res;
+  } catch (err) {
+    console.error(`[daemon-client] POST ${url} failed:`, err);
+    throw err;
+  }
 }
