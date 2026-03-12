@@ -49,7 +49,7 @@ import { getSdk } from "./__generated__/graphql";
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const SUBGRAPH_URL = process.env.SUBGRAPH_URL ??
-  "https://api.studio.thegraph.com/query/1743303/insider-streams-2/version/latest";
+  "https://api.studio.thegraph.com/query/1743303/insider-streams-zama/version/latest";
 
 const USDC_DECIMALS = 6;
 // Balance threshold: if below 1,000 CUSDC, mint more (reads first — writes are expensive)
