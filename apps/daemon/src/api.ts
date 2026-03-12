@@ -29,6 +29,7 @@ import {
 } from "./db.js";
 import * as marketplace from "./marketplace.js";
 import { getPublicClient, getWalletClient } from "./provider.js";
+import { withAdminLock } from "./admin-lock.js";
 
 export function startApi(): void {
   const app = express();
@@ -545,16 +546,19 @@ export function startApi(): void {
       }
 
       const mintAmount = BigInt(1000) * BigInt(10 ** 6); // 1000 USDC (6 decimals)
-      const hash = await getWalletClient().writeContract({
-        address: config.confidentialUsdcAddress as `0x${string}`,
-        abi: mockUsdcAbi,
-        functionName: "mint",
-        args: [result.payload.userAddress as `0x${string}`, mintAmount],
+      const txHash = await withAdminLock(async () => {
+        const hash = await getWalletClient().writeContract({
+          address: config.confidentialUsdcAddress as `0x${string}`,
+          abi: mockUsdcAbi,
+          functionName: "mint",
+          args: [result.payload.userAddress as `0x${string}`, mintAmount],
+        });
+        const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
+        return receipt.transactionHash;
       });
-      const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
 
       res.json({
-        txHash: receipt.transactionHash,
+        txHash,
         amount: mintAmount.toString(),
         address: result.payload.userAddress,
       });

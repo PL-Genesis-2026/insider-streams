@@ -13,6 +13,7 @@ import { fheSecretMarketplaceAbi } from "@private-streams/common";
 import { config } from "./config.js";
 import { getPublicClient, getWalletClient, getAccount } from "./provider.js";
 import { encryptUint64, encryptAuctionInputs, getFhevmInstance } from "./fhe.js";
+import { withAdminLock } from "./admin-lock.js";
 
 /** Convert a Uint8Array from FHE encryption to a 0x-prefixed hex string. */
 function toHexBytes(bytes: Uint8Array): `0x${string}` {
@@ -55,15 +56,17 @@ export async function depositFor(
   );
 
   console.log(`[marketplace] depositFor(${userId}, ${amount}) — submitting tx...`);
-  const hash = await getWalletClient().writeContract({
-    address: config.secretMarketplaceAddress as `0x${string}`,
-    abi: fheSecretMarketplaceAbi,
-    functionName: "depositFor",
-    args: [userId, toHexBytes(encrypted.handles[0]), toHexBytes(encrypted.inputProof)],
+  return withAdminLock(async () => {
+    const hash = await getWalletClient().writeContract({
+      address: config.secretMarketplaceAddress as `0x${string}`,
+      abi: fheSecretMarketplaceAbi,
+      functionName: "depositFor",
+      args: [userId, toHexBytes(encrypted.handles[0]), toHexBytes(encrypted.inputProof)],
+    });
+    const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
+    console.log(`[marketplace] depositFor confirmed: ${receipt.transactionHash}`);
+    return receipt.transactionHash;
   });
-  const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
-  console.log(`[marketplace] depositFor confirmed: ${receipt.transactionHash}`);
-  return receipt.transactionHash;
 }
 
 /**
@@ -83,15 +86,17 @@ export async function withdrawFor(
   );
 
   console.log(`[marketplace] withdrawFor(${userId}, ${amount}) — submitting tx...`);
-  const hash = await getWalletClient().writeContract({
-    address: config.secretMarketplaceAddress as `0x${string}`,
-    abi: fheSecretMarketplaceAbi,
-    functionName: "withdrawFor",
-    args: [userId, toHexBytes(encrypted.handles[0]), toHexBytes(encrypted.inputProof)],
+  return withAdminLock(async () => {
+    const hash = await getWalletClient().writeContract({
+      address: config.secretMarketplaceAddress as `0x${string}`,
+      abi: fheSecretMarketplaceAbi,
+      functionName: "withdrawFor",
+      args: [userId, toHexBytes(encrypted.handles[0]), toHexBytes(encrypted.inputProof)],
+    });
+    const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
+    console.log(`[marketplace] withdrawFor confirmed: ${receipt.transactionHash}`);
+    return receipt.transactionHash;
   });
-  const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
-  console.log(`[marketplace] withdrawFor confirmed: ${receipt.transactionHash}`);
-  return receipt.transactionHash;
 }
 
 /**
@@ -113,22 +118,24 @@ export async function placeBid(
   );
 
   console.log(`[marketplace] placeBid(auction=${auctionId}, bidder=${bidderId}, amount=${amount}) — submitting tx...`);
-  const hash = await getWalletClient().writeContract({
-    address: config.secretMarketplaceAddress as `0x${string}`,
-    abi: fheSecretMarketplaceAbi,
-    functionName: "placeBid",
-    args: [
-      BigInt(auctionId),
-      bidderId,
-      previousBidderId,
-      toHexBytes(encrypted.handles[0]),
-      toHexBytes(encrypted.inputProof),
-      amount,
-    ],
+  return withAdminLock(async () => {
+    const hash = await getWalletClient().writeContract({
+      address: config.secretMarketplaceAddress as `0x${string}`,
+      abi: fheSecretMarketplaceAbi,
+      functionName: "placeBid",
+      args: [
+        BigInt(auctionId),
+        bidderId,
+        previousBidderId,
+        toHexBytes(encrypted.handles[0]),
+        toHexBytes(encrypted.inputProof),
+        amount,
+      ],
+    });
+    const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
+    console.log(`[marketplace] placeBid confirmed: ${receipt.transactionHash}`);
+    return receipt.transactionHash;
   });
-  const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
-  console.log(`[marketplace] placeBid confirmed: ${receipt.transactionHash}`);
-  return receipt.transactionHash;
 }
 
 /**
@@ -154,43 +161,45 @@ export async function createAuction(
   );
 
   console.log(`[marketplace] createAuction(seller=${sellerId}, event=${eventId}) — submitting tx...`);
-  const hash = await getWalletClient().writeContract({
-    address: config.secretMarketplaceAddress as `0x${string}`,
-    abi: fheSecretMarketplaceAbi,
-    functionName: "createAuction",
-    args: [
-      sellerId,
-      BigInt(eventId),
-      eventTitle,
-      BigInt(endTime),
-      toHexBytes(encrypted.handles[0]), // prediction (ebool)
-      secretDataCid as `0x${string}`, // secretDataCid (bytes32) — already hex-encoded
-      toHexBytes(encrypted.handles[1]), // secretKey (euint256)
-      toHexBytes(encrypted.inputProof),
-    ],
-  });
-  const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
+  return withAdminLock(async () => {
+    const hash = await getWalletClient().writeContract({
+      address: config.secretMarketplaceAddress as `0x${string}`,
+      abi: fheSecretMarketplaceAbi,
+      functionName: "createAuction",
+      args: [
+        sellerId,
+        BigInt(eventId),
+        eventTitle,
+        BigInt(endTime),
+        toHexBytes(encrypted.handles[0]), // prediction (ebool)
+        secretDataCid as `0x${string}`, // secretDataCid (bytes32) — already hex-encoded
+        toHexBytes(encrypted.handles[1]), // secretKey (euint256)
+        toHexBytes(encrypted.inputProof),
+      ],
+    });
+    const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
 
-  // Parse AuctionCreated event to get the auction ID
-  let auctionId = -1;
-  for (const log of receipt.logs) {
-    try {
-      const decoded = decodeEventLog({
-        abi: fheSecretMarketplaceAbi,
-        data: log.data,
-        topics: log.topics,
-      });
-      if (decoded.eventName === "AuctionCreated") {
-        auctionId = Number((decoded.args as { auctionId: bigint }).auctionId);
-        break;
+    // Parse AuctionCreated event to get the auction ID
+    let auctionId = -1;
+    for (const log of receipt.logs) {
+      try {
+        const decoded = decodeEventLog({
+          abi: fheSecretMarketplaceAbi,
+          data: log.data,
+          topics: log.topics,
+        });
+        if (decoded.eventName === "AuctionCreated") {
+          auctionId = Number((decoded.args as { auctionId: bigint }).auctionId);
+          break;
+        }
+      } catch {
+        // Not our event
       }
-    } catch {
-      // Not our event
     }
-  }
 
-  console.log(`[marketplace] createAuction confirmed: ${receipt.transactionHash}, auctionId=${auctionId}`);
-  return { txHash: receipt.transactionHash, auctionId };
+    console.log(`[marketplace] createAuction confirmed: ${receipt.transactionHash}, auctionId=${auctionId}`);
+    return { txHash: receipt.transactionHash, auctionId };
+  });
 }
 
 /**
@@ -212,13 +221,15 @@ export async function getOnChainBalance(userId: string): Promise<bigint> {
 
   // Mark balance handle for public decryption (on-chain tx)
   console.log(`[marketplace] requestBalanceDecrypt(${userId}) — submitting tx...`);
-  const txHash = await getWalletClient().writeContract({
-    address: marketplaceAddress,
-    abi: fheSecretMarketplaceAbi,
-    functionName: "requestBalanceDecrypt",
-    args: [userId],
+  await withAdminLock(async () => {
+    const txHash = await getWalletClient().writeContract({
+      address: marketplaceAddress,
+      abi: fheSecretMarketplaceAbi,
+      functionName: "requestBalanceDecrypt",
+      args: [userId],
+    });
+    await publicClient.waitForTransactionReceipt({ hash: txHash });
   });
-  await publicClient.waitForTransactionReceipt({ hash: txHash });
 
   // Decrypt via Zama relayer
   const instance = await getFhevmInstance();

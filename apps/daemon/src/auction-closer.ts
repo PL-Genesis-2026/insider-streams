@@ -14,6 +14,7 @@ import { config, requireConfig } from "./config.js";
 import { getPublicClient, getWalletClient, getAccount } from "./provider.js";
 import { sendNotification } from "./notify.js";
 import { markBidsForAuction } from "./db.js";
+import { withAdminLock } from "./admin-lock.js";
 
 const ETHERSCAN_URL = "https://sepolia.etherscan.io/tx";
 const marketplaceAddress = config.secretMarketplaceAddress as `0x${string}`;
@@ -51,22 +52,24 @@ async function findExpiredAuctions(): Promise<bigint[]> {
 }
 
 async function closeAuction(auctionId: bigint): Promise<string | null> {
-  try {
-    console.log(`[closer] Closing auction ${auctionId}...`);
-    const hash = await getWalletClient().writeContract({
-      address: marketplaceAddress,
-      abi: fheSecretMarketplaceAbi,
-      functionName: "closeAuction",
-      args: [auctionId],
-    });
-    const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
-    console.log(`[closer] Closed auction ${auctionId}: ${receipt.transactionHash}`);
-    return receipt.transactionHash;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[closer] Failed to close auction ${auctionId}:`, msg);
-    return null;
-  }
+  return withAdminLock(async () => {
+    try {
+      console.log(`[closer] Closing auction ${auctionId}...`);
+      const hash = await getWalletClient().writeContract({
+        address: marketplaceAddress,
+        abi: fheSecretMarketplaceAbi,
+        functionName: "closeAuction",
+        args: [auctionId],
+      });
+      const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
+      console.log(`[closer] Closed auction ${auctionId}: ${receipt.transactionHash}`);
+      return receipt.transactionHash;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[closer] Failed to close auction ${auctionId}:`, msg);
+      return null;
+    }
+  });
 }
 
 async function runCloserCycle(): Promise<void> {

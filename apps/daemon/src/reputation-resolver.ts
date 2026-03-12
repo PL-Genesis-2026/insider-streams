@@ -19,6 +19,7 @@ import { examplePredictionMarketAbi, fheSecretMarketplaceAbi } from "@private-st
 import { config, requireConfig } from "./config.js";
 import { getPublicClient, getWalletClient, getAccount } from "./provider.js";
 import { sendNotification } from "./notify.js";
+import { withAdminLock } from "./admin-lock.js";
 
 const ETHERSCAN_URL = "https://sepolia.etherscan.io/tx";
 const marketplaceAddress = config.secretMarketplaceAddress as `0x${string}`;
@@ -73,19 +74,22 @@ async function handleSettlementResponse(
   console.log(`[resolver] Resolving ${auctionIds.length} auction(s) for event ${eventId} (outcomeIsYes=${actualOutcomeIsYes})`);
 
   try {
-    const hash = await getWalletClient().writeContract({
-      address: marketplaceAddress,
-      abi: fheSecretMarketplaceAbi,
-      functionName: "resolveEventPredictions",
-      args: [eventId, actualOutcomeIsYes],
+    const txHash = await withAdminLock(async () => {
+      const hash = await getWalletClient().writeContract({
+        address: marketplaceAddress,
+        abi: fheSecretMarketplaceAbi,
+        functionName: "resolveEventPredictions",
+        args: [eventId, actualOutcomeIsYes],
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      return receipt.transactionHash;
     });
-    const receipt = await publicClient.waitForTransactionReceipt({ hash });
-    console.log(`[resolver] Resolved event ${eventId}: ${receipt.transactionHash}`);
+    console.log(`[resolver] Resolved event ${eventId}: ${txHash}`);
 
     await sendNotification(
       `Reputation Resolved: Event ${eventId}`,
-      `Event ${eventId}: ${auctionIds.length} auction(s) resolved.\ntx: ${ETHERSCAN_URL}/${receipt.transactionHash}`,
-      `${ETHERSCAN_URL}/${receipt.transactionHash}`,
+      `Event ${eventId}: ${auctionIds.length} auction(s) resolved.\ntx: ${ETHERSCAN_URL}/${txHash}`,
+      `${ETHERSCAN_URL}/${txHash}`,
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
