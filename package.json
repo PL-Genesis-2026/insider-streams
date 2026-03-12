@@ -11,7 +11,9 @@
     "wagmi": "turbo run wagmi",
     "e2e": "turbo run e2e",
     "dev:insider-streams": "turbo run dev --filter=insider-streams-frontend",
-    "build:insider-streams": "turbo run build --filter=insider-streams-frontend"
+    "dev:prediction-market": "turbo run dev --filter=prediction-market-frontend",
+    "build:insider-streams": "turbo run build --filter=insider-streams-frontend",
+    "build:prediction-market": "turbo run build --filter=prediction-market-frontend"
   },
   "devDependencies": {
     "turbo": "^2.8.14"
