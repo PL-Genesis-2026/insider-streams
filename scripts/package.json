@@ -15,6 +15,7 @@
     "create-events": "tsx --env-file=.env create-events.ts",
     "spawn-auctions": "tsx --env-file=.env spawn-auctions.ts",
     "request-settlements": "tsx --env-file=.env request-settlements.ts",
+    "place-bids": "tsx --env-file=.env place-bids.ts",
     "run-demo": "bash run-demo.sh"
   },
   "dependencies": {
