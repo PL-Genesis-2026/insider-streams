@@ -1,21 +1,14 @@
 /**
  * Shared E2E test helpers
  *
- * DRY utilities used across all E2E test scripts:
+ * Used by:
  *   - secret-marketplace-e2e.ts
- *   - user-balance-recording-fallback-e2e.ts
- *   - secret-marketplace-auction-closer-e2e.ts
- *   - simple-market-e2e.ts
- *   - external-marketplace-settlement-resolved-handler-e2e.ts
- *   - auction-cancelled-handler-e2e.ts
  */
 
 import {
   confidentialUsdcAbi,
   secretMarketplaceAbi,
 } from "@private-streams/common";
-import type { Database } from "@private-streams/common";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   BaseError,
   ContractFunctionRevertedError,
@@ -341,77 +334,3 @@ export async function readSimpleMarketAddress(
   })) as Address;
 }
 
-// ─── Supabase helpers ───────────────────────────────────────────────────────
-
-/**
- * Insert the standard set of Supabase records needed for an auction bid test:
- * seller, secret, deposit transfer, and private bid.
- *
- * Use `skipDeposit: true` when the bidder already has a deposit from a prior call
- * (e.g., settlement-resolved-handler's second auction).
- */
-export async function setupSupabaseAuctionBid(
-  supabase: SupabaseClient<Database>,
-  opts: {
-    sellerName: string;
-    sellerAddress: string;
-    auctionId: string;
-    secretData: string;
-    eventData?: Record<string, unknown>;
-    bidderAddress: string;
-    bidAmount: bigint;
-    depositTxId: string;
-    depositAmount: bigint;
-    skipDeposit?: boolean;
-  },
-): Promise<void> {
-  // Upsert seller
-  const { error: sellerErr } = await supabase
-    .from("sellers")
-    .upsert({ id: opts.sellerName, address: opts.sellerAddress.toLowerCase() }, { onConflict: "id" });
-  assert(!sellerErr, `Failed to upsert seller: ${sellerErr?.message}`);
-  console.log(`  ok Seller upserted: ${opts.sellerName} -> ${opts.sellerAddress}`);
-
-  // Upsert secret
-  const secretRow: Record<string, unknown> = {
-    auction_id: opts.auctionId,
-    secret_data: opts.secretData,
-    seller_id: opts.sellerName,
-  };
-  if (opts.eventData) secretRow.event_data = opts.eventData;
-  const { error: secretErr } = await supabase
-    .from("secrets")
-    .upsert(secretRow as never, { onConflict: "auction_id" });
-  assert(!secretErr, `Failed to insert secret: ${secretErr?.message}`);
-  console.log(`  ok Secret inserted for auction ${opts.auctionId}`);
-
-  // Insert deposit transfer (unless skipped)
-  if (!opts.skipDeposit) {
-    const { error: depositErr } = await supabase
-      .from("transfers")
-      .insert({
-        transaction_id: opts.depositTxId,
-        user_address: opts.bidderAddress.toLowerCase(),
-        amount: opts.depositAmount.toString(),
-        status: "confirmed",
-      });
-    assert(!depositErr, `Failed to insert deposit transfer: ${depositErr?.message}`);
-    console.log(`  ok Deposit: ${formatUnits(opts.depositAmount, USDC_DECIMALS)} USDC for bidder`);
-  }
-
-  // Insert active private bid
-  const { error: bidErr } = await supabase
-    .from("private_bids")
-    .insert({
-      auction_id: opts.auctionId,
-      bidder_address: opts.bidderAddress.toLowerCase(),
-      amount: opts.bidAmount.toString(),
-      status: "active",
-    });
-  assert(!bidErr, `Failed to insert private_bid: ${bidErr?.message}`);
-  console.log(`  ok Private bid: ${formatUnits(opts.bidAmount, USDC_DECIMALS)} USDC from bidder`);
-}
-
-// ─── CRE CLI helper ─────────────────────────────────────────────────────────
-
-export { runCRE } from "../cre-runner.js";
