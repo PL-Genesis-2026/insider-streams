@@ -32,9 +32,13 @@ Unified Express server with background services:
 - **Demo Populator** — opt-in (`DEMO_MODE=true`): continuously creates events, auctions, bids, and settlement requests
 - **HTTP API** — signature-authenticated endpoints (`/user`, `/balance`, `/bid`, `/create-auction`, `/deposit`, `/withdraw`, `/faucet`, etc.)
 
-### Frontend (`apps/insider-streams-frontend/`)
+### Insider Streams Frontend (`apps/insider-streams-frontend/`)
 
-Next.js app with wallet connection (Reown/WalletConnect), Apollo Client for subgraph queries, and daemon API integration.
+Next.js app (port 3000) — encrypted auction marketplace. Wallet connection (Reown/WalletConnect), Apollo Client for subgraph queries, and daemon API integration. Users create auctions, place encrypted bids, manage balances.
+
+### Prediction Market Frontend (`apps/prediction-market-frontend/`)
+
+Next.js app (port 3100) — public prediction market. Users buy YES/NO shares on events using MockUSDC (plain ERC-20). After purchasing shares, users can create private auctions on the Insider Streams marketplace to sell their signal.
 
 ## Deployed Contracts (Eth Sepolia)
 
@@ -50,8 +54,11 @@ Next.js app with wallet connection (Reown/WalletConnect), Apollo Client for subg
 ```bash
 pnpm install
 
-# Start the frontend
+# Start the Insider Streams frontend (encrypted marketplace, port 3000)
 pnpm dev:insider-streams
+
+# Start the Prediction Market frontend (public market, port 3100)
+pnpm dev:prediction-market
 
 # Start the daemon (in a separate terminal)
 cd apps/daemon && pnpm start
@@ -105,7 +112,7 @@ private-streams/
 ├── apps/
 │   ├── insider-streams-frontend/    # Next.js marketplace UI (port 3000)
 │   ├── prediction-market-frontend/  # Next.js prediction market UI (port 3100)
-│   └── daemon/                      # Express daemon (settler, closer, resolver, API)
+│   └── daemon/                      # Express daemon (settler, closer, resolver, demo populator, API)
 ├── packages/
 │   └── common/                      # Shared ABIs, addresses, utilities
 ├── contracts-fhe/                   # Hardhat + fhEVM contracts
