@@ -84,6 +84,7 @@ Individual scripts:
 cd apps/daemon && pnpm test:db       # SQLite bid tracking (11 tests)
 cd apps/daemon && pnpm test:e2e      # API E2E tests (52 tests)
 cd apps/daemon && pnpm test:sepolia  # Sepolia FHE integration tests
+cd apps/daemon && pnpm test:lifecycle  # Full lifecycle E2E (Sepolia, ~3 min)
 
 # Contract tests
 cd contracts-fhe && npx hardhat test                  # Local (mock FHE)
@@ -91,9 +92,6 @@ cd contracts-fhe && npx hardhat test --network sepolia  # Sepolia (real FHE)
 
 # Frontend Playwright tests
 cd apps/insider-streams-frontend && pnpm test:playwright
-
-# On-chain E2E
-cd scripts && pnpm e2e:secret-marketplace
 ```
 
 ## Project Structure
