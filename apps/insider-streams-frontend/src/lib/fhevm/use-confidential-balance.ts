@@ -57,7 +57,7 @@ export function useConfidentialBalance() {
 
   const balanceHandle = useMemo(() => {
     const raw = balanceQuery.data as string | undefined;
-    if (!raw || raw === zeroHash) return null;
+    if (!raw || raw === "0x" || raw === zeroHash || /^0x0*$/.test(raw)) return null;
     return raw;
   }, [balanceQuery.data]);
 
