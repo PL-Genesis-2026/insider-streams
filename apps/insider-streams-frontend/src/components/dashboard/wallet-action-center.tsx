@@ -36,6 +36,7 @@ import { useFundingSnapshot } from "@/lib/funding/use-funding-snapshot";
 import { useDeposit, useWithdraw } from "@/lib/private-token/hooks";
 import { ConnectWalletButton } from "@/components/wallet/connect-wallet-button";
 import { SwitchNetworkButton } from "@/components/wallet/switch-network-button";
+import { useConfidentialBalance } from "@/lib/fhevm/use-confidential-balance";
 import { cn } from "@/lib/utils";
 import { useWalletSession } from "@/lib/wallet/use-wallet-session";
 
@@ -114,6 +115,7 @@ export function WalletActionCenter({
   const fundingSnapshot = useFundingSnapshot({ enabled: isRevealed });
   const depositMutation = useDeposit();
   const withdrawMutation = useWithdraw();
+  const walletBalance = useConfidentialBalance();
 
   const parsedAmount = useMemo(() => {
     const trimmed = amount.trim();
@@ -251,6 +253,7 @@ export function WalletActionCenter({
 
   const refreshWallet = () => {
     void fundingSnapshot.refresh();
+    void walletBalance.refresh();
   };
 
   if (!walletSession.isConnected || !walletSession.address) {
@@ -328,13 +331,42 @@ export function WalletActionCenter({
           </div>
 
           <div className="space-y-2">
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid gap-3 md:grid-cols-3">
               <CompactMetric label="Bidding balance" value={displayAvailable} accent />
+              <CompactMetric
+                label="Wallet balance"
+                value={
+                  walletBalance.balance !== null
+                    ? formatFundingBalance(walletBalance.balance.toString())
+                    : walletBalance.decryptState === "decrypting"
+                      ? "Decrypting..."
+                      : walletBalance.handle
+                        ? "Encrypted"
+                        : "—"
+                }
+              />
               <CompactMetric
                 label="Status"
                 value={fundingSnapshot.status === "not_funded_yet" ? "No deposits yet" : "Active"}
               />
             </div>
+            {walletBalance.handle && walletBalance.balance === null && walletBalance.decryptState !== "decrypting" && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { void walletBalance.decrypt(); }}
+                disabled={!walletBalance.canDecrypt || walletBalance.isFhevmLoading}
+              >
+                {walletBalance.isFhevmLoading ? (
+                  <><Loader2 className="size-3.5 animate-spin" /> Loading FHE...</>
+                ) : (
+                  <><Eye className="size-3.5" /> Decrypt wallet balance</>
+                )}
+              </Button>
+            )}
+            {walletBalance.error && (
+              <p className="text-sm text-destructive">{walletBalance.error}</p>
+            )}
           </div>
         </CardHeader>
 
@@ -604,8 +636,22 @@ export function WalletActionCenter({
             </p>
             <DiagnosticRow label="Funding status" value={fundingSnapshot.status} />
             <DiagnosticRow
-              label="Bidding balance"
+              label="Bidding balance (marketplace)"
               value={getDisplayFundingBalance(fundingSnapshot.balance) ?? "Unavailable"}
+            />
+            <DiagnosticRow
+              label="Wallet balance (cUSDC)"
+              value={
+                walletBalance.balance !== null
+                  ? formatFundingBalance(walletBalance.balance.toString())
+                  : walletBalance.handle
+                    ? `Encrypted (${walletBalance.decryptState})`
+                    : "No balance"
+              }
+            />
+            <DiagnosticRow
+              label="FHE SDK status"
+              value={walletBalance.isFhevmLoading ? "Loading..." : walletBalance.handle ? "Ready" : "Idle"}
             />
             <DiagnosticRow
               label="Platform recipient"
