@@ -60,7 +60,7 @@ function withAdminLock<T>(fn: () => Promise<T>): Promise<T> {
 // ─── Intervals ──────────────────────────────────────────────────────────────
 
 const CREATE_EVENTS_INTERVAL_MS = 15 * 60 * 1000;    // 15 minutes
-const SPAWN_AUCTIONS_INTERVAL_MS = 5 * 60 * 1000;    // 5 minutes
+const SPAWN_AUCTIONS_INTERVAL_MS = 1 * 60 * 1000;    // 1 minute
 const PLACE_BIDS_INTERVAL_MS = 1 * 60 * 1000;        // 1 minute
 const REQUEST_SETTLEMENTS_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
 
@@ -691,7 +691,7 @@ export async function startDemoPopulator(): Promise<void> {
   console.log("[demo]  Demo Populator Starting");
   console.log(`[demo]  Accounts:    ${testAccounts.length} test accounts`);
   console.log(`[demo]  Subgraph:    ${config.subgraphUrl.slice(0, 60)}...`);
-  console.log(`[demo]  Intervals:   events=15m, auctions=5m, bids=1m, settlements=10m`);
+  console.log(`[demo]  Intervals:   events=15m, auctions=1m, bids=1m, settlements=10m`);
   console.log("[demo] ═══════════════════════════════════════════════");
 
   // Run create-events once immediately (seed)
