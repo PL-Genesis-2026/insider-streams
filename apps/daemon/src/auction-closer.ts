@@ -13,6 +13,7 @@ import { fheSecretMarketplaceAbi } from "@private-streams/common";
 import { config, requireConfig } from "./config.js";
 import { getPublicClient, getWalletClient, getAccount } from "./provider.js";
 import { sendNotification } from "./notify.js";
+import { markBidsForAuction } from "./db.js";
 
 const ETHERSCAN_URL = "https://sepolia.etherscan.io/tx";
 const marketplaceAddress = config.secretMarketplaceAddress as `0x${string}`;
@@ -78,6 +79,7 @@ async function runCloserCycle(): Promise<void> {
   for (const auctionId of expired) {
     const txHash = await closeAuction(auctionId);
     if (txHash) {
+      markBidsForAuction(Number(auctionId), "won");
       await sendNotification(
         `Auction Closed: #${auctionId}`,
         `Auction ${auctionId} closed.\ntx: ${ETHERSCAN_URL}/${txHash}`,
@@ -104,6 +106,21 @@ export async function startAuctionCloser(): Promise<void> {
       console.error("[closer] Cycle error:", err instanceof Error ? err.message : err);
     }
   }, config.auctionCloserIntervalMs);
+
+  // Watch for AuctionCancelled events to mark bids as cancelled
+  getPublicClient().watchContractEvent({
+    address: marketplaceAddress,
+    abi: fheSecretMarketplaceAbi,
+    eventName: "AuctionCancelled",
+    onLogs: (logs) => {
+      for (const log of logs) {
+        const { auctionId } = log.args as { auctionId: bigint };
+        console.log(`[closer] AuctionCancelled event: auction ${auctionId}`);
+        markBidsForAuction(Number(auctionId), "cancelled");
+      }
+    },
+  });
+  console.log("[closer] Watching for AuctionCancelled events");
 }
 
 // Run standalone
