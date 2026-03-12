@@ -1,6 +1,6 @@
-# Deprecation Cleanup Implementation Plan
+# Deprecation Cleanup Implementation Plan — COMPLETED
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> All 25 tasks executed successfully. See commit log on `feat/zama-testing` branch.
 
 **Goal:** Remove all deprecated CRE/Foundry/Private Token API/Supabase/event-watcher code, port missing functionality to the daemon architecture, and update remaining scripts + docs for the Zama fhEVM + daemon system.
 
