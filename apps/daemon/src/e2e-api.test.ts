@@ -409,16 +409,36 @@ describe("Privacy", () => {
 // ────────────────────────────────────────────────────────────────────────────
 
 describe("POST /create-auction", () => {
-  it("auto-creates seller user", async () => {
+  it("auto-creates seller user (FHE tx fails in test mode but user is created)", async () => {
+    // Provide secretPayload + prediction so we hit the real code path.
+    // The on-chain FHE tx will fail (no real contract in test mode) but
+    // the user is auto-created via getOrCreateUser() before the tx attempt.
+    const { status, data } = await signedPost("/create-auction", ALICE, {
+      eventId: "42",
+      eventTitle: "Test Event",
+      endTime: "1999999999",
+      prediction: "true",
+      secretPayload: "My secret prediction data",
+    });
+    // FHE tx fails → 500 with FHE_TX_FAILED
+    assert.equal(status, 500);
+    assert.equal(data.success, false);
+    assert.equal(data.code, "FHE_TX_FAILED");
+
+    // But the user was auto-created before the tx attempt
+    const user = await signedPost("/user", ALICE);
+    assert.equal(user.data.created, false, "user should already exist from create-auction");
+    assert.ok(user.data.userId);
+  });
+
+  it("rejects missing prediction/secret data", async () => {
     const { status, data } = await signedPost("/create-auction", ALICE, {
       eventId: "42",
       eventTitle: "Test Event",
       endTime: "1999999999",
     });
-    assert.equal(status, 200);
-    assert.ok(data.userId, "seller gets a userId");
-    assert.equal(data.eventId, "42");
-    assert.ok(["recorded", "pending_fhe"].includes(data.status as string), `unexpected status: ${data.status}`);
+    assert.equal(status, 400);
+    assert.equal(data.code, "MISSING_FIELDS");
   });
 
   it("rejects missing fields", async () => {
@@ -609,15 +629,23 @@ describe("Multi-user auction lifecycle", () => {
     const buyer1 = privateKeyToAccount(buyer1Pk);
     const buyer2 = privateKeyToAccount(buyer2Pk);
 
-    // Step 1: Seller creates auction (auto-creates user)
+    // Step 1: Seller creates auction (FHE tx fails in test mode, but user is auto-created)
     const auction = await signedPost("/create-auction", seller, {
       eventId: "99",
       eventTitle: "Will BTC hit $200k?",
       endTime: "1999999999",
+      prediction: "true",
+      secretPayload: "BTC will definitely hit 200k",
     });
-    assert.equal(auction.status, 200);
-    assert.ok(auction.data.userId, "seller gets a userId");
-    const sellerUserId = auction.data.userId;
+    // FHE tx fails in test mode — that's expected
+    assert.equal(auction.status, 500);
+    assert.equal(auction.data.code, "FHE_TX_FAILED");
+
+    // But seller user was auto-created
+    const sellerInfo = await signedPost("/user", seller);
+    assert.ok(sellerInfo.data.userId, "seller gets a userId");
+    assert.equal(sellerInfo.data.created, false, "user already exists from create-auction");
+    const sellerUserId = sellerInfo.data.userId;
 
     // Step 2: Buyer1 bids (auto-creates user)
     const bid1 = await signedPost("/bid", buyer1, {
@@ -644,14 +672,14 @@ describe("Multi-user auction lifecycle", () => {
     assert.equal(b1Bal.data.balance, "0");
     assert.equal(b2Bal.data.balance, "0");
 
-    // Step 5: Seller sees their own user info
-    const sellerInfo = await signedPost("/user", seller);
-    assert.equal(sellerInfo.data.userId, sellerUserId, "seller's ID is stable");
+    // Step 5: Seller's ID is stable
+    const sellerCheck = await signedPost("/user", seller);
+    assert.equal(sellerCheck.data.userId, sellerUserId, "seller's ID is stable");
 
     // Step 6: All three users have different IDs
     const b1Info = await signedPost("/user", buyer1);
     const b2Info = await signedPost("/user", buyer2);
-    const ids = new Set([sellerInfo.data.userId, b1Info.data.userId, b2Info.data.userId]);
+    const ids = new Set([sellerUserId, b1Info.data.userId, b2Info.data.userId]);
     assert.equal(ids.size, 3, "all three users have unique pseudonymous IDs");
   });
 });

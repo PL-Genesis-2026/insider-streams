@@ -10,6 +10,7 @@
     "closer": "tsx src/auction-closer.ts",
     "resolver": "tsx src/reputation-resolver.ts",
     "api": "tsx src/api.ts",
+    "test:db": "node --import tsx --test src/db.test.ts",
     "test:e2e": "node --import tsx --test src/e2e-api.test.ts",
     "test:sepolia": "node --import tsx --test src/e2e-sepolia.test.ts"
   },

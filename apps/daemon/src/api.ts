@@ -264,7 +264,7 @@ export function startApi(): void {
         return;
       }
 
-      res.json({
+      res.status(400).json({
         success: false,
         error: "Missing prediction or secret data",
         code: "MISSING_FIELDS",
