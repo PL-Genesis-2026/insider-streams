@@ -44,6 +44,19 @@ import * as marketplace from "./marketplace.js";
 import { getOrCreateUser, recordBid, getActiveBid, getActiveBidPreviousBidderId, insertSecret } from "./db.js";
 import { sendNotification } from "./notify.js";
 
+// ─── Admin Wallet Mutex ──────────────────────────────────────────────────────
+// All on-chain txs from the admin EOA must be serialized to prevent nonce
+// collisions. The daemon's wallet client auto-manages nonces but only if txs
+// are submitted sequentially. setInterval can fire multiple cycles concurrently.
+
+let adminLockPromise = Promise.resolve();
+
+function withAdminLock<T>(fn: () => Promise<T>): Promise<T> {
+  const next = adminLockPromise.then(fn, fn);
+  adminLockPromise = next.then(() => {}, () => {});
+  return next;
+}
+
 // ─── Intervals ──────────────────────────────────────────────────────────────
 
 const CREATE_EVENTS_INTERVAL_MS = 15 * 60 * 1000;    // 15 minutes
@@ -582,14 +595,13 @@ async function runPlaceBids(
       // Record bid in SQLite
       const bid = recordBid(auctionIdNum, user.userId, bidAmount.toString());
 
-      // Submit on-chain (async — don't block next bid)
-      marketplace.placeBid(auctionIdNum, user.userId, previousBidderId, bidAmount)
-        .then(txHash => {
-          console.log(`[demo]   Bid ${bid.id} confirmed (tx: ${txHash.slice(0, 10)}...)`);
-        })
-        .catch(err => {
-          console.error(`[demo]   Bid ${bid.id} failed: ${err instanceof Error ? err.message : err}`);
-        });
+      // Submit on-chain — await to avoid nonce collisions from parallel admin txs
+      try {
+        const txHash = await marketplace.placeBid(auctionIdNum, user.userId, previousBidderId, bidAmount);
+        console.log(`[demo]   Bid ${bid.id} confirmed (tx: ${txHash.slice(0, 10)}...)`);
+      } catch (err) {
+        console.error(`[demo]   Bid ${bid.id} failed: ${err instanceof Error ? err.message : err}`);
+      }
 
       bidsPlaced++;
     } catch (err) {
@@ -684,29 +696,29 @@ export async function startDemoPopulator(): Promise<void> {
 
   // Run create-events once immediately (seed)
   try {
-    await runCreateEvents(venice, gqlClient, testAccounts);
+    await withAdminLock(() => runCreateEvents(venice, gqlClient, testAccounts));
   } catch (err) {
     console.error("[demo] Initial create-events failed:", err instanceof Error ? err.message : err);
   }
 
-  // Set up interval loops
+  // Set up interval loops — all wrapped in withAdminLock to serialize admin EOA nonces
   setInterval(async () => {
-    try { await runCreateEvents(venice, gqlClient, testAccounts); }
+    try { await withAdminLock(() => runCreateEvents(venice, gqlClient, testAccounts)); }
     catch (err) { console.error("[demo] create-events cycle error:", err instanceof Error ? err.message : err); }
   }, CREATE_EVENTS_INTERVAL_MS);
 
   setInterval(async () => {
-    try { await runSpawnAuctions(gqlClient, testAccounts); }
+    try { await withAdminLock(() => runSpawnAuctions(gqlClient, testAccounts)); }
     catch (err) { console.error("[demo] spawn-auctions cycle error:", err instanceof Error ? err.message : err); }
   }, SPAWN_AUCTIONS_INTERVAL_MS);
 
   setInterval(async () => {
-    try { await runPlaceBids(gqlClient, testAccounts); }
+    try { await withAdminLock(() => runPlaceBids(gqlClient, testAccounts)); }
     catch (err) { console.error("[demo] place-bids cycle error:", err instanceof Error ? err.message : err); }
   }, PLACE_BIDS_INTERVAL_MS);
 
   setInterval(async () => {
-    try { await runRequestSettlements(gqlClient); }
+    try { await withAdminLock(() => runRequestSettlements(gqlClient)); }
     catch (err) { console.error("[demo] request-settlements cycle error:", err instanceof Error ? err.message : err); }
   }, REQUEST_SETTLEMENTS_INTERVAL_MS);
 
