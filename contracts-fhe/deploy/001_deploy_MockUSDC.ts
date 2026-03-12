@@ -11,6 +11,21 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   });
 
   console.log(`MockUSDC deployed at: ${result.address}`);
+
+  if (hre.network.name !== "hardhat" && hre.network.name !== "localhost") {
+    try {
+      await hre.run("verify:verify", {
+        address: result.address,
+        constructorArguments: [],
+      });
+    } catch (e: any) {
+      if (e.message?.includes("Already Verified")) {
+        console.log(`MockUSDC already verified`);
+      } else {
+        console.error(`MockUSDC verification failed:`, e.message);
+      }
+    }
+  }
 };
 
 export default func;
