@@ -22,6 +22,21 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   console.log(`FHESecretMarketplace deployed at: ${result.address}`);
   console.log(`  paymentToken: ${confidentialUSDCAddress}`);
   console.log(`  settler: ${settlerAddress}`);
+
+  if (hre.network.name !== "hardhat" && hre.network.name !== "localhost") {
+    try {
+      await hre.run("verify:verify", {
+        address: result.address,
+        constructorArguments: [confidentialUSDCAddress, settlerAddress],
+      });
+    } catch (e: any) {
+      if (e.message?.includes("Already Verified")) {
+        console.log(`FHESecretMarketplace already verified`);
+      } else {
+        console.error(`FHESecretMarketplace verification failed:`, e.message);
+      }
+    }
+  }
 };
 
 export default func;

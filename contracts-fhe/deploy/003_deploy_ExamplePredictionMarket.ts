@@ -20,6 +20,21 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   console.log(`ExamplePredictionMarket deployed at: ${result.address}`);
   console.log(`  paymentToken: ${mockUSDC.address}`);
   console.log(`  settler: ${settlerAddress}`);
+
+  if (hre.network.name !== "hardhat" && hre.network.name !== "localhost") {
+    try {
+      await hre.run("verify:verify", {
+        address: result.address,
+        constructorArguments: [mockUSDC.address, settlerAddress],
+      });
+    } catch (e: any) {
+      if (e.message?.includes("Already Verified")) {
+        console.log(`ExamplePredictionMarket already verified`);
+      } else {
+        console.error(`ExamplePredictionMarket verification failed:`, e.message);
+      }
+    }
+  }
 };
 
 export default func;
