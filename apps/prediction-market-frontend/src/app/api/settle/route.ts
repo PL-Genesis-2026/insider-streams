@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     const eventData = await publicClient.readContract({
       address: CONTRACT_ADDRESS,
       abi: examplePredictionMarketAbi,
-      functionName: "getEvent",
+      functionName: "getMarketEvent",
       args: [BigInt(eventId)],
     });
 
