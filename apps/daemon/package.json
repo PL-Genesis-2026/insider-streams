@@ -12,7 +12,8 @@
     "api": "tsx src/api.ts",
     "test:db": "node --import tsx --test src/db.test.ts",
     "test:e2e": "node --import tsx --test src/e2e-api.test.ts",
-    "test:sepolia": "node --import tsx --test src/e2e-sepolia.test.ts"
+    "test:sepolia": "node --import tsx --test src/e2e-sepolia.test.ts",
+    "test:lifecycle": "node --import tsx --test src/e2e-lifecycle.test.ts"
   },
   "dependencies": {
     "@private-streams/common": "workspace:*",
