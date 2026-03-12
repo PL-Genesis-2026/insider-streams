@@ -14,7 +14,7 @@
  */
 
 import express, { type Request, type Response } from "express";
-import { verifySignedRequest, mockUsdcAbi } from "@private-streams/common";
+import { verifySignedRequest, fheConfidentialUsdcAbi } from "@private-streams/common";
 import { config } from "./config.js";
 import {
   getOrCreateUser,
@@ -553,12 +553,12 @@ export function startApi(): void {
         return;
       }
 
-      const mintAmount = BigInt(1000) * BigInt(10 ** 6); // 1000 USDC (6 decimals)
+      const mintAmount = BigInt(1000) * BigInt(10 ** 6); // 1000 cUSDC (6 decimals)
       const txHash = await withAdminLock(async () => {
         const hash = await getWalletClient().writeContract({
           address: config.confidentialUsdcAddress as `0x${string}`,
-          abi: mockUsdcAbi,
-          functionName: "mint",
+          abi: fheConfidentialUsdcAbi,
+          functionName: "mintPlaintext",
           args: [result.payload.userAddress as `0x${string}`, mintAmount],
         });
         const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
