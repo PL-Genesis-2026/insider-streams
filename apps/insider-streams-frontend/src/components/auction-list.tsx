@@ -42,12 +42,13 @@ export function AuctionList({ className }: AuctionListProps) {
     usePrivateData();
 
   const orderBy = sortMode === "bid" ? "currentBid" : "blockTimestamp";
+  const nowSeconds = String(Math.floor(Date.now() / 1000));
 
   const openAuctionsQuery = useQuery(HomepageAuctionsDocument, {
     variables: {
       limit: AUCTIONS_PAGE_SIZE,
       skip: page * AUCTIONS_PAGE_SIZE,
-      where: { status_not_in: EXCLUDE_CLOSED },
+      where: { status_not_in: EXCLUDE_CLOSED, endTime_gt: nowSeconds },
       orderBy,
       orderDirection: "desc",
     },
