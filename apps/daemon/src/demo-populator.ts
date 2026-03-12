@@ -43,19 +43,7 @@ import { getPublicClient, getWalletClient, getAccount } from "./provider.js";
 import * as marketplace from "./marketplace.js";
 import { getOrCreateUser, recordBid, insertSecret } from "./db.js";
 import { sendNotification } from "./notify.js";
-
-// ─── Admin Wallet Mutex ──────────────────────────────────────────────────────
-// All on-chain txs from the admin EOA must be serialized to prevent nonce
-// collisions. The daemon's wallet client auto-manages nonces but only if txs
-// are submitted sequentially. setInterval can fire multiple cycles concurrently.
-
-let adminLockPromise = Promise.resolve();
-
-function withAdminLock<T>(fn: () => Promise<T>): Promise<T> {
-  const next = adminLockPromise.then(fn, fn);
-  adminLockPromise = next.then(() => {}, () => {});
-  return next;
-}
+import { withAdminLock } from "./admin-lock.js";
 
 // ─── Intervals ──────────────────────────────────────────────────────────────
 
@@ -328,13 +316,15 @@ async function runCreateEvents(
     args: [adminAddress],
   }) as bigint;
   if (adminBalance < MIN_BALANCE) {
-    const h = await adminClient.writeContract({
-      address: paymentToken,
-      abi: mockUsdcAbi,
-      functionName: "mint",
-      args: [adminAddress, MINT_AMOUNT],
+    await withAdminLock(async () => {
+      const h = await adminClient.writeContract({
+        address: paymentToken,
+        abi: mockUsdcAbi,
+        functionName: "mint",
+        args: [adminAddress, MINT_AMOUNT],
+      });
+      await waitForTx(h, "Mint USDC for admin");
     });
-    await waitForTx(h, "Mint USDC for admin");
   }
 
   // Ensure approval
@@ -345,13 +335,15 @@ async function runCreateEvents(
     args: [adminAddress, EXAMPLE_PREDICTION_MARKET_ADDRESS as Address],
   }) as bigint;
   if (allowance < MIN_ALLOWANCE) {
-    const h = await adminClient.writeContract({
-      address: paymentToken,
-      abi: mockUsdcAbi,
-      functionName: "approve",
-      args: [EXAMPLE_PREDICTION_MARKET_ADDRESS as Address, APPROVAL_AMOUNT],
+    await withAdminLock(async () => {
+      const h = await adminClient.writeContract({
+        address: paymentToken,
+        abi: mockUsdcAbi,
+        functionName: "approve",
+        args: [EXAMPLE_PREDICTION_MARKET_ADDRESS as Address, APPROVAL_AMOUNT],
+      });
+      await waitForTx(h, "Approve USDC for admin");
     });
-    await waitForTx(h, "Approve USDC for admin");
   }
 
   // Step 4: Create events on-chain
@@ -359,13 +351,15 @@ async function runCreateEvents(
   for (const question of questions) {
     const duration = EVENT_DURATIONS[randomInt(0, EVENT_DURATIONS.length - 1)]!;
     try {
-      const hash = await adminClient.writeContract({
-        address: EXAMPLE_PREDICTION_MARKET_ADDRESS as Address,
-        abi: examplePredictionMarketAbi,
-        functionName: "newEvent",
-        args: [question, duration],
+      const receipt = await withAdminLock(async () => {
+        const hash = await adminClient.writeContract({
+          address: EXAMPLE_PREDICTION_MARKET_ADDRESS as Address,
+          abi: examplePredictionMarketAbi,
+          functionName: "newEvent",
+          args: [question, duration],
+        });
+        return waitForTx(hash, `Event: "${question.slice(0, 40)}..."`);
       });
-      const receipt = await waitForTx(hash, `Event: "${question.slice(0, 40)}..."`);
       const logs = parseEventLogs({
         abi: examplePredictionMarketAbi,
         logs: receipt.logs,
@@ -399,11 +393,13 @@ async function runCreateEvents(
           functionName: "balanceOf", args: [ta.address],
         }) as bigint;
         if (bal < MIN_BALANCE) {
-          const h = await adminClient.writeContract({
-            address: paymentToken, abi: mockUsdcAbi,
-            functionName: "mint", args: [ta.address, MINT_AMOUNT],
+          await withAdminLock(async () => {
+            const h = await adminClient.writeContract({
+              address: paymentToken, abi: mockUsdcAbi,
+              functionName: "mint", args: [ta.address, MINT_AMOUNT],
+            });
+            await waitForTx(h, `Mint for ${ta.label}`);
           });
-          await waitForTx(h, `Mint for ${ta.label}`);
           await new Promise(r => setTimeout(r, 2_000));
         }
 
@@ -577,13 +573,15 @@ async function runPlaceBids(
         // Top up: mint MockUSDC to admin, then deposit for user
         console.log(`[demo]   ${ta.label} balance ${balance} < bid ${bidAmount}, topping up`);
         try {
-          const mintHash = await getWalletClient().writeContract({
-            address: MOCK_USDC_ADDRESS as Address,
-            abi: mockUsdcAbi,
-            functionName: "mint",
-            args: [getAccount().address, BID_DEPOSIT_AMOUNT],
+          await withAdminLock(async () => {
+            const mintHash = await getWalletClient().writeContract({
+              address: MOCK_USDC_ADDRESS as Address,
+              abi: mockUsdcAbi,
+              functionName: "mint",
+              args: [getAccount().address, BID_DEPOSIT_AMOUNT],
+            });
+            await waitForTx(mintHash, `Mint USDC for ${ta.label}`);
           });
-          await waitForTx(mintHash, `Mint USDC for ${ta.label}`);
 
           await marketplace.depositFor(user.userId, BID_DEPOSIT_AMOUNT);
           balance += BID_DEPOSIT_AMOUNT;
@@ -651,13 +649,15 @@ async function runRequestSettlements(gqlClient: GraphQLClient): Promise<void> {
   for (const event of toSettle) {
     try {
       console.log(`[demo]   Requesting settlement for event ${event.eventId}`);
-      const hash = await walletClient.writeContract({
-        address: EXAMPLE_PREDICTION_MARKET_ADDRESS as `0x${string}`,
-        abi: examplePredictionMarketAbi,
-        functionName: "requestSettlement",
-        args: [BigInt(event.eventId)],
+      await withAdminLock(async () => {
+        const hash = await walletClient.writeContract({
+          address: EXAMPLE_PREDICTION_MARKET_ADDRESS as `0x${string}`,
+          abi: examplePredictionMarketAbi,
+          functionName: "requestSettlement",
+          args: [BigInt(event.eventId)],
+        });
+        await getPublicClient().waitForTransactionReceipt({ hash });
       });
-      await getPublicClient().waitForTransactionReceipt({ hash });
       console.log(`[demo]   Event ${event.eventId}: confirmed`);
       succeeded.push(event.eventId);
     } catch (err) {
@@ -704,29 +704,30 @@ export async function startDemoPopulator(): Promise<void> {
 
   // Run create-events once immediately (seed)
   try {
-    await withAdminLock(() => runCreateEvents(venice, gqlClient, testAccounts));
+    await runCreateEvents(venice, gqlClient, testAccounts);
   } catch (err) {
     console.error("[demo] Initial create-events failed:", err instanceof Error ? err.message : err);
   }
 
-  // Set up interval loops — all wrapped in withAdminLock to serialize admin EOA nonces
+  // Set up interval loops — individual on-chain txs are serialized via withAdminLock
+  // in marketplace.ts and other service modules. No outer lock needed here.
   setInterval(async () => {
-    try { await withAdminLock(() => runCreateEvents(venice, gqlClient, testAccounts)); }
+    try { await runCreateEvents(venice, gqlClient, testAccounts); }
     catch (err) { console.error("[demo] create-events cycle error:", err instanceof Error ? err.message : err); }
   }, CREATE_EVENTS_INTERVAL_MS);
 
   setInterval(async () => {
-    try { await withAdminLock(() => runSpawnAuctions(gqlClient, testAccounts)); }
+    try { await runSpawnAuctions(gqlClient, testAccounts); }
     catch (err) { console.error("[demo] spawn-auctions cycle error:", err instanceof Error ? err.message : err); }
   }, SPAWN_AUCTIONS_INTERVAL_MS);
 
   setInterval(async () => {
-    try { await withAdminLock(() => runPlaceBids(gqlClient, testAccounts)); }
+    try { await runPlaceBids(gqlClient, testAccounts); }
     catch (err) { console.error("[demo] place-bids cycle error:", err instanceof Error ? err.message : err); }
   }, PLACE_BIDS_INTERVAL_MS);
 
   setInterval(async () => {
-    try { await withAdminLock(() => runRequestSettlements(gqlClient)); }
+    try { await runRequestSettlements(gqlClient); }
     catch (err) { console.error("[demo] request-settlements cycle error:", err instanceof Error ? err.message : err); }
   }, REQUEST_SETTLEMENTS_INTERVAL_MS);
 

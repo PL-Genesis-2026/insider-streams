@@ -13,6 +13,7 @@ import { examplePredictionMarketAbi } from "@private-streams/common";
 import { config, requireConfig } from "./config.js";
 import { getPublicClient, getWalletClient, getAccount } from "./provider.js";
 import { sendNotification } from "./notify.js";
+import { withAdminLock } from "./admin-lock.js";
 
 const ETHERSCAN_URL = "https://sepolia.etherscan.io/tx";
 
@@ -174,14 +175,16 @@ async function handleSettlementRequest(eventId: bigint, question: string): Promi
   // Step 2: Settle on-chain
   const pmAddress = config.predictionMarketAddress as `0x${string}`;
   const outcome = OutcomeMap[geminiResult.result];
-  const hash = await getWalletClient().writeContract({
-    address: pmAddress,
-    abi: examplePredictionMarketAbi,
-    functionName: "settleEvent",
-    args: [eventId, outcome, geminiResult.confidence, geminiResult.responseId],
+  const txHash = await withAdminLock(async () => {
+    const hash = await getWalletClient().writeContract({
+      address: pmAddress,
+      abi: examplePredictionMarketAbi,
+      functionName: "settleEvent",
+      args: [eventId, outcome, geminiResult.confidence, geminiResult.responseId],
+    });
+    const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
+    return receipt.transactionHash;
   });
-  const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
-  const txHash = receipt.transactionHash;
   console.log(`[settler] Settlement tx: ${txHash}`);
 
   // Step 3: Write Firestore audit
