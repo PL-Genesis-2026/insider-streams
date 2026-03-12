@@ -21,8 +21,7 @@
 import stringify from "fast-json-stable-stringify";
 import { GraphQLClient, gql } from "graphql-request";
 import { privateKeyToAccount } from "viem/accounts";
-import { createWalletClient, http, type Hex } from "viem";
-import { sepolia } from "viem/chains";
+import { type Hex } from "viem";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -72,7 +71,7 @@ async function ntfy(title: string, message: string, tags?: string[]) {
 interface TestAccount {
   privateKey: Hex;
   address: string;
-  walletClient: ReturnType<typeof createWalletClient>;
+  account: ReturnType<typeof privateKeyToAccount>;
 }
 
 function loadTestAccounts(): TestAccount[] {
@@ -84,14 +83,7 @@ function loadTestAccounts(): TestAccount[] {
     accounts.push({
       privateKey: pk as Hex,
       address: account.address,
-      walletClient: createWalletClient({
-        account,
-        chain: sepolia,
-        transport: http(
-          process.env.RPC_URL ??
-            "https://ethereum-sepolia-rpc.publicnode.com",
-        ),
-      }),
+      account,
     });
   }
   return accounts;
@@ -109,7 +101,7 @@ async function signedPost(
   const timestamp = Math.floor(Date.now() / 1000).toString();
   const payload = { ...fields, timestamp };
   const message = stringify(payload);
-  const signature = await account.walletClient.signMessage({ message });
+  const signature = await account.account.signMessage({ message });
 
   return fetch(`${DAEMON_URL}${endpoint}`, {
     method: "POST",
