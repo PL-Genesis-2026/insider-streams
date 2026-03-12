@@ -1,13 +1,9 @@
 /**
  * Shared E2E test helpers
- *
- * Used by:
- *   - secret-marketplace-e2e.ts
  */
 
 import {
-  confidentialUsdcAbi,
-  secretMarketplaceAbi,
+  mockUsdcAbi,
 } from "@private-streams/common";
 import {
   BaseError,
@@ -207,7 +203,7 @@ export async function ensureUsdcBalance(
 ): Promise<void> {
   const balance = (await publicClient.readContract({
     address: usdcAddr,
-    abi: confidentialUsdcAbi,
+    abi: mockUsdcAbi,
     functionName: "balanceOf",
     args: [target],
   })) as bigint;
@@ -215,7 +211,7 @@ export async function ensureUsdcBalance(
   if (balance < minBalance) {
     const h = await mintClient.writeContract({
       address: usdcAddr,
-      abi: confidentialUsdcAbi,
+      abi: mockUsdcAbi,
       functionName: "mint",
       args: [target, mintAmount],
     });
@@ -284,7 +280,7 @@ export async function ensureUsdcApproval(
 ): Promise<void> {
   const allowance = (await publicClient.readContract({
     address: usdcAddr,
-    abi: confidentialUsdcAbi,
+    abi: mockUsdcAbi,
     functionName: "allowance",
     args: [owner, spender],
   })) as bigint;
@@ -292,7 +288,7 @@ export async function ensureUsdcApproval(
   if (allowance < MIN_ALLOWANCE) {
     const h = await walletClient.writeContract({
       address: usdcAddr,
-      abi: confidentialUsdcAbi,
+      abi: mockUsdcAbi,
       functionName: "approve",
       args: [spender, APPROVAL_AMOUNT],
     });
@@ -318,19 +314,4 @@ export function parseFirstEventLog(
   return (logs[0] as { args: Record<string, unknown> }).args;
 }
 
-// ─── Contract read helpers ──────────────────────────────────────────────────
-
-/**
- * Read the ExamplePredictionMarket address from SecretMarketplace.marketplace().
- */
-export async function readSimpleMarketAddress(
-  publicClient: E2EPublicClient,
-  secretMarketplace: Address,
-): Promise<Address> {
-  return (await publicClient.readContract({
-    address: secretMarketplace,
-    abi: secretMarketplaceAbi,
-    functionName: "marketplace",
-  })) as Address;
-}
 

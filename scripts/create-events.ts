@@ -26,7 +26,7 @@ import "dotenv/config";
 
 import {
   EXAMPLE_PREDICTION_MARKET_ADDRESS,
-  confidentialUsdcAbi,
+  mockUsdcAbi,
   examplePredictionMarketAbi,
 } from "@private-streams/common";
 import { GraphQLClient } from "graphql-request";
@@ -175,7 +175,7 @@ async function waitForTx(hash: Hex, label: string) {
 async function ensureBalance(target: Address) {
   const balance = (await publicClient.readContract({
     address: paymentTokenAddress,
-    abi: confidentialUsdcAbi,
+    abi: mockUsdcAbi,
     functionName: "balanceOf",
     args: [target],
   })) as bigint;
@@ -183,7 +183,7 @@ async function ensureBalance(target: Address) {
   if (balance < MIN_BALANCE) {
     const h = await ownerClient.writeContract({
       address: paymentTokenAddress,
-      abi: confidentialUsdcAbi,
+      abi: mockUsdcAbi,
       functionName: "mint",
       args: [target, MINT_AMOUNT],
     });
@@ -202,7 +202,7 @@ async function ensureApproval(
 ) {
   const allowance = (await publicClient.readContract({
     address: paymentTokenAddress,
-    abi: confidentialUsdcAbi,
+    abi: mockUsdcAbi,
     functionName: "allowance",
     args: [owner, EXAMPLE_PREDICTION_MARKET_ADDRESS],
   })) as bigint;
@@ -210,7 +210,7 @@ async function ensureApproval(
   if (allowance < MIN_ALLOWANCE) {
     const h = await walletClient.writeContract({
       address: paymentTokenAddress,
-      abi: confidentialUsdcAbi,
+      abi: mockUsdcAbi,
       functionName: "approve",
       args: [EXAMPLE_PREDICTION_MARKET_ADDRESS, APPROVAL_AMOUNT],
     });
