@@ -29,7 +29,7 @@ Unified Express server with background services:
 - **Settler** — watches `SettlementRequested` events, calls Gemini AI with Google Search grounding, settles events on-chain
 - **Auction Closer** — polls for expired auctions, closes them, marks winning bids; watches `AuctionCancelled` events
 - **Reputation Resolver** — watches `SettlementResponse` events, resolves per-auction predictions against actual outcomes
-- **Deposit Watcher** — monitors on-chain deposits
+- **Demo Populator** — opt-in (`DEMO_MODE=true`): continuously creates events, auctions, bids, and settlement requests
 - **HTTP API** — signature-authenticated endpoints (`/user`, `/balance`, `/bid`, `/create-auction`, `/deposit`, `/withdraw`, `/faucet`, etc.)
 
 ### Frontend (`apps/insider-streams-frontend/`)
@@ -40,10 +40,10 @@ Next.js app with wallet connection (Reown/WalletConnect), Apollo Client for subg
 
 | Contract | Address |
 |---|---|
-| MockUSDC | [`0x7Dd00c06B6123dFCaF23F6647Eb6f19eC21abD33`](https://sepolia.etherscan.io/address/0x7Dd00c06B6123dFCaF23F6647Eb6f19eC21abD33) |
-| FHEConfidentialUSDC | [`0xee3A0Cccb31fF816615C18E1d1DB480df8a0f9F1`](https://sepolia.etherscan.io/address/0xee3A0Cccb31fF816615C18E1d1DB480df8a0f9F1) |
-| ExamplePredictionMarket | [`0x791550c705B2272E1D6EC617AB18337f4E5712E8`](https://sepolia.etherscan.io/address/0x791550c705B2272E1D6EC617AB18337f4E5712E8) |
-| FHESecretMarketplace | [`0x0056F94eCC59B918a225B433401EE5121506171B`](https://sepolia.etherscan.io/address/0x0056F94eCC59B918a225B433401EE5121506171B) |
+| MockUSDC | [`0x1Cd05cf3c20Cd64f6803C1777C6373e47872944c`](https://sepolia.etherscan.io/address/0x1Cd05cf3c20Cd64f6803C1777C6373e47872944c) |
+| FHEConfidentialUSDC | [`0x1f54Afd38756089cd2B8852e5014C6ccf1299b57`](https://sepolia.etherscan.io/address/0x1f54Afd38756089cd2B8852e5014C6ccf1299b57) |
+| ExamplePredictionMarket | [`0x7C22C1b9B2a4575089a996E98c877b996eBbBAA2`](https://sepolia.etherscan.io/address/0x7C22C1b9B2a4575089a996E98c877b996eBbBAA2) |
+| FHESecretMarketplace | [`0xf74884348F7153c63A46a1e362ec6D90E754Cf15`](https://sepolia.etherscan.io/address/0xf74884348F7153c63A46a1e362ec6D90E754Cf15) |
 
 ## Quick Start
 
@@ -56,19 +56,23 @@ pnpm dev:insider-streams
 # Start the daemon (in a separate terminal)
 cd apps/daemon && pnpm start
 
-# Populate with test data (in a separate terminal)
-cd scripts && pnpm run-demo
+# Populate with test data (daemon built-in)
+cd apps/daemon && DEMO_MODE=true pnpm start
 ```
 
-## Demo Scripts
+## Demo Mode
 
-The `run-demo` orchestrator runs all population scripts together:
+The daemon includes a built-in demo populator that continuously generates events, auctions, bids, and settlements:
 
 ```bash
-cd scripts && pnpm run-demo
+cd apps/daemon && DEMO_MODE=true pnpm start
 ```
 
-Individual scripts:
+Requires `VENICE_API_KEY` and `TEST_ACCOUNT_1..25` in `apps/daemon/.env`.
+
+Intervals: create-events (15m), spawn-auctions (5m), place-bids (1m), request-settlements (10m).
+
+Individual scripts remain available for one-shot runs (from `scripts/`):
 
 | Script | Description |
 |---|---|
@@ -99,7 +103,8 @@ cd apps/insider-streams-frontend && pnpm test:playwright
 ```
 private-streams/
 ├── apps/
-│   ├── insider-streams-frontend/    # Next.js marketplace UI
+│   ├── insider-streams-frontend/    # Next.js marketplace UI (port 3000)
+│   ├── prediction-market-frontend/  # Next.js prediction market UI (port 3100)
 │   └── daemon/                      # Express daemon (settler, closer, resolver, API)
 ├── packages/
 │   └── common/                      # Shared ABIs, addresses, utilities
