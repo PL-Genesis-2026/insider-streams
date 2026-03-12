@@ -40,7 +40,7 @@ if (!OWNER_PK) {
 
 const SUBGRAPH_URL =
   process.env.SUBGRAPH_URL ??
-  "https://gateway.thegraph.com/api/a075bc6e2e48577d2588bb458b939bdc/subgraphs/id/2vVUkMCH5m48s8Qj1ChgR2z3c98vAX3raBoJoYZ9RrBW";
+  "https://api.studio.thegraph.com/query/1743303/insider-streams-zama/version/latest";
 
 // ---------------------------------------------------------------------------
 // ntfy (optional)

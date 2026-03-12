@@ -3,17 +3,19 @@
 # run-demo.sh — Orchestrates demo-population scripts.
 #
 # Order of operations:
-#   1. create-events  — runs once at startup to seed prediction market events
-#   2. spawn-auctions — long-running daemon, creates one auction per cycle
-#   3. create-events  — re-runs on a background loop to add fresh events
+#   1. create-events          — runs once at startup to seed prediction market events
+#   2. spawn-auctions         — background loop, creates one auction per cycle
+#   3. request-settlements    — background loop, requests settlement for closed events
+#   4. create-events          — re-runs on a background loop to add fresh events
 #
 # Usage (from scripts/):
 #   pnpm run-demo
 #
 # Optional env overrides (in scripts/.env or environment):
-#   INTERVAL_MS                — spawn-auctions cycle interval (default: 300000 / 5 min)
-#   CREATE_EVENTS_INTERVAL_MS  — how often to re-run create-events (default: 1800000 / 30 min)
-#   BASE_URL                   — frontend origin (default: http://localhost:3000)
+#   INTERVAL_MS                      — spawn-auctions cycle interval (default: 300000 / 5 min)
+#   CREATE_EVENTS_INTERVAL_MS        — how often to re-run create-events (default: 1800000 / 30 min)
+#   REQUEST_SETTLEMENTS_INTERVAL_MS  — how often to request settlements (default: 120000 / 2 min)
+#   BASE_URL                         — frontend origin (default: http://localhost:3000)
 
 set -uo pipefail
 
@@ -22,15 +24,18 @@ cd "$SCRIPT_DIR"
 
 CREATE_EVENTS_INTERVAL_S=$(( ${CREATE_EVENTS_INTERVAL_MS:-1800000} / 1000 ))
 SPAWN_INTERVAL_S=$(( ${INTERVAL_MS:-300000} / 1000 ))
+REQUEST_SETTLEMENTS_INTERVAL_S=$(( ${REQUEST_SETTLEMENTS_INTERVAL_MS:-120000} / 1000 ))
 
 SPAWN_PID=""
 REFRESH_PID=""
+REQUEST_SETTLEMENTS_PID=""
 
 cleanup() {
   echo ""
   echo "[run-demo] shutting down all demo processes..."
-  [ -n "$SPAWN_PID"   ] && kill "$SPAWN_PID"   2>/dev/null || true
-  [ -n "$REFRESH_PID" ] && kill "$REFRESH_PID" 2>/dev/null || true
+  [ -n "$SPAWN_PID"               ] && kill "$SPAWN_PID"               2>/dev/null || true
+  [ -n "$REFRESH_PID"             ] && kill "$REFRESH_PID"             2>/dev/null || true
+  [ -n "$REQUEST_SETTLEMENTS_PID" ] && kill "$REQUEST_SETTLEMENTS_PID" 2>/dev/null || true
   exit 0
 }
 
@@ -39,9 +44,10 @@ trap cleanup INT TERM
 echo "[run-demo] =================================================="
 echo "[run-demo]  Insider Streams — Demo Orchestrator"
 echo "[run-demo] =================================================="
-echo "[run-demo]  create-events:  once at startup, then every ${CREATE_EVENTS_INTERVAL_S}s"
-echo "[run-demo]  spawn-auctions: every ${SPAWN_INTERVAL_S}s"
-echo "[run-demo]  base URL:       ${BASE_URL:-http://localhost:3000}"
+echo "[run-demo]  create-events:        once at startup, then every ${CREATE_EVENTS_INTERVAL_S}s"
+echo "[run-demo]  spawn-auctions:       every ${SPAWN_INTERVAL_S}s"
+echo "[run-demo]  request-settlements:  every ${REQUEST_SETTLEMENTS_INTERVAL_S}s"
+echo "[run-demo]  base URL:             ${BASE_URL:-http://localhost:3000}"
 echo ""
 
 # ── 1. Seed prediction market events ─────────────────────────────────────────
@@ -49,7 +55,7 @@ echo "[run-demo] Running create-events (initial seed)..."
 pnpm run create-events || echo "[run-demo] create-events exited non-zero — continuing"
 echo ""
 
-# ── 2. Start background loops ─────────────────────────────────────────────────
+# ── 2. Start spawn-auctions loop ────────────────────────────────────────────
 (
   while true; do
     pnpm run spawn-auctions || echo "[run-demo] spawn-auctions failed — continuing"
@@ -59,7 +65,17 @@ echo ""
 SPAWN_PID=$!
 echo "[run-demo] spawn-auctions loop started (PID $SPAWN_PID)"
 
-# ── 3. Periodic create-events refresh ─────────────────────────────────────────
+# ── 3. Periodic request-settlements ─────────────────────────────────────────
+(
+  while true; do
+    sleep "$REQUEST_SETTLEMENTS_INTERVAL_S"
+    pnpm run request-settlements || echo "[run-demo] request-settlements failed — continuing"
+  done
+) &
+REQUEST_SETTLEMENTS_PID=$!
+echo "[run-demo] request-settlements loop started (PID $REQUEST_SETTLEMENTS_PID)"
+
+# ── 4. Periodic create-events refresh ───────────────────────────────────────
 (
   while true; do
     sleep "$CREATE_EVENTS_INTERVAL_S"
@@ -74,4 +90,4 @@ echo ""
 echo "[run-demo] All processes running. Press Ctrl+C to stop all."
 echo ""
 
-wait "$SPAWN_PID" "$REFRESH_PID"
+wait "$SPAWN_PID" "$REQUEST_SETTLEMENTS_PID" "$REFRESH_PID"
