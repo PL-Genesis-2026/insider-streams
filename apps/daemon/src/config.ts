@@ -38,6 +38,12 @@ export const config = {
 
   // SQLite
   dbPath: process.env.DB_PATH || "",
+
+  // Demo populator (opt-in)
+  demoMode: process.env.DEMO_MODE === "true",
+  veniceApiKey: process.env.VENICE_API_KEY || "",
+  subgraphUrl: process.env.SUBGRAPH_URL ||
+    "https://api.studio.thegraph.com/query/1743303/insider-streams-zama/version/latest",
 } as const;
 
 export function requireConfig(keys: (keyof typeof config)[]): void {
