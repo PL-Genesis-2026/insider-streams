@@ -204,7 +204,7 @@ export async function startSettler(): Promise<void> {
   console.log(`[settler] Watching SettlementRequested on ${config.predictionMarketAddress}`);
   console.log(`[settler] Settler address: ${getAccount().address}`);
 
-  // Watch for events as they arrive
+  // Watch for new events as they arrive
   publicClient.watchContractEvent({
     address: pmAddress,
     abi: examplePredictionMarketAbi,
@@ -220,6 +220,42 @@ export async function startSettler(): Promise<void> {
       }
     },
   });
+
+  // Catch up on any SettlementRequested events missed while the daemon was down.
+  // The contract has no getter for these, so scan all events for status=1.
+  const nextEventId = await publicClient.readContract({
+    address: pmAddress,
+    abi: examplePredictionMarketAbi,
+    functionName: "nextEventId",
+  });
+
+  let pendingCount = 0;
+  for (let i = 0n; i < nextEventId; i++) {
+    try {
+      const ev = await publicClient.readContract({
+        address: pmAddress,
+        abi: examplePredictionMarketAbi,
+        functionName: "getMarketEvent",
+        args: [i],
+      });
+      // Status 1 = SettlementRequested
+      if (ev.status === 1) {
+        pendingCount++;
+        console.log(`[settler] Found pending settlement: event ${i}`);
+        handleSettlementRequest(i, ev.question).catch((err) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(`[settler] Error processing event ${i}:`, msg);
+          sendNotification("Settlement FAILED", `Event ${i}: ${msg}`);
+        });
+      }
+    } catch {
+      // Event may not exist or read failed
+    }
+  }
+
+  if (pendingCount > 0) {
+    console.log(`[settler] Processing ${pendingCount} pending settlement(s) from startup scan`);
+  }
 
   console.log("[settler] Listening for events...");
 }
