@@ -26,11 +26,13 @@ import {
   createPublicClient,
   createWalletClient,
   http,
+  zeroHash,
   type Hex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
 import stringify from "fast-json-stable-stringify";
+import { createInstance, SepoliaConfig } from "@zama-fhe/relayer-sdk/node";
 import {
   examplePredictionMarketAbi,
   fheSecretMarketplaceAbi,
@@ -409,6 +411,78 @@ describe("Full Lifecycle E2E", { timeout: 600_000 }, () => {
     console.log(`  Event resolved: ${resolved}`);
   });
 
+  it("Step 7.5: Finalize reputation via relayer decrypt + on-chain proof", async () => {
+    const wallet = getOwnerWallet();
+    const id = BigInt(auctionId);
+
+    // Verify pending reputation decrypt is set
+    const pending = await publicClient.readContract({
+      address: mpAddress,
+      abi: fheSecretMarketplaceAbi,
+      functionName: "pendingReputationDecrypt",
+      args: [id],
+    });
+    assert.equal(pending, true, "Should have pending reputation decrypt");
+
+    // Read the encrypted handle
+    const handle = await publicClient.readContract({
+      address: mpAddress,
+      abi: fheSecretMarketplaceAbi,
+      functionName: "pendingIsCorrectHandle",
+      args: [id],
+    }) as `0x${string}`;
+    assert.notEqual(handle, zeroHash, "Handle should not be zero");
+    console.log(`  Reputation handle: ${handle}`);
+
+    // Decrypt via Zama Relayer
+    console.log("  Initializing FhevmInstance for reputation decrypt...");
+    const fhevmInstance = await createInstance({
+      ...SepoliaConfig,
+      network: RPC_URL,
+    });
+    console.log("  Calling publicDecrypt...");
+    const decryptResult = await fhevmInstance.publicDecrypt([handle]);
+    const predictionWasCorrect = Boolean(decryptResult.clearValues[handle]);
+    console.log(`  Decrypted: predictionWasCorrect=${predictionWasCorrect}`);
+
+    // Seller predicted YES, outcome was YES → should be correct
+    assert.equal(predictionWasCorrect, true, "Prediction should be correct (YES matched YES)");
+
+    // Submit finalization on-chain with proof
+    const finalizeHash = await wallet.writeContract({
+      address: mpAddress,
+      abi: fheSecretMarketplaceAbi,
+      functionName: "finalizeReputationResult",
+      args: [id, predictionWasCorrect, decryptResult.decryptionProof],
+    });
+    await waitForTx(finalizeHash, "Finalize reputation result");
+
+    // Verify pending flag cleared
+    const pendingAfter = await publicClient.readContract({
+      address: mpAddress,
+      abi: fheSecretMarketplaceAbi,
+      functionName: "pendingReputationDecrypt",
+      args: [id],
+    });
+    assert.equal(pendingAfter, false, "Pending flag should be cleared");
+
+    // Read sellerId from auction, then verify on-chain reputation score
+    const [sellerId] = await publicClient.readContract({
+      address: mpAddress,
+      abi: fheSecretMarketplaceAbi,
+      functionName: "getAuction",
+      args: [id],
+    });
+    const seller = await publicClient.readContract({
+      address: mpAddress,
+      abi: fheSecretMarketplaceAbi,
+      functionName: "getSeller",
+      args: [sellerId],
+    });
+    console.log(`  On-chain seller (${sellerId}): score=${seller.reputationScore}`);
+    assert.ok(Number(seller.reputationScore) >= 1, "On-chain reputation score should be >= 1");
+  });
+
   it("Step 8: Verify seller reputation via daemon API", async () => {
     const result = await signedPost("/seller", SELLER);
 
@@ -416,9 +490,10 @@ describe("Full Lifecycle E2E", { timeout: 600_000 }, () => {
     assert.equal(result.status, 200);
     assert.equal(result.data.isSeller, true, "Seller should be registered");
     assert.ok(result.data.userId, "Should have userId");
-    // Reputation score depends on whether prediction matched outcome
-    // Seller predicted YES, outcome was YES → should get +1
-    console.log(`  Reputation score: ${result.data.reputationScore}`);
+    // Seller predicted YES, outcome was YES → should have positive reputation
+    const score = Number(result.data.reputationScore);
+    console.log(`  Reputation score: ${score}`);
+    assert.ok(score >= 1, "Reputation score should be >= 1 (correct prediction)");
   });
 
   it("Step 9: Verify bidder bids via daemon API", async () => {

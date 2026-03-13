@@ -244,7 +244,11 @@ export async function startSettler(): Promise<void> {
           console.log(`[settler] Settlement requested for admin-closed event ${eventId}`);
         })().catch((err) => {
           const msg = err instanceof Error ? err.message : String(err);
-          console.error(`[settler] Failed to request settlement for event ${eventId}:`, msg);
+          if (msg.includes("StatusNotOpen")) {
+            console.log(`[settler] Event ${eventId} already settled, skipping`);
+          } else {
+            console.error(`[settler] Failed to request settlement for event ${eventId}:`, msg);
+          }
         });
       }
     },
