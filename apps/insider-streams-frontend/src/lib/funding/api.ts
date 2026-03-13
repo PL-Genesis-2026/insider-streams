@@ -50,6 +50,7 @@ export async function fetchFundingSnapshot(
       userId: body.userId ?? null,
       balance: body.balance ?? "0",
       balanceUnavailable: body.balanceUnavailable ?? false,
+      error: body.error ?? undefined,
     };
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") {

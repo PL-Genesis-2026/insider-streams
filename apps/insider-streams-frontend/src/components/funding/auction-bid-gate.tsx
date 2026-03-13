@@ -42,6 +42,7 @@ export function AuctionBidGate({
   currentBidUsdc,
 }: AuctionBidGateProps) {
   const [modalOpen, setModalOpen] = useState(false);
+  const [bidSuccessAmount, setBidSuccessAmount] = useState<string | null>(null);
   const {
     seller,
     isRevealed,
@@ -55,8 +56,9 @@ export function AuctionBidGate({
     !!seller?.id &&
     seller.id.toLowerCase() === sellerAddress.toLowerCase();
 
-  const handleBidSuccess = useCallback(() => {
+  const handleBidSuccess = useCallback((amountUsdc?: string) => {
     void fundingSnapshot.refresh();
+    if (amountUsdc) setBidSuccessAmount(amountUsdc);
   }, [fundingSnapshot]);
 
   const statusCopy = getFundingStatusCopy(fundingSnapshot.status);
@@ -262,6 +264,11 @@ export function AuctionBidGate({
             />
           </>
         ) : null}
+        {bidSuccessAmount && (
+          <div className="rounded-md border border-accent/30 bg-accent/8 px-3 py-2 text-sm text-accent">
+            Your bid of ${bidSuccessAmount} USDC has been placed. The auction will update shortly.
+          </div>
+        )}
         {reconcileErrorMessage ? (
           <p className="text-xs leading-6 text-destructive">
             {reconcileErrorMessage}

@@ -14,6 +14,7 @@ export type FundingServerSnapshot = {
   userId: string | null;
   balance: string;
   balanceUnavailable?: boolean;
+  error?: string;
 };
 
 export type FundingSnapshotResponse = {
@@ -42,4 +43,5 @@ export type FundingSnapshot = {
   canPlaceBid: boolean;
   isReconciling: boolean;
   balance: string;
+  balanceError?: string;
 };

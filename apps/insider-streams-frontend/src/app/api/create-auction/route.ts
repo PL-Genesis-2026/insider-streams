@@ -41,7 +41,16 @@ export async function POST(request: Request) {
     signature,
   };
 
-  const res = await proxyToDaemon("/create-auction", daemonBody);
-  const data = await res.json();
-  return NextResponse.json(data, { status: res.status });
+  try {
+    const res = await proxyToDaemon("/create-auction", daemonBody);
+    const data = await res.json();
+    return NextResponse.json(data, { status: res.status });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Auction creation request failed";
+    console.error("[api/create-auction]", msg);
+    return NextResponse.json(
+      { success: false, error: msg, code: "PROXY_ERROR" },
+      { status: 502 },
+    );
+  }
 }

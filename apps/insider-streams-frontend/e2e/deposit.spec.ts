@@ -115,17 +115,24 @@ test.describe("Deposit flow", () => {
     // ── Step 2: Wait for FHE SDK to load ──
     const depositButton = page.getByRole("button", { name: "Deposit" });
     const loadingFheButton = page.getByRole("button", { name: /loading fhe/i });
+    const initEncryptionMsg = page.getByText(/initializing encryption/i);
 
     console.log("[deposit] Waiting for FHE SDK to initialize...");
     const fheLoadStart = Date.now();
+    // Verify the inline "Initializing encryption..." message appears while loading
+    let sawInitMessage = false;
     await expect(async () => {
       const isLoading = await loadingFheButton.isVisible().catch(() => false);
       const isReady = await depositButton.isVisible().catch(() => false);
+      if (!sawInitMessage && isLoading) {
+        sawInitMessage = await initEncryptionMsg.isVisible().catch(() => false);
+      }
       const elapsed = ((Date.now() - fheLoadStart) / 1000).toFixed(0);
-      console.log(`[deposit] FHE SDK: loading=${isLoading} ready=${isReady} (${elapsed}s)`);
+      console.log(`[deposit] FHE SDK: loading=${isLoading} ready=${isReady} initMsg=${sawInitMessage} (${elapsed}s)`);
       if (isLoading) throw new Error("SDK_LOADING");
       expect(isReady).toBe(true);
     }).toPass({ timeout: 60_000, intervals: [3_000] });
+    console.log(`[deposit] "Initializing encryption..." message was ${sawInitMessage ? "seen" : "not seen (SDK loaded too fast)"}`);
 
     const fheLoadTime = ((Date.now() - fheLoadStart) / 1000).toFixed(1);
     console.log(`[deposit] FHE SDK ready in ${fheLoadTime}s`);

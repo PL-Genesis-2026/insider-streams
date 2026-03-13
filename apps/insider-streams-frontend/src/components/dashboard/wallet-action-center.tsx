@@ -117,7 +117,7 @@ export function WalletActionCenter({
   const depositMutation = useDeposit();
   const withdrawMutation = useWithdraw();
   const walletBalance = useConfidentialBalance();
-  const { status: fheSdkStatus } = useFhevm();
+  const { status: fheSdkStatus, error: fheSdkError } = useFhevm();
 
   const parsedAmount = useMemo(() => {
     const trimmed = amount.trim();
@@ -378,6 +378,9 @@ export function WalletActionCenter({
             {walletBalance.error && (
               <p className="text-sm text-destructive">{walletBalance.error}</p>
             )}
+            {fundingSnapshot.balanceError && (
+              <p className="text-sm text-destructive">{fundingSnapshot.balanceError}</p>
+            )}
           </div>
         </CardHeader>
 
@@ -475,6 +478,19 @@ export function WalletActionCenter({
                         </div>
                         <ConfidentialUsdcFaucetButton />
                       </div>
+
+                      {fheSdkStatus === "loading" && (
+                        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Loader2 className="size-3.5 animate-spin" />
+                          Initializing encryption...
+                        </p>
+                      )}
+                      {fheSdkStatus === "error" && (
+                        <p className="flex items-center gap-2 text-sm text-destructive">
+                          <AlertCircle className="size-3.5" />
+                          Encryption service unavailable{fheSdkError ? `: ${fheSdkError.message}` : ""}
+                        </p>
+                      )}
 
                       <Button
                         className="w-full sm:w-auto"
