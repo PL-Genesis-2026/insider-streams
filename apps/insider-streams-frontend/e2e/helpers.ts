@@ -16,6 +16,7 @@ export async function signedDaemonRequest(
   path: string,
   account: PrivateKeyAccount,
   fields: Record<string, unknown> = {},
+  timeoutMs = 120_000,
 ): Promise<{ status: number; data: Record<string, unknown> }> {
   const timestamp = Math.floor(Date.now() / 1000);
   const payload = { ...fields, timestamp };
@@ -26,6 +27,7 @@ export async function signedDaemonRequest(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ...payload, signature }),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   const data = await res.json();
   return { status: res.status, data };

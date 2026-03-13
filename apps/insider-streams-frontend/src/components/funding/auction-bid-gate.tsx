@@ -254,7 +254,9 @@ export function AuctionBidGate({
               auctionId={auctionId}
               currentBidUsdc={currentBidUsdc}
               availableBalance={
-                fundingSnapshot.balance ?? null
+                fundingSnapshot.balance && BigInt(fundingSnapshot.balance) > 0n
+                  ? fundingSnapshot.balance
+                  : null
               }
               onBidSuccess={handleBidSuccess}
             />

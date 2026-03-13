@@ -13,6 +13,7 @@ export type FundingStatus =
 export type FundingServerSnapshot = {
   userId: string | null;
   balance: string;
+  balanceUnavailable?: boolean;
 };
 
 export type FundingSnapshotResponse = {
