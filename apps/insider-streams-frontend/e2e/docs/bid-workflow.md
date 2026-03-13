@@ -74,12 +74,13 @@ Renders the bid access panel on the auction detail page. Shows different UI base
 
 | Status | UI Element | Test Selector |
 | --- | --- | --- |
-| `wallet_required` | Connect wallet button | `getByRole("button", { name: "Connect" })` |
+| `wallet_required` | Connect wallet button | `getByRole("button", { name: "Connect wallet" })` |
 | `wrong_network` | Switch network button | `getByRole("button", { name: /switch/i })` |
 | `private_data_hidden` | "Unlock wallet" button | `getByRole("button", { name: "Unlock wallet" })` |
 | Loading balance | "Loading balance..." button (disabled) | `getByRole("button", { name: "Loading balance" })` |
 | `funding_unavailable` | "Retry funding snapshot" button | `getByRole("button", { name: "Retry funding snapshot" })` |
 | `not_funded_yet` | "Deposit funds to bid" link | `getByRole("link", { name: "Deposit funds to bid" })` |
+| `reconciling_transfer` | "Refresh transfer status" button + "Manage wallet" link | `getByRole("button", { name: "Refresh transfer status" })` |
 | `funded` / `withdrawal_available` | "Place Bid" button | `getByRole("button", { name: "Place Bid" })` |
 
 **Unlock Flow:**
@@ -108,7 +109,7 @@ Dialog that appears when "Place Bid" is clicked.
 - `Bid must be at least $X` - bid must exceed current bid + $1
 - `Bid exceeds available balance of $X` - bid must be within balance
 
-**Success text:** `"Bid placed successfully"` (inside a styled div, NOT a toast)
+**Success text:** `"Bid placed successfully. Updating auction…"` (inside a styled div, NOT a toast)
 
 **Error text:** Rendered in `.text-destructive` class inside the dialog
 

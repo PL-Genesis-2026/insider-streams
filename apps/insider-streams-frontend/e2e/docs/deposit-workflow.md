@@ -167,7 +167,7 @@ delegation captures, but there can be timing issues.
 **File:** `apps/daemon/src/api.ts` (lines 382-427)
 
 ```
-1. verifySignedRequest<{ txHash, amount }>
+1. verifySignedRequest<{ amount, timestamp }>
 2. Parse amount as BigInt, validate > 0
 3. getOrCreateUser(userAddress) -> { userId, address }
 4. Fire-and-forget: marketplace.depositFor(userId, parsedAmount)
@@ -346,10 +346,11 @@ Note: Balance may take 30-90s to update after deposit due to:
 
 #### Bug: FHE SDK permanent failure after rate limit
 
-**Status:** FIXED in `apps/daemon/src/fhe.ts`
+**Status:** FIXED in `apps/daemon/src/fhe.ts` (daemon only)
 
 - `_initPromise` was never cleared on rejection
-- Fixed with `try/finally` to always clear the promise
+- Fixed with `try/finally` to always clear the promise in daemon's fhe.ts
+- **Note:** The frontend's `load-sdk.ts` still has this issue — `loadPromise` and `initPromise` are never cleared on rejection. A failed init from a transient error requires page reload.
 
 #### Bug: Deposit button stays disabled after FHE SDK ready
 
