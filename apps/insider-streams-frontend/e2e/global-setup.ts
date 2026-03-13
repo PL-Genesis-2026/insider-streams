@@ -18,8 +18,10 @@ import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
 import {
   MOCK_USDC_ADDRESS,
+  CONFIDENTIAL_USDC_ADDRESS,
   EXAMPLE_PREDICTION_MARKET_ADDRESS,
   mockUsdcAbi,
+  fheConfidentialUsdcAbi,
   examplePredictionMarketAbi,
 } from "@private-streams/common";
 import { TEST_ACCOUNTS } from "./fixtures";
@@ -59,6 +61,48 @@ for (const root of [worktreeRoot, mainRepoRoot]) {
 const RPC_URL =
   process.env.RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com";
 
+/** Retry an async operation on transient RPC errors (429 rate limit, indexing). */
+async function retryRpc<T>(fn: () => Promise<T>, maxAttempts = 5, delayMs = 15_000): Promise<T> {
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const isTransient = msg.includes("429") || msg.includes("rate limit") || msg.includes("indexing is in progress");
+      if (isTransient && i < maxAttempts - 1) {
+        console.log(`[global-setup] RPC transient error (attempt ${i + 1}/${maxAttempts}), retrying in ${delayMs / 1000}s...`);
+        await new Promise((r) => setTimeout(r, delayMs));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error("unreachable");
+}
+
+/** waitForTransactionReceipt with retry — public RPCs sometimes return
+ *  "transaction indexing is in progress" which viem doesn't handle gracefully. */
+async function waitForReceipt(
+  client: ReturnType<typeof createPublicClient>,
+  hash: `0x${string}`,
+  maxAttempts = 10,
+) {
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      return await client.waitForTransactionReceipt({ hash });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("indexing is in progress") && i < maxAttempts - 1) {
+        console.log(`[global-setup] Tx receipt pending (attempt ${i + 1}/${maxAttempts}), retrying in 5s...`);
+        await new Promise((r) => setTimeout(r, 5_000));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error(`Transaction receipt not available after ${maxAttempts} attempts`);
+}
+
 export type TestState = {
   eventId: string;
   eventTitle: string;
@@ -96,11 +140,13 @@ export default async function globalSetup() {
 
   // ── Step 1: Find or create a prediction market event ──────────────────
 
-  const nextEventId = await publicClient.readContract({
-    address: EXAMPLE_PREDICTION_MARKET_ADDRESS as Address,
-    abi: examplePredictionMarketAbi,
-    functionName: "nextEventId",
-  });
+  const nextEventId = await retryRpc(() =>
+    publicClient.readContract({
+      address: EXAMPLE_PREDICTION_MARKET_ADDRESS as Address,
+      abi: examplePredictionMarketAbi,
+      functionName: "nextEventId",
+    }),
+  );
 
   let usableEventId: string | null = null;
   let usableEventTitle = "";
@@ -132,18 +178,22 @@ export default async function globalSetup() {
   if (!usableEventId) {
     console.log("[global-setup] No usable events found, creating one...");
 
-    const initialLiquidity = (await publicClient.readContract({
-      address: EXAMPLE_PREDICTION_MARKET_ADDRESS as Address,
-      abi: examplePredictionMarketAbi,
-      functionName: "INITIAL_LIQUIDITY",
-    })) as bigint;
+    const initialLiquidity = (await retryRpc(() =>
+      publicClient.readContract({
+        address: EXAMPLE_PREDICTION_MARKET_ADDRESS as Address,
+        abi: examplePredictionMarketAbi,
+        functionName: "INITIAL_LIQUIDITY",
+      }),
+    )) as bigint;
 
-    const balance = (await publicClient.readContract({
-      address: MOCK_USDC_ADDRESS as Address,
-      abi: mockUsdcAbi,
-      functionName: "balanceOf",
-      args: [account.address],
-    })) as bigint;
+    const balance = (await retryRpc(() =>
+      publicClient.readContract({
+        address: MOCK_USDC_ADDRESS as Address,
+        abi: mockUsdcAbi,
+        functionName: "balanceOf",
+        args: [account.address],
+      }),
+    )) as bigint;
 
     if (balance < initialLiquidity) {
       const mintAmount = initialLiquidity * 10n;
@@ -154,15 +204,17 @@ export default async function globalSetup() {
         functionName: "mint",
         args: [account.address, mintAmount],
       });
-      await publicClient.waitForTransactionReceipt({ hash: mintHash });
+      await waitForReceipt(publicClient, mintHash);
     }
 
-    const allowance = (await publicClient.readContract({
-      address: MOCK_USDC_ADDRESS as Address,
-      abi: mockUsdcAbi,
-      functionName: "allowance",
-      args: [account.address, EXAMPLE_PREDICTION_MARKET_ADDRESS as Address],
-    })) as bigint;
+    const allowance = (await retryRpc(() =>
+      publicClient.readContract({
+        address: MOCK_USDC_ADDRESS as Address,
+        abi: mockUsdcAbi,
+        functionName: "allowance",
+        args: [account.address, EXAMPLE_PREDICTION_MARKET_ADDRESS as Address],
+      }),
+    )) as bigint;
 
     if (allowance < initialLiquidity) {
       console.log(
@@ -177,7 +229,7 @@ export default async function globalSetup() {
           initialLiquidity * 100n,
         ],
       });
-      await publicClient.waitForTransactionReceipt({ hash: approveHash });
+      await waitForReceipt(publicClient, approveHash);
     }
 
     const duration = 2n * 60n * 60n;
@@ -192,7 +244,7 @@ export default async function globalSetup() {
       functionName: "newEvent",
       args: [usableEventTitle, duration],
     });
-    await publicClient.waitForTransactionReceipt({ hash: createHash });
+    await waitForReceipt(publicClient, createHash);
 
     usableEventId = String(nextEventId);
     console.log(`[global-setup] Created event #${usableEventId}`);
@@ -253,11 +305,17 @@ export default async function globalSetup() {
   }
 
   // ── Step 3: Fund bidder accounts ───────────────────────────────────────
+  //
+  // The deposit flow: daemon calls marketplace.depositFor() which does
+  // confidentialTransferFrom(admin, contract, amount). The admin must have
+  // cUSDC in their wallet for this to work. We check the admin's cUSDC
+  // balance and mint a large amount (10M) if it's low, avoiding repeated
+  // faucet calls on subsequent runs.
 
   const bidder1 = privateKeyToAccount(TEST_ACCOUNTS.bidder1);
   const bidder2 = privateKeyToAccount(TEST_ACCOUNTS.bidder2);
 
-  // Check if already funded
+  // Check bidder marketplace balances
   const checkBalance = async (acct: typeof bidder1) => {
     const { data } = await signedDaemonRequest("/balance", acct);
     return BigInt((data.balance as string) ?? "0");
@@ -267,20 +325,55 @@ export default async function globalSetup() {
   const b2Balance = await checkBalance(bidder2);
   const minRequired = 50_000_000n; // 50 USDC
 
+  // Ensure admin has enough cUSDC for deposits.
+  // depositFor does confidentialTransferFrom(admin, contract, amount) so
+  // the admin EOA must hold cUSDC. Mint 10M upfront when any bidder needs
+  // funding. cUSDC is ERC-7984 (all balances encrypted) so we can't cheaply
+  // check the plaintext balance — just mint if deposits are needed.
+  const needsFunding =
+    (b1Balance < minRequired ? 1n : 0n) +
+    (b2Balance < minRequired ? 1n : 0n);
+
+  if (needsFunding > 0n) {
+    const mintAmount = 10_000_000_000_000n; // 10M cUSDC (6 decimals)
+    console.log(`[global-setup] Minting ${Number(mintAmount) / 1e6} cUSDC to admin for deposits...`);
+    const mintHash = await walletClient.writeContract({
+      address: CONFIDENTIAL_USDC_ADDRESS as Address,
+      abi: fheConfidentialUsdcAbi,
+      functionName: "mintPlaintext",
+      args: [account.address, mintAmount],
+    });
+    await waitForReceipt(publicClient, mintHash);
+    console.log(`[global-setup] Minted 10M cUSDC to admin: ${mintHash}`);
+  }
+
+  // Helper: deposit funds for a user account
+  const fundUser = async (
+    userAccount: typeof bidder1,
+    amountUsdc: number,
+    label: string,
+  ) => {
+    await depositFunds(userAccount, amountUsdc);
+    console.log(`[global-setup] Waiting for ${label} deposit to confirm...`);
+    try {
+      const bal = await waitForBalance(userAccount, minRequired, 180_000);
+      console.log(`[global-setup] ${label} balance: ${bal}`);
+    } catch (err) {
+      console.warn(
+        `[global-setup] WARNING: ${label} deposit may not have confirmed: ${err}\n` +
+          `  This usually means the admin wallet doesn't have enough cUSDC for depositFor.\n` +
+          `  Check admin cUSDC balance and ensure mintPlaintext succeeded.`,
+      );
+    }
+  };
+
   // Deposits must be sequential — daemon submits on-chain txs asynchronously
   // from a single admin wallet. Concurrent deposits cause nonce collisions.
   if (b1Balance < minRequired) {
     console.log(
       `[global-setup] Depositing 100 USDC for bidder1 (balance: ${b1Balance})...`,
     );
-    await depositFunds(bidder1, 100);
-    console.log("[global-setup] Waiting for bidder1 deposit to confirm...");
-    try {
-      const bal = await waitForBalance(bidder1, minRequired, 180_000);
-      console.log(`[global-setup] Bidder1 balance: ${bal}`);
-    } catch (err) {
-      console.warn(`[global-setup] Bidder1 deposit may not have confirmed: ${err}`);
-    }
+    await fundUser(bidder1, 100, "bidder1");
   } else {
     console.log(
       `[global-setup] Bidder1 already funded: ${b1Balance} (${Number(b1Balance) / 1e6} USDC)`,
@@ -291,14 +384,7 @@ export default async function globalSetup() {
     console.log(
       `[global-setup] Depositing 100 USDC for bidder2 (balance: ${b2Balance})...`,
     );
-    await depositFunds(bidder2, 100);
-    console.log("[global-setup] Waiting for bidder2 deposit to confirm...");
-    try {
-      const bal = await waitForBalance(bidder2, minRequired, 180_000);
-      console.log(`[global-setup] Bidder2 balance: ${bal}`);
-    } catch (err) {
-      console.warn(`[global-setup] Bidder2 deposit may not have confirmed: ${err}`);
-    }
+    await fundUser(bidder2, 100, "bidder2");
   } else {
     console.log(
       `[global-setup] Bidder2 already funded: ${b2Balance} (${Number(b2Balance) / 1e6} USDC)`,

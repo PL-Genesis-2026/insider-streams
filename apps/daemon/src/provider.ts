@@ -36,3 +36,23 @@ export function getWalletClient(): AppWalletClient {
   }
   return _walletClient;
 }
+
+/** waitForTransactionReceipt with retry — Sepolia public RPCs sometimes return
+ *  "transaction indexing is in progress" which viem doesn't handle gracefully. */
+export async function waitForReceipt(hash: `0x${string}`, maxAttempts = 10) {
+  const client = getPublicClient();
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      return await client.waitForTransactionReceipt({ hash });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("indexing is in progress") && i < maxAttempts - 1) {
+        console.log(`[provider] Tx receipt pending (attempt ${i + 1}/${maxAttempts}), retrying in 5s...`);
+        await new Promise((r) => setTimeout(r, 5_000));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error(`Transaction receipt not available after ${maxAttempts} attempts`);
+}

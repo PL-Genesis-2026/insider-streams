@@ -11,7 +11,7 @@
 
 import { examplePredictionMarketAbi } from "@private-streams/common";
 import { config, requireConfig } from "./config.js";
-import { getPublicClient, getWalletClient, getAccount } from "./provider.js";
+import { getPublicClient, getWalletClient, getAccount, waitForReceipt } from "./provider.js";
 import { sendNotification } from "./notify.js";
 import { withAdminLock } from "./admin-lock.js";
 
@@ -183,7 +183,7 @@ async function handleSettlementRequest(eventId: bigint, question: string): Promi
       args: [eventId, outcome, geminiResult.confidence, geminiResult.responseId],
     }),
   );
-  const settleReceipt = await getPublicClient().waitForTransactionReceipt({ hash });
+  const settleReceipt = await waitForReceipt(hash);
   const txHash = settleReceipt.transactionHash;
   console.log(`[settler] Settlement tx: ${txHash}`);
 
@@ -240,7 +240,7 @@ export async function startSettler(): Promise<void> {
               args: [eventId],
             }),
           );
-          await publicClient.waitForTransactionReceipt({ hash });
+          await waitForReceipt(hash);
           console.log(`[settler] Settlement requested for admin-closed event ${eventId}`);
         })().catch((err) => {
           const msg = err instanceof Error ? err.message : String(err);

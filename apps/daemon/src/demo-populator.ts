@@ -42,7 +42,7 @@ import { config } from "./config.js";
 import { getOrCreateUser, insertSecret, recordBid } from "./db.js";
 import * as marketplace from "./marketplace.js";
 import { sendNotification } from "./notify.js";
-import { getAccount, getPublicClient, getWalletClient } from "./provider.js";
+import { getAccount, getPublicClient, getWalletClient, waitForReceipt } from "./provider.js";
 
 // ─── Intervals ──────────────────────────────────────────────────────────────
 
@@ -149,7 +149,7 @@ function timestamp(): number {
 }
 
 async function waitForTx(hash: Hex, label: string) {
-  const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
+  const receipt = await waitForReceipt(hash);
   if (receipt.status !== "success") throw new Error(`${label} tx failed`);
   console.log(`[demo]   ok ${label} (tx: ${hash.slice(0, 10)}...)`);
   return receipt;
@@ -764,7 +764,7 @@ async function runRequestSettlements(gqlClient: GraphQLClient): Promise<void> {
           args: [BigInt(event.eventId)],
         }),
       );
-      await getPublicClient().waitForTransactionReceipt({ hash });
+      await waitForReceipt(hash);
       console.log(`[demo]   Event ${event.eventId}: confirmed`);
       succeeded.push(event.eventId);
     } catch (err) {

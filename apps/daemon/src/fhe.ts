@@ -31,14 +31,18 @@ export async function getFhevmInstance(): Promise<FhevmInstance> {
 
   _initPromise = (async () => {
     console.log("[fhe] Initializing FhevmInstance (downloading public key from relayer)...");
-    const instance = await createInstance({
-      ...SepoliaConfig,
-      network: config.rpcUrl,
-    });
-    console.log("[fhe] FhevmInstance ready.");
-    _instance = instance;
-    _initPromise = null;
-    return instance;
+    try {
+      const instance = await createInstance({
+        ...SepoliaConfig,
+        network: config.rpcUrl,
+      });
+      console.log("[fhe] FhevmInstance ready.");
+      _instance = instance;
+      return instance;
+    } finally {
+      // Always clear the promise so failures can be retried
+      _initPromise = null;
+    }
   })();
 
   return _initPromise;

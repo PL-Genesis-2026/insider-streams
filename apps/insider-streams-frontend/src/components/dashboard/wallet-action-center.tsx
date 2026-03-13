@@ -37,6 +37,7 @@ import { useDeposit, useWithdraw } from "@/lib/private-token/hooks";
 import { ConnectWalletButton } from "@/components/wallet/connect-wallet-button";
 import { SwitchNetworkButton } from "@/components/wallet/switch-network-button";
 import { useConfidentialBalance } from "@/lib/fhevm/use-confidential-balance";
+import { useFhevm } from "@/lib/fhevm/use-fhevm";
 import { cn } from "@/lib/utils";
 import { useWalletSession } from "@/lib/wallet/use-wallet-session";
 
@@ -116,6 +117,7 @@ export function WalletActionCenter({
   const depositMutation = useDeposit();
   const withdrawMutation = useWithdraw();
   const walletBalance = useConfidentialBalance();
+  const { status: fheSdkStatus } = useFhevm();
 
   const parsedAmount = useMemo(() => {
     const trimmed = amount.trim();
@@ -476,7 +478,7 @@ export function WalletActionCenter({
 
                       <Button
                         className="w-full sm:w-auto"
-                        disabled={!parsedAmount || isDepositing}
+                        disabled={!parsedAmount || isDepositing || fheSdkStatus !== "ready"}
                         onClick={() => {
                           void handleDeposit();
                         }}
@@ -485,6 +487,11 @@ export function WalletActionCenter({
                           <>
                             <Loader2 className="size-4 animate-spin" />
                             Depositing...
+                          </>
+                        ) : fheSdkStatus === "loading" ? (
+                          <>
+                            <Loader2 className="size-4 animate-spin" />
+                            Loading FHE...
                           </>
                         ) : (
                           "Deposit"
