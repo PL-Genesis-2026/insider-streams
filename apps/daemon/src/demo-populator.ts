@@ -299,6 +299,9 @@ const CLOSED_UNSETTLED_QUERY = gql`
     settlementRequesteds(first: 1000) {
       eventId
     }
+    settlementResponses(first: 1000) {
+      eventId
+    }
   }
 `;
 
@@ -735,11 +738,13 @@ async function runRequestSettlements(gqlClient: GraphQLClient): Promise<void> {
   const data = await gqlClient.request<{
     eventCreateds: { eventId: string; question: string; eventClose: string }[];
     settlementRequesteds: { eventId: string }[];
+    settlementResponses: { eventId: string }[];
   }>(CLOSED_UNSETTLED_QUERY, { now });
 
   const requestedIds = new Set(data.settlementRequesteds.map((r) => r.eventId));
+  const settledIds = new Set(data.settlementResponses.map((r) => r.eventId));
   const toSettle = data.eventCreateds.filter(
-    (e) => !requestedIds.has(e.eventId),
+    (e) => !requestedIds.has(e.eventId) && !settledIds.has(e.eventId),
   );
 
   if (toSettle.length === 0) {
@@ -768,17 +773,20 @@ async function runRequestSettlements(gqlClient: GraphQLClient): Promise<void> {
       console.log(`[demo]   Event ${event.eventId}: confirmed`);
       succeeded.push(event.eventId);
     } catch (err) {
-      console.error(
-        `[demo]   Event ${event.eventId}: FAILED — ${err instanceof Error ? err.message : err}`,
-      );
-      failed.push(event.eventId);
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("StatusNotOpen")) {
+        console.log(`[demo]   Event ${event.eventId}: already settled, skipping`);
+      } else {
+        console.error(`[demo]   Event ${event.eventId}: FAILED — ${msg}`);
+        failed.push(event.eventId);
+      }
     }
   }
 
   const lines: string[] = [];
   if (succeeded.length > 0) lines.push(`Settled: [${succeeded.join(", ")}]`);
   if (failed.length > 0) lines.push(`Failed: [${failed.join(", ")}]`);
-  await sendNotification("Settlements Requested", lines.join("\n"));
+  if (lines.length > 0) await sendNotification("Settlements Requested", lines.join("\n"));
 }
 
 // ─── Entry Point ────────────────────────────────────────────────────────────

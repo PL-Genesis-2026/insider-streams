@@ -87,12 +87,16 @@ const CLOSED_UNSETTLED_QUERY = gql`
     settlementRequesteds(first: 1000) {
       eventId
     }
+    settlementResponses(first: 1000) {
+      eventId
+    }
   }
 `;
 
 type ClosedUnsettledResponse = {
   eventCreateds: { eventId: string; question: string; eventClose: string }[];
   settlementRequesteds: { eventId: string }[];
+  settlementResponses: { eventId: string }[];
 };
 
 async function fetchClosedUnsettledEvents(
@@ -107,8 +111,13 @@ async function fetchClosedUnsettledEvents(
   const requestedIds = new Set(
     data.settlementRequesteds.map((r) => r.eventId),
   );
+  const settledIds = new Set(
+    data.settlementResponses.map((r) => r.eventId),
+  );
 
-  return data.eventCreateds.filter((e) => !requestedIds.has(e.eventId));
+  return data.eventCreateds.filter(
+    (e) => !requestedIds.has(e.eventId) && !settledIds.has(e.eventId),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -180,10 +189,16 @@ async function main() {
       succeeded.push(event.eventId);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(
-        `[request-settlements] event ${event.eventId}: FAILED — ${msg}`,
-      );
-      failed.push({ eventId: event.eventId, error: msg });
+      if (msg.includes("StatusNotOpen")) {
+        console.log(
+          `[request-settlements] event ${event.eventId}: already settled, skipping`,
+        );
+      } else {
+        console.error(
+          `[request-settlements] event ${event.eventId}: FAILED — ${msg}`,
+        );
+        failed.push({ eventId: event.eventId, error: msg });
+      }
     }
   }
 
