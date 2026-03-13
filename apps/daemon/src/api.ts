@@ -163,11 +163,16 @@ export function startApi(): void {
 
       const user = getOrCreateUser(userAddress);
 
-      // Read previous bidder from contract (always correct, free view call)
+      // Read auction from contract to get previousBidderId and check self-bid
       let previousBidderId = "";
       try {
         const mp = marketplace.getMarketplace();
         const auction = await mp.read.getAuction([BigInt(auctionId)]);
+        const sellerId = auction[0]; // sellerId
+        if (sellerId === user.userId) {
+          res.status(400).json({ error: "You cannot bid on your own auction", code: "SELF_BID" });
+          return;
+        }
         previousBidderId = auction[3] || ""; // currentBidderId
       } catch {
         // Auction may not exist yet — proceed without previousBidderId
@@ -434,7 +439,9 @@ export function startApi(): void {
   // ---------------------------------------------------------------------------
   app.post("/bids", async (req: Request, res: Response) => {
     try {
-      const result = await verifySignedRequest(req.body);
+      // Strip unsigned fields before verification — frontend signs only { timestamp }
+      const { auctionIds: _unused, ...signedBody } = req.body;
+      const result = await verifySignedRequest(signedBody);
       if (!result.ok) {
         res.status(result.status).json({ error: result.error, code: result.code });
         return;
@@ -469,11 +476,7 @@ export function startApi(): void {
         return;
       }
 
-      const user = getUserByAddress(result.payload.userAddress);
-      if (!user) {
-        res.json({ isSeller: false, userId: null });
-        return;
-      }
+      const user = getOrCreateUser(result.payload.userAddress);
 
       const mp = marketplace.getMarketplace();
       const seller = await mp.read.getSeller([user.userId]);
@@ -498,24 +501,24 @@ export function startApi(): void {
   // ---------------------------------------------------------------------------
   app.post("/secrets", async (req: Request, res: Response) => {
     try {
-      const result = await verifySignedRequest<{ auctionIds: number[] }>(req.body);
+      // Extract auctionIds before signature verification — the frontend signs
+      // only { timestamp } and passes auctionIds as an unsigned extra field.
+      const { auctionIds: rawAuctionIds, ...signedBody } = req.body;
+      const result = await verifySignedRequest(signedBody);
       if (!result.ok) {
         res.status(result.status).json({ error: result.error, code: result.code });
         return;
       }
 
-      const { userAddress, auctionIds } = result.payload;
+      const { userAddress } = result.payload;
+      const auctionIds: number[] = rawAuctionIds ?? [];
 
       if (!Array.isArray(auctionIds) || auctionIds.length === 0) {
         res.json({ secrets: [] });
         return;
       }
 
-      const user = getUserByAddress(userAddress);
-      if (!user) {
-        res.json({ secrets: [] });
-        return;
-      }
+      const user = getOrCreateUser(userAddress);
 
       const secrets = getSecretsByAuctionIds(auctionIds.map(Number));
 

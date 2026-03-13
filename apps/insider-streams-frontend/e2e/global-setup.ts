@@ -257,50 +257,67 @@ export default async function globalSetup() {
   const auctionCreatorAccount = privateKeyToAccount(TEST_ACCOUNTS.createAuction);
 
   // Bid/outbid auction — long duration (1h)
-  console.log("[global-setup] Creating bid test auction (1h duration)...");
-  const bidAuctionResult = await createTestAuction(auctionCreatorAccount, {
-    eventId: usableEventId,
-    eventTitle: usableEventTitle,
-    privateLeg: "yes",
-    secretPayload: "E2E test secret for bid auction",
-    durationSeconds: 3600,
-  });
+  // Wrapped in try/catch: FHE relayer may be rate-limited (429), causing
+  // the daemon to hang beyond the fetch timeout. Tests that need auction IDs
+  // have fallback logic to query the subgraph directly.
+  let bidAuctionId = "";
+  try {
+    console.log("[global-setup] Creating bid test auction (1h duration)...");
+    const bidAuctionResult = await createTestAuction(auctionCreatorAccount, {
+      eventId: usableEventId,
+      eventTitle: usableEventTitle,
+      privateLeg: "yes",
+      secretPayload: "E2E test secret for bid auction",
+      durationSeconds: 3600,
+    });
 
-  const bidAuctionId =
-    bidAuctionResult.status === 200
-      ? String(bidAuctionResult.data.auctionId ?? "")
-      : "";
+    bidAuctionId =
+      bidAuctionResult.status === 200
+        ? String(bidAuctionResult.data.auctionId ?? "")
+        : "";
 
-  if (bidAuctionId) {
-    console.log(`[global-setup] Bid auction created: #${bidAuctionId}`);
-  } else {
+    if (bidAuctionId) {
+      console.log(`[global-setup] Bid auction created: #${bidAuctionId}`);
+    } else {
+      console.warn(
+        `[global-setup] Bid auction creation returned status ${bidAuctionResult.status}:`,
+        bidAuctionResult.data,
+      );
+    }
+  } catch (err) {
     console.warn(
-      `[global-setup] Bid auction creation returned status ${bidAuctionResult.status}:`,
-      bidAuctionResult.data,
+      `[global-setup] Bid auction creation failed (FHE timeout?): ${err instanceof Error ? err.message : err}`,
     );
   }
 
   // Close auction — very short duration (5 min)
-  console.log("[global-setup] Creating close test auction (5min duration)...");
-  const closeAuctionResult = await createTestAuction(auctionCreatorAccount, {
-    eventId: usableEventId,
-    eventTitle: usableEventTitle,
-    privateLeg: "no",
-    secretPayload: "E2E test secret for close auction",
-    durationSeconds: 300,
-  });
+  let closeAuctionId = "";
+  try {
+    console.log("[global-setup] Creating close test auction (5min duration)...");
+    const closeAuctionResult = await createTestAuction(auctionCreatorAccount, {
+      eventId: usableEventId,
+      eventTitle: usableEventTitle,
+      privateLeg: "no",
+      secretPayload: "E2E test secret for close auction",
+      durationSeconds: 300,
+    });
 
-  const closeAuctionId =
-    closeAuctionResult.status === 200
-      ? String(closeAuctionResult.data.auctionId ?? "")
-      : "";
+    closeAuctionId =
+      closeAuctionResult.status === 200
+        ? String(closeAuctionResult.data.auctionId ?? "")
+        : "";
 
-  if (closeAuctionId) {
-    console.log(`[global-setup] Close auction created: #${closeAuctionId}`);
-  } else {
+    if (closeAuctionId) {
+      console.log(`[global-setup] Close auction created: #${closeAuctionId}`);
+    } else {
+      console.warn(
+        `[global-setup] Close auction creation returned status ${closeAuctionResult.status}:`,
+        closeAuctionResult.data,
+      );
+    }
+  } catch (err) {
     console.warn(
-      `[global-setup] Close auction creation returned status ${closeAuctionResult.status}:`,
-      closeAuctionResult.data,
+      `[global-setup] Close auction creation failed (FHE timeout?): ${err instanceof Error ? err.message : err}`,
     );
   }
 
@@ -311,83 +328,91 @@ export default async function globalSetup() {
   // cUSDC in their wallet for this to work. We check the admin's cUSDC
   // balance and mint a large amount (10M) if it's low, avoiding repeated
   // faucet calls on subsequent runs.
+  //
+  // Wrapped in try/catch: FHE balance checks and deposits can timeout when
+  // the relayer is rate-limited. Tests that need funded accounts will skip.
+  try {
+    const bidder1 = privateKeyToAccount(TEST_ACCOUNTS.bidder1);
+    const bidder2 = privateKeyToAccount(TEST_ACCOUNTS.bidder2);
 
-  const bidder1 = privateKeyToAccount(TEST_ACCOUNTS.bidder1);
-  const bidder2 = privateKeyToAccount(TEST_ACCOUNTS.bidder2);
+    // Check bidder marketplace balances
+    const checkBalance = async (acct: typeof bidder1) => {
+      const { data } = await signedDaemonRequest("/balance", acct);
+      return BigInt((data.balance as string) ?? "0");
+    };
 
-  // Check bidder marketplace balances
-  const checkBalance = async (acct: typeof bidder1) => {
-    const { data } = await signedDaemonRequest("/balance", acct);
-    return BigInt((data.balance as string) ?? "0");
-  };
+    const b1Balance = await checkBalance(bidder1);
+    const b2Balance = await checkBalance(bidder2);
+    const minRequired = 50_000_000n; // 50 USDC
 
-  const b1Balance = await checkBalance(bidder1);
-  const b2Balance = await checkBalance(bidder2);
-  const minRequired = 50_000_000n; // 50 USDC
+    // Ensure admin has enough cUSDC for deposits.
+    // depositFor does confidentialTransferFrom(admin, contract, amount) so
+    // the admin EOA must hold cUSDC. Mint 10M upfront when any bidder needs
+    // funding. cUSDC is ERC-7984 (all balances encrypted) so we can't cheaply
+    // check the plaintext balance — just mint if deposits are needed.
+    const needsFunding =
+      (b1Balance < minRequired ? 1n : 0n) +
+      (b2Balance < minRequired ? 1n : 0n);
 
-  // Ensure admin has enough cUSDC for deposits.
-  // depositFor does confidentialTransferFrom(admin, contract, amount) so
-  // the admin EOA must hold cUSDC. Mint 10M upfront when any bidder needs
-  // funding. cUSDC is ERC-7984 (all balances encrypted) so we can't cheaply
-  // check the plaintext balance — just mint if deposits are needed.
-  const needsFunding =
-    (b1Balance < minRequired ? 1n : 0n) +
-    (b2Balance < minRequired ? 1n : 0n);
+    if (needsFunding > 0n) {
+      const mintAmount = 10_000_000_000_000n; // 10M cUSDC (6 decimals)
+      console.log(`[global-setup] Minting ${Number(mintAmount) / 1e6} cUSDC to admin for deposits...`);
+      const mintHash = await walletClient.writeContract({
+        address: CONFIDENTIAL_USDC_ADDRESS as Address,
+        abi: fheConfidentialUsdcAbi,
+        functionName: "mintPlaintext",
+        args: [account.address, mintAmount],
+      });
+      await waitForReceipt(publicClient, mintHash);
+      console.log(`[global-setup] Minted 10M cUSDC to admin: ${mintHash}`);
+    }
 
-  if (needsFunding > 0n) {
-    const mintAmount = 10_000_000_000_000n; // 10M cUSDC (6 decimals)
-    console.log(`[global-setup] Minting ${Number(mintAmount) / 1e6} cUSDC to admin for deposits...`);
-    const mintHash = await walletClient.writeContract({
-      address: CONFIDENTIAL_USDC_ADDRESS as Address,
-      abi: fheConfidentialUsdcAbi,
-      functionName: "mintPlaintext",
-      args: [account.address, mintAmount],
-    });
-    await waitForReceipt(publicClient, mintHash);
-    console.log(`[global-setup] Minted 10M cUSDC to admin: ${mintHash}`);
-  }
+    // Helper: deposit funds for a user account
+    const fundUser = async (
+      userAccount: typeof bidder1,
+      amountUsdc: number,
+      label: string,
+    ) => {
+      await depositFunds(userAccount, amountUsdc);
+      console.log(`[global-setup] Waiting for ${label} deposit to confirm...`);
+      try {
+        const bal = await waitForBalance(userAccount, minRequired, 180_000);
+        console.log(`[global-setup] ${label} balance: ${bal}`);
+      } catch (err) {
+        console.warn(
+          `[global-setup] WARNING: ${label} deposit may not have confirmed: ${err}\n` +
+            `  This usually means the admin wallet doesn't have enough cUSDC for depositFor.\n` +
+            `  Check admin cUSDC balance and ensure mintPlaintext succeeded.`,
+        );
+      }
+    };
 
-  // Helper: deposit funds for a user account
-  const fundUser = async (
-    userAccount: typeof bidder1,
-    amountUsdc: number,
-    label: string,
-  ) => {
-    await depositFunds(userAccount, amountUsdc);
-    console.log(`[global-setup] Waiting for ${label} deposit to confirm...`);
-    try {
-      const bal = await waitForBalance(userAccount, minRequired, 180_000);
-      console.log(`[global-setup] ${label} balance: ${bal}`);
-    } catch (err) {
-      console.warn(
-        `[global-setup] WARNING: ${label} deposit may not have confirmed: ${err}\n` +
-          `  This usually means the admin wallet doesn't have enough cUSDC for depositFor.\n` +
-          `  Check admin cUSDC balance and ensure mintPlaintext succeeded.`,
+    // Deposits must be sequential — daemon submits on-chain txs asynchronously
+    // from a single admin wallet. Concurrent deposits cause nonce collisions.
+    if (b1Balance < minRequired) {
+      console.log(
+        `[global-setup] Depositing 100 USDC for bidder1 (balance: ${b1Balance})...`,
+      );
+      await fundUser(bidder1, 100, "bidder1");
+    } else {
+      console.log(
+        `[global-setup] Bidder1 already funded: ${b1Balance} (${Number(b1Balance) / 1e6} USDC)`,
       );
     }
-  };
 
-  // Deposits must be sequential — daemon submits on-chain txs asynchronously
-  // from a single admin wallet. Concurrent deposits cause nonce collisions.
-  if (b1Balance < minRequired) {
-    console.log(
-      `[global-setup] Depositing 100 USDC for bidder1 (balance: ${b1Balance})...`,
-    );
-    await fundUser(bidder1, 100, "bidder1");
-  } else {
-    console.log(
-      `[global-setup] Bidder1 already funded: ${b1Balance} (${Number(b1Balance) / 1e6} USDC)`,
-    );
-  }
-
-  if (b2Balance < minRequired) {
-    console.log(
-      `[global-setup] Depositing 100 USDC for bidder2 (balance: ${b2Balance})...`,
-    );
-    await fundUser(bidder2, 100, "bidder2");
-  } else {
-    console.log(
-      `[global-setup] Bidder2 already funded: ${b2Balance} (${Number(b2Balance) / 1e6} USDC)`,
+    if (b2Balance < minRequired) {
+      console.log(
+        `[global-setup] Depositing 100 USDC for bidder2 (balance: ${b2Balance})...`,
+      );
+      await fundUser(bidder2, 100, "bidder2");
+    } else {
+      console.log(
+        `[global-setup] Bidder2 already funded: ${b2Balance} (${Number(b2Balance) / 1e6} USDC)`,
+      );
+    }
+  } catch (err) {
+    console.warn(
+      `[global-setup] Funding step failed (FHE timeout?): ${err instanceof Error ? err.message : err}`,
     );
   }
 

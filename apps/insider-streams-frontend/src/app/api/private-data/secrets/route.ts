@@ -19,11 +19,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { auctionIds: requestedIds } = body as {
+  const { auctionIds: requestedIds, signature, timestamp } = body as {
     auctionIds?: string[];
+    signature?: string;
+    timestamp?: number;
   };
 
-  const res = await proxyToDaemon("/secrets", body);
+  // Proxy only { signature, timestamp, auctionIds } to the daemon.
+  // The client signs only { timestamp }, so extra fields in the body would
+  // cause verifySignedRequest to reconstruct a different message and recover
+  // the wrong address. We re-add auctionIds as the daemon expects it.
+  const res = await proxyToDaemon("/secrets", { signature, timestamp, auctionIds: requestedIds });
   const json = await res.json();
 
   if (!res.ok) {

@@ -119,8 +119,8 @@ export function SecretRevealCard({ auctionId }: SecretRevealCardProps) {
   if (!isLoading && secretState?.kind === "not_found") {
     return (
       <p className="text-sm leading-7 text-muted-foreground">
-        Secret not available. The seller and winning bidder can view this
-        secret after the auction closes.
+        Secret not available. Only the auction seller and winning bidder can
+        access this secret.
       </p>
     );
   }
