@@ -93,15 +93,26 @@ test.describe("Bid placement", () => {
     // Step 3: Click "Place Bid" to open the bid modal
     await placeBidButton.click();
 
-    // Step 4: Fill in bid amount — $100 USDC (high enough to exceed any current bid)
+    const dialog = page.locator('[role="dialog"]');
+    await expect(dialog).toBeVisible({ timeout: 5_000 });
+
+    // Step 4: Determine bid amount based on current bid
+    const currentBidText = await dialog
+      .getByText(/current bid|no bids/i)
+      .first()
+      .textContent()
+      .catch(() => "");
+    const currentBidMatch = currentBidText?.match(/\$(\d+)/);
+    const currentBid = currentBidMatch ? Number(currentBidMatch[1]) : 0;
+    const bidAmount = String(currentBid + 1);
+    console.log(`[bid] Current bid: $${currentBid}, bidding $${bidAmount}`);
+
     const bidAmountInput = page.locator("#bid-amount");
     await expect(bidAmountInput).toBeVisible({ timeout: 10_000 });
-    await bidAmountInput.fill("100");
+    await bidAmountInput.fill(bidAmount);
 
     // Step 5: Click submit in the modal dialog
-    const modalSubmit = page
-      .locator('[role="dialog"]')
-      .getByRole("button", { name: "Place Bid" });
+    const modalSubmit = dialog.getByRole("button", { name: "Place Bid" });
     await expect(modalSubmit).toBeEnabled({ timeout: 5_000 });
     await modalSubmit.click();
 
@@ -111,16 +122,15 @@ test.describe("Bid placement", () => {
         .getByText("Bid placed successfully")
         .waitFor({ timeout: 60_000 })
         .then(() => "success" as const),
-      page
-        .locator('[role="dialog"]')
+      dialog
         .getByText(/failed|error/i)
         .waitFor({ timeout: 60_000 })
         .then(() => "error" as const),
     ]);
 
     if (outcome === "error") {
-      const errorText = await page
-        .locator('[role="dialog"] .text-destructive')
+      const errorText = await dialog
+        .locator(".text-destructive")
         .first()
         .textContent();
       console.log(`[bid] Bid failed: ${errorText}`);

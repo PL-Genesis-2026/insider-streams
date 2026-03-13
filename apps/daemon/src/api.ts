@@ -28,7 +28,7 @@ import {
   getSecretsByAuctionIds,
 } from "./db.js";
 import * as marketplace from "./marketplace.js";
-import { getPublicClient, getWalletClient } from "./provider.js";
+import { getPublicClient, getWalletClient, waitForReceipt } from "./provider.js";
 import { withAdminLock } from "./admin-lock.js";
 
 export function startApi(): void {
@@ -353,7 +353,7 @@ export function startApi(): void {
             args: [userAddress as `0x${string}`, parsedAmount],
           }),
         );
-        await getPublicClient().waitForTransactionReceipt({ hash: sendHash });
+        await waitForReceipt(sendHash);
         console.log(`[api] Withdrawal ${withdrawalId} step 2 (admin→user wallet) confirmed: ${sendHash}`);
       })().catch((err) => {
         console.error(`[api] Withdrawal ${withdrawalId} failed:`, err);
@@ -602,7 +602,7 @@ export function startApi(): void {
           args: [result.payload.userAddress as `0x${string}`, mintAmount],
         }),
       );
-      const mintReceipt = await getPublicClient().waitForTransactionReceipt({ hash: mintHash });
+      const mintReceipt = await waitForReceipt(mintHash);
       const txHash = mintReceipt.transactionHash;
 
       res.json({

@@ -11,7 +11,7 @@
 
 import { fheSecretMarketplaceAbi } from "@private-streams/common";
 import { config, requireConfig } from "./config.js";
-import { getPublicClient, getWalletClient, getAccount } from "./provider.js";
+import { getPublicClient, getWalletClient, getAccount, waitForReceipt } from "./provider.js";
 import { sendNotification } from "./notify.js";
 import { markBidsForAuction } from "./db.js";
 import { withAdminLock } from "./admin-lock.js";
@@ -62,7 +62,7 @@ async function closeAuction(auctionId: bigint): Promise<string | null> {
         args: [auctionId],
       }),
     );
-    const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
+    const receipt = await waitForReceipt(hash);
     console.log(`[closer] Closed auction ${auctionId}: ${receipt.transactionHash}`);
     return receipt.transactionHash;
   } catch (err) {

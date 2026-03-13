@@ -13,18 +13,20 @@ test.use({ walletPrivateKey: TEST_ACCOUNTS.bidder1 });
 
 test.describe("Bid debug", () => {
   test("trace bid submission end-to-end", async ({ page }) => {
-    // Find an auction to bid on
-    const state = readTestState();
-    let auctionId = state?.bidAuctionId || null;
+    test.setTimeout(180_000); // 3 min — unlock + bid can be slow
 
-    if (!auctionId) {
-      console.log(
-        "[bid-debug] No test state, querying subgraph for open auction...",
-      );
-      // Require at least 10 min remaining — wallet unlock + bid flow takes ~3 min under load
-      const auctions = await findOpenAuctions(20, 600);
-      auctionId = auctions[0]?.auctionId ?? null;
-    }
+    // Find an auction to bid on — prefer one from subgraph that bidder1
+    // hasn't already bid on (the global-setup bidAuctionId may already
+    // have a bid from auction-lifecycle.spec.ts).
+    const state = readTestState();
+    let auctionId: string | null = null;
+
+    // Query subgraph for open auctions — find one that's not the same as
+    // the bidAuctionId (which may already have a bid from auction-lifecycle test)
+    const auctions = await findOpenAuctions(20, 600);
+    const bidAuctionId = state?.bidAuctionId;
+    const fresh = auctions.find((a) => a.auctionId !== bidAuctionId);
+    auctionId = fresh?.auctionId ?? bidAuctionId ?? null;
 
     if (!auctionId) {
       test.skip(true, "No open auction found on subgraph");
@@ -218,10 +220,12 @@ test.describe("Bid debug", () => {
     const bidAmountInput = page.locator("#bid-amount");
     await expect(bidAmountInput).toBeVisible({ timeout: 10_000 });
 
-    // Use a bid high enough to exceed any current bid
-    const bidAmount = "100";
+    // Parse current bid from modal to determine minimum bid
+    const currentBidMatch = currentBidText?.match(/\$(\d+)/);
+    const currentBid = currentBidMatch ? Number(currentBidMatch[1]) : 0;
+    const bidAmount = String(currentBid + 1);
     await bidAmountInput.fill(bidAmount);
-    console.log(`[bid-debug] Filled bid amount: $${bidAmount}`);
+    console.log(`[bid-debug] Filled bid amount: $${bidAmount} (current: $${currentBid})`);
 
     const modalSubmit = dialog.getByRole("button", { name: "Place Bid" });
     await expect(modalSubmit).toBeEnabled({ timeout: 5_000 });

@@ -16,6 +16,7 @@ import { loadRelayerSDK, type FhevmInstance } from "./load-sdk";
 type FhevmState = "idle" | "loading" | "ready" | "error";
 
 let cachedInstance: FhevmInstance | null = null;
+let initPromise: Promise<FhevmInstance> | null = null;
 
 export function useFhevm(): {
   instance: FhevmInstance | undefined;
@@ -47,28 +48,38 @@ export function useFhevm(): {
     setError(undefined);
 
     (async () => {
-      const sdk = await loadRelayerSDK();
-      if (abort.signal.aborted) return;
+      // Deduplicate concurrent init calls from multiple hook instances.
+      // Without this, two useFhevm() hooks mounting simultaneously would
+      // both call createInstance(), causing duplicate RPC calls that can
+      // trigger rate limits (HTTP 429).
+      if (!initPromise) {
+        initPromise = (async () => {
+          const sdk = await loadRelayerSDK();
+          const provider = {
+            request: async (args: { method: string; params?: unknown[] }) =>
+              walletClient.request(args as never),
+          };
+          const config = {
+            ...sdk.SepoliaConfig,
+            relayerUrl: `${sdk.SepoliaConfig.relayerUrl as string}/v2`,
+            network: provider,
+            relayerRouteVersion: 2,
+          };
+          return sdk.createInstance(config);
+        })();
+      }
 
-      // Create EIP-1193 adapter from wagmi walletClient
-      const provider = {
-        request: async (args: { method: string; params?: unknown[] }) =>
-          walletClient.request(args as never),
-      };
-
-      const config = {
-        ...sdk.SepoliaConfig,
-        relayerUrl: `${sdk.SepoliaConfig.relayerUrl as string}/v2`,
-        network: provider,
-        relayerRouteVersion: 2,
-      };
-
-      const inst = await sdk.createInstance(config);
-      if (abort.signal.aborted) return;
-
-      cachedInstance = inst;
-      setInstance(inst);
-      setStatus("ready");
+      try {
+        const inst = await initPromise;
+        if (abort.signal.aborted) return;
+        cachedInstance = inst;
+        setInstance(inst);
+        setStatus("ready");
+      } catch (err) {
+        // Clear promise so next attempt can retry
+        initPromise = null;
+        throw err;
+      }
     })().catch((err) => {
       if (abort.signal.aborted) return;
       console.error("[useFhevm] Failed to initialize:", err);

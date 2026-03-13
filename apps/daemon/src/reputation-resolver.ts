@@ -17,7 +17,7 @@
 
 import { examplePredictionMarketAbi, fheSecretMarketplaceAbi } from "@private-streams/common";
 import { config, requireConfig } from "./config.js";
-import { getPublicClient, getWalletClient, getAccount } from "./provider.js";
+import { getPublicClient, getWalletClient, getAccount, waitForReceipt } from "./provider.js";
 import { sendNotification } from "./notify.js";
 import { withAdminLock } from "./admin-lock.js";
 
@@ -82,7 +82,7 @@ async function handleSettlementResponse(
         args: [eventId, actualOutcomeIsYes],
       }),
     );
-    const resolveReceipt = await publicClient.waitForTransactionReceipt({ hash });
+    const resolveReceipt = await waitForReceipt(hash);
     const txHash = resolveReceipt.transactionHash;
     console.log(`[resolver] Resolved event ${eventId}: ${txHash}`);
 

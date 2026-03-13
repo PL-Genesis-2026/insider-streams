@@ -11,7 +11,7 @@
 import { getContract, zeroHash, decodeEventLog, toHex, type GetContractReturnType } from "viem";
 import { fheSecretMarketplaceAbi } from "@private-streams/common";
 import { config } from "./config.js";
-import { getPublicClient, getWalletClient, getAccount } from "./provider.js";
+import { getPublicClient, getWalletClient, getAccount, waitForReceipt } from "./provider.js";
 import { encryptUint64, encryptAuctionInputs, getFhevmInstance } from "./fhe.js";
 import { withAdminLock } from "./admin-lock.js";
 
@@ -64,7 +64,7 @@ export async function depositFor(
       args: [userId, toHexBytes(encrypted.handles[0]), toHexBytes(encrypted.inputProof)],
     }),
   );
-  const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
+  const receipt = await waitForReceipt(hash);
   console.log(`[marketplace] depositFor confirmed: ${receipt.transactionHash}`);
   return receipt.transactionHash;
 }
@@ -94,7 +94,7 @@ export async function withdrawFor(
       args: [userId, toHexBytes(encrypted.handles[0]), toHexBytes(encrypted.inputProof)],
     }),
   );
-  const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
+  const receipt = await waitForReceipt(hash);
   console.log(`[marketplace] withdrawFor confirmed: ${receipt.transactionHash}`);
   return receipt.transactionHash;
 }
@@ -133,7 +133,7 @@ export async function placeBid(
       ],
     }),
   );
-  const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
+  const receipt = await waitForReceipt(hash);
   console.log(`[marketplace] placeBid confirmed: ${receipt.transactionHash}`);
   return receipt.transactionHash;
 }
@@ -178,7 +178,7 @@ export async function createAuction(
       ],
     }),
   );
-  const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
+  const receipt = await waitForReceipt(hash);
 
   // Parse AuctionCreated event to get the auction ID
   let auctionId = -1;
@@ -289,7 +289,7 @@ async function _getOnChainBalanceImpl(userId: string): Promise<bigint> {
       args: [userId],
     }),
   );
-  await publicClient.waitForTransactionReceipt({ hash: decryptTxHash });
+  await waitForReceipt(decryptTxHash);
 
   const value = await _publicDecryptWithTimeout(instance, handle);
   _decryptedHandles.add(handle);
