@@ -156,10 +156,7 @@ async function createAuction(
 ```
 
 Flow:
-1. `encryptBatch(marketplace_addr, admin_addr, [
-     { type: "ebool", value: prediction },
-     { type: "euint256", value: secretDataKey },
-   ])` -> ~10s (single ZK proof for both values)
+1. `encryptAuctionInputs(marketplace_addr, admin_addr, prediction, secretDataKey)` -> ~10s (single ZK proof for ebool + euint256)
 2. `withAdminLock`: `writeContract("createAuction", [
      sellerId, eventId, eventTitle, endTime,
      handle_prediction, handle_key, inputProof

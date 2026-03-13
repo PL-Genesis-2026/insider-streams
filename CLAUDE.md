@@ -15,14 +15,12 @@ private-streams/
 ├── subgraphs/secrets-marketplace/   # The Graph subgraph (insider-streams-zama)
 ├── scripts/                         # Demo scripts, E2E tests, deploy helpers
 │   ├── e2e_tests/
-│   │   ├── secret-marketplace-e2e.ts    # SecretMarketplace full event lifecycle E2E
 │   │   └── e2e-helpers.ts               # Shared E2E test utilities
 │   ├── create-events.ts             # One-shot: generate AI events + place bets
 │   ├── spawn-auctions.ts            # One-shot: create auction via daemon API
 │   ├── place-bids.ts                # One-shot: place bids on open auctions via daemon API
 │   ├── request-settlements.ts       # One-shot: request settlement for closed events
 │   ├── deploy-subgraph.sh           # Build + deploy subgraph
-│   ├── run-demo.sh                  # Orchestrator for all demo scripts
 │   └── codegen.ts                   # GraphQL codegen config
 ├── docs/plans/                      # Implementation plans
 └── CLAUDE.md
@@ -82,7 +80,7 @@ The daemon (`apps/daemon/`) is a unified Express server with background services
 - **Auction Closer**: polls for expired auctions, closes them, marks winning bids in SQLite
 - **Reputation Resolver**: watches `SettlementResponse` events, resolves per-auction predictions
 - **Deposit Watcher**: monitors on-chain deposits to the platform
-- **HTTP API**: signature-authenticated endpoints for frontend interaction
+- **HTTP API**: signature-authenticated POST endpoints for frontend interaction (`/health`, `/user`, `/balance`, `/bid`, `/create-auction`, `/withdraw`, `/deposit`, `/bids`, `/seller`, `/secrets`, `/dashboard`, `/faucet`)
 
 ```bash
 cd apps/daemon
@@ -102,10 +100,13 @@ pnpm build                # typecheck
 Scripts for populating the marketplace with test data:
 
 ```bash
-# Run everything together (recommended)
-cd scripts && pnpm run-demo
+# Run via daemon (recommended)
+# Set DEMO_MODE=true in apps/daemon/.env, then start the daemon normally.
+# The daemon will run create-events, spawn-auctions, place-bids, and
+# request-settlements as background loops automatically.
 
-# Or run individually
+# Or run scripts individually
+cd scripts
 pnpm create-events        # one-shot: generate AI events + place bets
 pnpm spawn-auctions       # one-shot: create auction via daemon API
 pnpm place-bids           # one-shot: place bids on open auctions via daemon API
@@ -120,12 +121,13 @@ pnpm request-settlements  # one-shot: request settlement for closed events
 
 **`request-settlements`** — requires `OWNER_PK`, `RPC_URL`. Queries subgraph for closed-but-unsettled events.
 
-**`run-demo`** — orchestrates all scripts: seeds events once, then runs spawn-auctions, place-bids, and request-settlements as background loops, with periodic create-events refresh.
+**`DEMO_MODE`** — when enabled in daemon `.env`, the daemon runs all demo scripts as background loops: create-events (15m), spawn-auctions (5m), place-bids (1m), request-settlements (10m).
 
 ### E2E Tests
 
 ```bash
-pnpm e2e:secret-marketplace    # SecretMarketplace full on-chain lifecycle (Sepolia)
+pnpm e2e                       # Playwright E2E tests (via turbo, from root)
+cd apps/insider-streams-frontend && pnpm test:playwright   # Playwright E2E directly
 ```
 
 ## Chain & Network
@@ -251,7 +253,7 @@ After deploying, follow the procedure in **"After a Contract Deployment"** above
 - `ExamplePredictionMarket` accepts any ERC-20 token (constructor arg) — uses MockUSDC (6 decimals)
 - Daemon SQLite stores address-to-pseudonymousId mapping and bid tracking; **balance source of truth is on-chain** (decrypted via `publicDecrypt`)
 - Highest-bid-only model: ONE `currentBid` per auction, admin pre-validates bids are higher
-- `resolveEventPredictions(eventId, AuctionResult[])` accepts per-auction prediction outcomes
+- `resolveEventPredictions(uint256 eventId, bool actualOutcomeIsYes)` resolves all auction predictions for an event against the actual outcome
 - `BidPlaced` event has no bidder address (privacy)
 
 ## Reference Docs
