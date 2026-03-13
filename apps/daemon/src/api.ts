@@ -110,10 +110,18 @@ export function startApi(): void {
         return;
       }
 
-      // Read on-chain encrypted balance and decrypt via Zama relayer
-      const balance = await marketplace.getOnChainBalance(user.userId);
-      console.log(`[api] Balance for ${user.userId}: ${balance}`);
-      res.json({ userId: user.userId, balance: balance.toString() });
+      // Read on-chain encrypted balance and decrypt via Zama relayer.
+      // If decryption fails (e.g. relayer down), return balance as null
+      // so the frontend can still allow bidding (contract validates on-chain).
+      try {
+        const balance = await marketplace.getOnChainBalance(user.userId);
+        console.log(`[api] Balance for ${user.userId}: ${balance}`);
+        res.json({ userId: user.userId, balance: balance.toString() });
+      } catch (decryptErr) {
+        const msg = decryptErr instanceof Error ? decryptErr.message : String(decryptErr);
+        console.warn(`[api] Balance decryption failed for ${user.userId}: ${msg}`);
+        res.json({ userId: user.userId, balance: null, balanceUnavailable: true, error: msg });
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error("[api] POST /balance error:", msg);

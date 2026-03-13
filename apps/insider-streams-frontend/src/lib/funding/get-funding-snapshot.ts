@@ -68,6 +68,7 @@ export function getFundingSnapshot(
   options?: FundingSnapshotOptions,
 ): FundingSnapshot {
   const balance = serverSnapshot?.balance ?? "0";
+  const balanceUnavailable = serverSnapshot?.balanceUnavailable ?? false;
 
   if (!session.isConnected || !session.address) {
     return {
@@ -112,6 +113,20 @@ export function getFundingSnapshot(
       canPlaceBid: false,
       isReconciling: false,
       balance: "0",
+    };
+  }
+
+  // If user exists but balance decryption failed, still allow bidding.
+  // The contract validates on-chain — the balance display is just for UX.
+  if (balanceUnavailable && serverSnapshot?.userId) {
+    return {
+      status: "funded",
+      address: session.address,
+      currentChainName: session.currentChainName,
+      requiredChainName: session.requiredChainName,
+      canPlaceBid: true,
+      isReconciling: false,
+      balance,
     };
   }
 
