@@ -61,7 +61,7 @@ const APPROVAL_AMOUNT =
 // Re-approve when allowance drops below 1,000 CUSDC
 const MIN_ALLOWANCE = 1_000_000_000n;
 
-const DURATIONS = [1800n, 3600n]; // 30 min or 1 hour
+const DURATIONS = [1800n, 3600n, 10800n]; // 30 min, 1 hour, or 3 hours
 const MIN_BET_USDC = 10; // $10
 const MAX_BET_USDC = 500; // $500
 const MIN_BETS_PER_EVENT = 3;

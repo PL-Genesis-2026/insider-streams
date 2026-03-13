@@ -337,16 +337,16 @@ export function startApi(): void {
         console.log(`[api] Withdrawal ${withdrawalId} step 1 (marketplace→admin) confirmed: ${txHash}`);
 
         // Send cUSDC from admin to user's wallet
-        await withAdminLock(async () => {
-          const sendHash = await getWalletClient().writeContract({
+        const sendHash = await withAdminLock(() =>
+          getWalletClient().writeContract({
             address: config.confidentialUsdcAddress as `0x${string}`,
             abi: fheConfidentialUsdcAbi,
             functionName: "mintPlaintext",
             args: [userAddress as `0x${string}`, parsedAmount],
-          });
-          await getPublicClient().waitForTransactionReceipt({ hash: sendHash });
-          console.log(`[api] Withdrawal ${withdrawalId} step 2 (admin→user wallet) confirmed: ${sendHash}`);
-        });
+          }),
+        );
+        await getPublicClient().waitForTransactionReceipt({ hash: sendHash });
+        console.log(`[api] Withdrawal ${withdrawalId} step 2 (admin→user wallet) confirmed: ${sendHash}`);
       })().catch((err) => {
         console.error(`[api] Withdrawal ${withdrawalId} failed:`, err);
       });
@@ -586,16 +586,16 @@ export function startApi(): void {
       }
 
       const mintAmount = BigInt(25) * BigInt(10 ** 6); // 25 cUSDC (6 decimals)
-      const txHash = await withAdminLock(async () => {
-        const hash = await getWalletClient().writeContract({
+      const mintHash = await withAdminLock(() =>
+        getWalletClient().writeContract({
           address: config.confidentialUsdcAddress as `0x${string}`,
           abi: fheConfidentialUsdcAbi,
           functionName: "mintPlaintext",
           args: [result.payload.userAddress as `0x${string}`, mintAmount],
-        });
-        const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
-        return receipt.transactionHash;
-      });
+        }),
+      );
+      const mintReceipt = await getPublicClient().waitForTransactionReceipt({ hash: mintHash });
+      const txHash = mintReceipt.transactionHash;
 
       res.json({
         txHash,

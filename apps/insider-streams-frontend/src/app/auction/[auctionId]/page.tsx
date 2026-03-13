@@ -26,6 +26,7 @@ import {
   getAuctionDetail,
   type AuctionDetailData,
 } from "@/lib/auction-detail";
+import { getEffectiveStatus } from "@/lib/auction-status";
 import { SECRET_MARKETPLACE_ADDRESS } from "@/lib/contract-addresses";
 
 type AuctionDetailPageProps = {
@@ -131,11 +132,12 @@ export default async function AuctionDetailPage({
     notFound();
   }
 
-  const isOpen = auction.status === "Open";
+  const effectiveStatus = getEffectiveStatus(auction.status, auction.endTime);
+  const isOpen = effectiveStatus === "Open";
   const statusVariant =
-    auction.status === "Closed"
+    effectiveStatus === "Closed" || effectiveStatus === "Ended"
       ? "secondary"
-      : auction.status === "Cancelled"
+      : effectiveStatus === "Cancelled"
         ? "outline"
         : "accent";
   const timeline = buildTimeline(auction);
@@ -168,7 +170,7 @@ export default async function AuctionDetailPage({
                 className="text-xs font-medium font-sans leading-none tracking-[0.24em] text-accent"
               />
             </div>
-            <Badge variant={statusVariant}>{auction.status}</Badge>
+            <Badge variant={statusVariant}>{effectiveStatus}</Badge>
             {auction.endTime ? (
               <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
                 <Clock className="size-3.5" />
@@ -254,7 +256,7 @@ export default async function AuctionDetailPage({
                     <Separator className="mb-5" />
                     <div className="flex items-center justify-center gap-2 rounded-lg border border-border/50 bg-muted/30 px-4 py-3 text-sm font-medium text-muted-foreground">
                       <ShieldCheck className="size-4 text-accent/70" />
-                      Auction {auction.status.toLowerCase()}
+                      Auction {effectiveStatus.toLowerCase()}
                     </div>
                   </CardContent>
                 </>

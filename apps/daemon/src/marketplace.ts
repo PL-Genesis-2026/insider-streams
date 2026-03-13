@@ -56,17 +56,17 @@ export async function depositFor(
   );
 
   console.log(`[marketplace] depositFor(${userId}, ${amount}) — submitting tx...`);
-  return withAdminLock(async () => {
-    const hash = await getWalletClient().writeContract({
+  const hash = await withAdminLock(() =>
+    getWalletClient().writeContract({
       address: config.secretMarketplaceAddress as `0x${string}`,
       abi: fheSecretMarketplaceAbi,
       functionName: "depositFor",
       args: [userId, toHexBytes(encrypted.handles[0]), toHexBytes(encrypted.inputProof)],
-    });
-    const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
-    console.log(`[marketplace] depositFor confirmed: ${receipt.transactionHash}`);
-    return receipt.transactionHash;
-  });
+    }),
+  );
+  const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
+  console.log(`[marketplace] depositFor confirmed: ${receipt.transactionHash}`);
+  return receipt.transactionHash;
 }
 
 /**
@@ -86,17 +86,17 @@ export async function withdrawFor(
   );
 
   console.log(`[marketplace] withdrawFor(${userId}, ${amount}) — submitting tx...`);
-  return withAdminLock(async () => {
-    const hash = await getWalletClient().writeContract({
+  const hash = await withAdminLock(() =>
+    getWalletClient().writeContract({
       address: config.secretMarketplaceAddress as `0x${string}`,
       abi: fheSecretMarketplaceAbi,
       functionName: "withdrawFor",
       args: [userId, toHexBytes(encrypted.handles[0]), toHexBytes(encrypted.inputProof)],
-    });
-    const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
-    console.log(`[marketplace] withdrawFor confirmed: ${receipt.transactionHash}`);
-    return receipt.transactionHash;
-  });
+    }),
+  );
+  const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
+  console.log(`[marketplace] withdrawFor confirmed: ${receipt.transactionHash}`);
+  return receipt.transactionHash;
 }
 
 /**
@@ -118,8 +118,8 @@ export async function placeBid(
   );
 
   console.log(`[marketplace] placeBid(auction=${auctionId}, bidder=${bidderId}, amount=${amount}) — submitting tx...`);
-  return withAdminLock(async () => {
-    const hash = await getWalletClient().writeContract({
+  const hash = await withAdminLock(() =>
+    getWalletClient().writeContract({
       address: config.secretMarketplaceAddress as `0x${string}`,
       abi: fheSecretMarketplaceAbi,
       functionName: "placeBid",
@@ -131,11 +131,11 @@ export async function placeBid(
         toHexBytes(encrypted.inputProof),
         amount,
       ],
-    });
-    const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
-    console.log(`[marketplace] placeBid confirmed: ${receipt.transactionHash}`);
-    return receipt.transactionHash;
-  });
+    }),
+  );
+  const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
+  console.log(`[marketplace] placeBid confirmed: ${receipt.transactionHash}`);
+  return receipt.transactionHash;
 }
 
 /**
@@ -161,8 +161,8 @@ export async function createAuction(
   );
 
   console.log(`[marketplace] createAuction(seller=${sellerId}, event=${eventId}) — submitting tx...`);
-  return withAdminLock(async () => {
-    const hash = await getWalletClient().writeContract({
+  const hash = await withAdminLock(() =>
+    getWalletClient().writeContract({
       address: config.secretMarketplaceAddress as `0x${string}`,
       abi: fheSecretMarketplaceAbi,
       functionName: "createAuction",
@@ -176,30 +176,30 @@ export async function createAuction(
         toHexBytes(encrypted.handles[1]), // secretKey (euint256)
         toHexBytes(encrypted.inputProof),
       ],
-    });
-    const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
+    }),
+  );
+  const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
 
-    // Parse AuctionCreated event to get the auction ID
-    let auctionId = -1;
-    for (const log of receipt.logs) {
-      try {
-        const decoded = decodeEventLog({
-          abi: fheSecretMarketplaceAbi,
-          data: log.data,
-          topics: log.topics,
-        });
-        if (decoded.eventName === "AuctionCreated") {
-          auctionId = Number((decoded.args as { auctionId: bigint }).auctionId);
-          break;
-        }
-      } catch {
-        // Not our event
+  // Parse AuctionCreated event to get the auction ID
+  let auctionId = -1;
+  for (const log of receipt.logs) {
+    try {
+      const decoded = decodeEventLog({
+        abi: fheSecretMarketplaceAbi,
+        data: log.data,
+        topics: log.topics,
+      });
+      if (decoded.eventName === "AuctionCreated") {
+        auctionId = Number((decoded.args as { auctionId: bigint }).auctionId);
+        break;
       }
+    } catch {
+      // Not our event
     }
+  }
 
-    console.log(`[marketplace] createAuction confirmed: ${receipt.transactionHash}, auctionId=${auctionId}`);
-    return { txHash: receipt.transactionHash, auctionId };
-  });
+  console.log(`[marketplace] createAuction confirmed: ${receipt.transactionHash}, auctionId=${auctionId}`);
+  return { txHash: receipt.transactionHash, auctionId };
 }
 
 /**
@@ -239,17 +239,18 @@ async function _getOnChainBalanceImpl(userId: string): Promise<bigint> {
   if (!handle || handle === zeroHash) return 0n;
   console.log(`[marketplace] getOnChainBalance(${userId}) — handle: ${handle}`);
 
-  // Submit requestBalanceDecrypt on-chain (marks handle for public decryption)
+  // Submit requestBalanceDecrypt on-chain (marks handle for public decryption).
+  // Lock only covers writeContract (nonce assignment); receipt wait is outside.
   console.log(`[marketplace] requestBalanceDecrypt(${userId}) — submitting tx...`);
-  await withAdminLock(async () => {
-    const txHash = await getWalletClient().writeContract({
+  const decryptTxHash = await withAdminLock(() =>
+    getWalletClient().writeContract({
       address: marketplaceAddress,
       abi: fheSecretMarketplaceAbi,
       functionName: "requestBalanceDecrypt",
       args: [userId],
-    });
-    await publicClient.waitForTransactionReceipt({ hash: txHash });
-  });
+    }),
+  );
+  await publicClient.waitForTransactionReceipt({ hash: decryptTxHash });
 
   // Re-read handle after requestBalanceDecrypt in case a deposit landed between reads
   const freshRawHandle = await publicClient.readContract({
@@ -264,20 +265,28 @@ async function _getOnChainBalanceImpl(userId: string): Promise<bigint> {
   if (freshHandle !== handle) {
     // Handle changed (e.g. deposit landed) — need to requestBalanceDecrypt again
     console.log(`[marketplace] handle changed: ${handle} → ${freshHandle}, re-submitting requestBalanceDecrypt...`);
-    await withAdminLock(async () => {
-      const txHash = await getWalletClient().writeContract({
+    const retryTxHash = await withAdminLock(() =>
+      getWalletClient().writeContract({
         address: marketplaceAddress,
         abi: fheSecretMarketplaceAbi,
         functionName: "requestBalanceDecrypt",
         args: [userId],
-      });
-      await publicClient.waitForTransactionReceipt({ hash: txHash });
-    });
+      }),
+    );
+    await publicClient.waitForTransactionReceipt({ hash: retryTxHash });
   }
 
-  // Decrypt via Zama relayer using the freshest handle
+  // Decrypt via Zama relayer using the freshest handle (with timeout)
   const instance = await getFhevmInstance();
-  const result = await instance.publicDecrypt([freshHandle]);
+  const DECRYPT_TIMEOUT_MS = 60_000; // 60 seconds
+  console.log(`[marketplace] publicDecrypt(${freshHandle}) — waiting for relayer...`);
+
+  const decryptPromise = instance.publicDecrypt([freshHandle]);
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error(`publicDecrypt timed out after ${DECRYPT_TIMEOUT_MS / 1000}s`)), DECRYPT_TIMEOUT_MS),
+  );
+  const result = await Promise.race([decryptPromise, timeoutPromise]);
+
   const clearValue = result.clearValues[freshHandle];
   console.log(`[marketplace] getOnChainBalance(${userId}) — decrypted: ${String(clearValue)}`);
   if (clearValue === undefined || clearValue === null) return 0n;
