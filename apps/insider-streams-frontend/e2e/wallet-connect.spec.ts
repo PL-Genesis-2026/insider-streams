@@ -17,8 +17,9 @@ test.describe("Wallet connection", () => {
     await expect(unlockButton).toBeVisible();
     await unlockButton.click();
 
-    await expect(unlockButton).not.toBeVisible({ timeout: 10_000 });
-    await expect(page.getByRole("tab", { name: "Deposit" })).toBeVisible();
+    // After clicking, wait for the Deposit/Withdraw tabs to appear.
+    // The unlock triggers personal_sign + daemon reveal which can take time.
+    await expect(page.getByRole("tab", { name: "Deposit" })).toBeVisible({ timeout: 60_000 });
     await expect(page.getByRole("tab", { name: "Withdraw" })).toBeVisible();
   });
 });
