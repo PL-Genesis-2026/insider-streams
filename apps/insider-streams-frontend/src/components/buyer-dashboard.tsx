@@ -581,12 +581,18 @@ export function BuyerDashboard({ activeTab }: { activeTab: DashboardTab }) {
                               </div>
                               <div className="rounded-[calc(var(--radius)-4px)] border border-border/70 bg-muted/24 p-4">
                                 <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground/70">
-                                  Auto-bet amount
+                                  Status
                                 </p>
                                 <p className="mt-2 font-serif text-[1.8rem] leading-none tracking-[-0.05em]">
-                                  {latestBid.status === "active" || latestBid.status === "won"
-                                    ? formatBidAmount(latestBid.amount)
-                                    : "Not winning"}
+                                  {latestBid.status === "active"
+                                    ? "Winning"
+                                    : latestBid.status === "won"
+                                      ? "Won"
+                                      : latestBid.status === "outbid"
+                                        ? "Losing"
+                                        : latestBid.status === "refunded"
+                                          ? "Refunded"
+                                          : "—"}
                                 </p>
                               </div>
                             </div>
