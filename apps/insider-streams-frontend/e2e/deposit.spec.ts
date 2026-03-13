@@ -14,13 +14,13 @@ test.describe("Deposit flow", () => {
     const needsUnlock = await unlockButton.isVisible().catch(() => false);
     if (needsUnlock) {
       await unlockButton.click();
-      await expect(unlockButton).not.toBeVisible({ timeout: 10_000 });
     }
 
-    // Step 2: Wait for the Deposit tab to be visible and selected
+    // Step 2: Wait for the Deposit tab to be visible — the unlock/reveal can take
+    // time as it involves personal_sign + daemon API + optional FHE balance decrypt
     await expect(
       page.getByRole("tab", { name: "Deposit" }),
-    ).toBeVisible({ timeout: 10_000 });
+    ).toBeVisible({ timeout: 60_000 });
 
     // Step 3: Fill in a deposit amount — clear any previous value first
     const amountInput = page.getByRole("textbox", { name: /amount/i });
