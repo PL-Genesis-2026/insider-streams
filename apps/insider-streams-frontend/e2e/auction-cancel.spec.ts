@@ -17,18 +17,13 @@ import { sepolia } from "viem/chains";
 import {
   fheSecretMarketplaceAbi,
   SECRET_MARKETPLACE_ADDRESS,
+  EXAMPLE_PREDICTION_MARKET_ADDRESS,
+  examplePredictionMarketAbi,
 } from "@private-streams/common";
 import { test, expect, TEST_ACCOUNTS } from "./fixtures";
-import { createTestAuction } from "./helpers";
-import type { TestState } from "./global-setup";
+import { createTestAuction, readTestState } from "./helpers";
 
 test.use({ walletPrivateKey: TEST_ACCOUNTS.viewer });
-
-function getTestState(): TestState {
-  return JSON.parse(
-    readFileSync(resolve(__dirname, ".test-state.json"), "utf-8"),
-  );
-}
 
 // Load env vars for OWNER_PK
 function loadEnvFile(path: string) {
@@ -55,23 +50,69 @@ for (const root of [worktreeRoot, mainRepoRoot]) {
   loadEnvFile(resolve(root, "scripts/.env"));
 }
 
+/** Find a usable prediction market event from the contract. */
+async function findUsableEvent(): Promise<{ eventId: string; eventTitle: string } | null> {
+  const RPC_URL = process.env.RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com";
+  const publicClient = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
+
+  const nextEventId = await publicClient.readContract({
+    address: EXAMPLE_PREDICTION_MARKET_ADDRESS as Address,
+    abi: examplePredictionMarketAbi,
+    functionName: "nextEventId",
+  });
+
+  for (let i = 0; i < Number(nextEventId); i++) {
+    try {
+      const event = await publicClient.readContract({
+        address: EXAMPLE_PREDICTION_MARKET_ADDRESS as Address,
+        abi: examplePredictionMarketAbi,
+        functionName: "getMarketEvent",
+        args: [BigInt(i)],
+      });
+      const endTime = Number((event as any)[1] ?? (event as any).endTime);
+      const settled = (event as any)[2] ?? (event as any).settled;
+      const question = (event as any)[0] ?? (event as any).question;
+      if (!settled && endTime > Math.floor(Date.now() / 1000) + 600) {
+        return { eventId: String(i), eventTitle: String(question) };
+      }
+    } catch {
+      // skip
+    }
+  }
+  return null;
+}
+
 test.describe("Auction cancel", () => {
   test("cancelled auction shows Cancelled status on auction page", async ({
     page,
   }) => {
-    const state = getTestState();
+    const state = readTestState();
     const ownerPk = process.env.OWNER_PK;
     if (!ownerPk) {
       test.skip(true, "OWNER_PK not set — cannot cancel auctions");
       return;
     }
 
+    // Find event info — from test state or on-chain
+    let eventId = state?.eventId;
+    let eventTitle = state?.eventTitle;
+    if (!eventId || !eventTitle) {
+      console.log("[cancel] No test state, looking up event from chain...");
+      const found = await findUsableEvent();
+      if (!found) {
+        test.skip(true, "No usable prediction market event on-chain");
+        return;
+      }
+      eventId = found.eventId;
+      eventTitle = found.eventTitle;
+    }
+
     // Step 1: Create a fresh auction via daemon API
     const viewerAccount = privateKeyToAccount(TEST_ACCOUNTS.viewer);
     console.log("[cancel] Creating auction to cancel...");
     const result = await createTestAuction(viewerAccount, {
-      eventId: state.eventId,
-      eventTitle: state.eventTitle,
+      eventId,
+      eventTitle,
       privateLeg: "yes",
       secretPayload: "E2E cancel test secret",
       durationSeconds: 3600,

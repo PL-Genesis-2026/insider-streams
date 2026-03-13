@@ -1,7 +1,7 @@
 /**
  * Auction close E2E test.
  *
- * Uses the short-duration auction created by global setup (5 min).
+ * Uses the short-duration auction from global setup, or creates one.
  * Waits for it to expire, closes it via direct contract call,
  * then verifies the frontend shows "Closed" status.
  */
@@ -18,20 +18,16 @@ import { sepolia } from "viem/chains";
 import {
   fheSecretMarketplaceAbi,
   SECRET_MARKETPLACE_ADDRESS,
+  EXAMPLE_PREDICTION_MARKET_ADDRESS,
+  examplePredictionMarketAbi,
 } from "@private-streams/common";
 import { test, expect, TEST_ACCOUNTS } from "./fixtures";
-import type { TestState } from "./global-setup";
+import { createTestAuction, readTestState } from "./helpers";
 
 // Increase timeout — this test may wait for auction to expire
 test.setTimeout(600_000); // 10 min
 
 test.use({ walletPrivateKey: TEST_ACCOUNTS.viewer });
-
-function getTestState(): TestState {
-  return JSON.parse(
-    readFileSync(resolve(__dirname, ".test-state.json"), "utf-8"),
-  );
-}
 
 // Load env vars for OWNER_PK
 function loadEnvFile(path: string) {
@@ -58,20 +54,79 @@ for (const root of [worktreeRoot, mainRepoRoot]) {
   loadEnvFile(resolve(root, "scripts/.env"));
 }
 
+/** Find a usable prediction market event from the contract. */
+async function findUsableEvent(rpcUrl: string): Promise<{ eventId: string; eventTitle: string } | null> {
+  const publicClient = createPublicClient({ chain: sepolia, transport: http(rpcUrl) });
+
+  const nextEventId = await publicClient.readContract({
+    address: EXAMPLE_PREDICTION_MARKET_ADDRESS as Address,
+    abi: examplePredictionMarketAbi,
+    functionName: "nextEventId",
+  });
+
+  for (let i = 0; i < Number(nextEventId); i++) {
+    try {
+      const event = await publicClient.readContract({
+        address: EXAMPLE_PREDICTION_MARKET_ADDRESS as Address,
+        abi: examplePredictionMarketAbi,
+        functionName: "getMarketEvent",
+        args: [BigInt(i)],
+      });
+      const endTime = Number((event as any)[1] ?? (event as any).endTime);
+      const settled = (event as any)[2] ?? (event as any).settled;
+      const question = (event as any)[0] ?? (event as any).question;
+      if (!settled && endTime > Math.floor(Date.now() / 1000) + 600) {
+        return { eventId: String(i), eventTitle: String(question) };
+      }
+    } catch {
+      // skip
+    }
+  }
+  return null;
+}
+
 test.describe("Auction close", () => {
   test("closed auction shows Closed status on auction page", async ({
     page,
   }) => {
-    const state = getTestState();
+    const state = readTestState();
     const ownerPk = process.env.OWNER_PK;
 
     if (!ownerPk) {
       test.skip(true, "OWNER_PK not set — cannot close auctions");
       return;
     }
-    if (!state.closeAuctionId) {
-      test.skip(true, "No close auction created in global setup");
-      return;
+
+    let closeAuctionId = state?.closeAuctionId || null;
+
+    // If no test state, create a short-duration auction to close
+    if (!closeAuctionId) {
+      console.log("[close] No test state, creating short-duration auction...");
+      const RPC_URL = process.env.RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com";
+      const found = await findUsableEvent(RPC_URL);
+      if (!found) {
+        test.skip(true, "No usable prediction market event on-chain");
+        return;
+      }
+
+      const viewerAccount = privateKeyToAccount(TEST_ACCOUNTS.viewer);
+      const result = await createTestAuction(viewerAccount, {
+        eventId: found.eventId,
+        eventTitle: found.eventTitle,
+        privateLeg: "no",
+        secretPayload: "E2E close test secret",
+        durationSeconds: 300, // 5 min
+      });
+
+      closeAuctionId = result.status === 200
+        ? String(result.data.auctionId ?? "")
+        : null;
+
+      if (!closeAuctionId) {
+        test.skip(true, `Auction creation failed: ${JSON.stringify(result.data)}`);
+        return;
+      }
+      console.log(`[close] Created auction #${closeAuctionId}`);
     }
 
     const adminAccount = privateKeyToAccount(ownerPk as `0x${string}`);
@@ -86,14 +141,14 @@ test.describe("Auction close", () => {
 
     // Step 1: Wait for the auction to expire
     console.log(
-      `[close] Checking auction #${state.closeAuctionId} expiry...`,
+      `[close] Checking auction #${closeAuctionId} expiry...`,
     );
 
     const auction = await publicClient.readContract({
       address: marketplaceAddress,
       abi: fheSecretMarketplaceAbi,
       functionName: "getAuction",
-      args: [BigInt(state.closeAuctionId)],
+      args: [BigInt(closeAuctionId)],
     });
     const endTime = Number((auction as any)[1]);
     const now = Math.floor(Date.now() / 1000);
@@ -107,7 +162,7 @@ test.describe("Auction close", () => {
     }
 
     // Step 2: Close the auction via direct contract call (retry on AuctionNotEnded)
-    console.log(`[close] Closing auction #${state.closeAuctionId}...`);
+    console.log(`[close] Closing auction #${closeAuctionId}...`);
     let closeHash: `0x${string}` | undefined;
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
@@ -115,7 +170,7 @@ test.describe("Auction close", () => {
           address: marketplaceAddress,
           abi: fheSecretMarketplaceAbi,
           functionName: "closeAuction",
-          args: [BigInt(state.closeAuctionId)],
+          args: [BigInt(closeAuctionId)],
         });
         break;
       } catch (err) {
@@ -137,8 +192,8 @@ test.describe("Auction close", () => {
 
     // Poll: reload the auction page until "Closed" appears or timeout
     await expect(async () => {
-      await page.goto(`/auction/${state.closeAuctionId}`);
-      await expect(page.getByText(`#${state.closeAuctionId}`).first()).toBeVisible(
+      await page.goto(`/auction/${closeAuctionId}`);
+      await expect(page.getByText(`#${closeAuctionId}`).first()).toBeVisible(
         { timeout: 10_000 },
       );
       // Check for either "Closed" badge or "Auction closed" timeline text
