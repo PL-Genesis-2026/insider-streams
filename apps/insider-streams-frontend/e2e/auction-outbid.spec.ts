@@ -18,7 +18,7 @@ test.describe("Outbid flow", () => {
 
     if (!auctionId) {
       console.log("[outbid] No test state, querying subgraph for open auction...");
-      const auctions = await findOpenAuctions();
+      const auctions = await findOpenAuctions(20, 600);
       auctionId = auctions[0]?.auctionId ?? null;
     }
 
@@ -51,10 +51,13 @@ test.describe("Outbid flow", () => {
         await page.waitForTimeout(3_000);
       }
 
+      // Balance may still be loading (FHE decrypt via daemon)
+      const loadingButton = page.getByRole("button", { name: "Loading balance" });
+      const isLoading = await loadingButton.isVisible().catch(() => false);
+      if (isLoading) throw new Error("STILL_LOADING");
+
       const needsDeposit = await depositLink.isVisible().catch(() => false);
-      if (needsDeposit) {
-        throw new Error("NEEDS_DEPOSIT");
-      }
+      if (needsDeposit) throw new Error("NEEDS_DEPOSIT");
 
       await expect(placeBidButton).toBeVisible({ timeout: 5_000 });
     }).toPass({ timeout: 60_000, intervals: [5_000] });
@@ -71,16 +74,16 @@ test.describe("Outbid flow", () => {
     // Open bid modal
     await placeBidButton.click();
 
-    // Fill higher bid amount — $10 USDC (above bidder1's $5)
+    // Fill higher bid amount — $200 USDC (above any existing bid)
     const bidAmountInput = page.locator("#bid-amount");
-    await expect(bidAmountInput).toBeVisible();
-    await bidAmountInput.fill("10");
+    await expect(bidAmountInput).toBeVisible({ timeout: 10_000 });
+    await bidAmountInput.fill("200");
 
     // Submit
     const modalSubmit = page
       .locator('[role="dialog"]')
       .getByRole("button", { name: "Place Bid" });
-    await expect(modalSubmit).toBeEnabled();
+    await expect(modalSubmit).toBeEnabled({ timeout: 5_000 });
     await modalSubmit.click();
 
     // Wait for confirmation

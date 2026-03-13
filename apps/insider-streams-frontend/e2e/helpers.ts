@@ -90,19 +90,22 @@ const SUBGRAPH_URL =
   "https://api.studio.thegraph.com/query/1743303/insider-streams-zama/version/latest";
 
 /** Query the subgraph for open auctions (not cancelled/closed). */
-export async function findOpenAuctions(limit = 20): Promise<
-  { auctionId: string; sellerId: string }[]
-> {
+export async function findOpenAuctions(
+  limit = 20,
+  minRemainingSeconds = 0,
+): Promise<{ auctionId: string; sellerId: string; endTime: string }[]> {
   const now = Math.floor(Date.now() / 1000);
+  const minEndTime = now + minRemainingSeconds;
   const query = `{
     auctionCreateds(
-      where: { endTime_gt: "${now}" }
+      where: { endTime_gt: "${minEndTime}" }
       first: ${limit}
       orderBy: endTime
       orderDirection: asc
     ) {
       auctionId
       sellerId
+      endTime
     }
     auctionCancelleds(first: 1000) { auctionId }
     auctionCloseds(first: 1000) { auctionId }
@@ -117,7 +120,11 @@ export async function findOpenAuctions(limit = 20): Promise<
     });
     const json = (await res.json()) as {
       data?: {
-        auctionCreateds?: { auctionId: string; sellerId: string }[];
+        auctionCreateds?: {
+          auctionId: string;
+          sellerId: string;
+          endTime: string;
+        }[];
         auctionCancelleds?: { auctionId: string }[];
         auctionCloseds?: { auctionId: string }[];
       };

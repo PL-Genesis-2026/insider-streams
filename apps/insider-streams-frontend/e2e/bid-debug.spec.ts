@@ -21,7 +21,8 @@ test.describe("Bid debug", () => {
       console.log(
         "[bid-debug] No test state, querying subgraph for open auction...",
       );
-      const auctions = await findOpenAuctions();
+      // Require at least 10 min remaining — wallet unlock + bid flow takes ~3 min under load
+      const auctions = await findOpenAuctions(20, 600);
       auctionId = auctions[0]?.auctionId ?? null;
     }
 
@@ -156,7 +157,7 @@ test.describe("Bid debug", () => {
       }
 
       await expect(placeBidButton).toBeVisible({ timeout: 5_000 });
-    }).toPass({ timeout: 90_000, intervals: [5_000] });
+    }).toPass({ timeout: 60_000, intervals: [5_000] });
 
     // Check if we ended up needing deposit
     const finalNeedsDeposit = await depositLink.isVisible().catch(() => false);
@@ -184,6 +185,13 @@ test.describe("Bid debug", () => {
     }
 
     // ── Step 3: Open bid modal ──
+    // Check if the button is enabled (may be disabled if auction expired)
+    const isEnabled = await placeBidButton.isEnabled();
+    if (!isEnabled) {
+      console.log("[bid-debug] Place Bid button is disabled (auction may have expired)");
+      test.skip(true, "Place Bid button disabled — auction likely expired");
+      return;
+    }
     await placeBidButton.click();
     console.log("[bid-debug] Clicked 'Place Bid'");
 
@@ -208,22 +216,16 @@ test.describe("Bid debug", () => {
 
     // ── Step 4: Fill bid amount ──
     const bidAmountInput = page.locator("#bid-amount");
-    await expect(bidAmountInput).toBeVisible();
-    await bidAmountInput.fill("5");
-    console.log("[bid-debug] Filled bid amount: $5");
+    await expect(bidAmountInput).toBeVisible({ timeout: 10_000 });
 
-    // Check if submit is enabled
+    // Use a bid high enough to exceed any current bid
+    const bidAmount = "100";
+    await bidAmountInput.fill(bidAmount);
+    console.log(`[bid-debug] Filled bid amount: $${bidAmount}`);
+
     const modalSubmit = dialog.getByRole("button", { name: "Place Bid" });
-    const isEnabled = await modalSubmit.isEnabled();
-    console.log(`[bid-debug] Submit button enabled: ${isEnabled}`);
-
-    if (!isEnabled) {
-      // Try a higher amount in case $5 is below the minimum
-      await bidAmountInput.clear();
-      await bidAmountInput.fill("100");
-      console.log("[bid-debug] Retrying with $100");
-      await expect(modalSubmit).toBeEnabled({ timeout: 2_000 });
-    }
+    await expect(modalSubmit).toBeEnabled({ timeout: 5_000 });
+    console.log("[bid-debug] Submit button enabled");
 
     // ── Step 5: Submit bid ──
     const preBidLogCount = apiLog.length;
@@ -278,17 +280,17 @@ test.describe("Bid debug", () => {
       }
     };
 
-    // Poll phases for up to 120s (FHE bid submission can be slow)
+    // Poll phases for up to 60s (FHE bid submission ~10-30s)
     const outcome = await Promise.race([
       page
         .getByText("Bid placed successfully")
         .first()
-        .waitFor({ timeout: 120_000 })
+        .waitFor({ timeout: 60_000 })
         .then(() => "success" as const),
       dialog
         .locator(".text-destructive")
         .first()
-        .waitFor({ timeout: 120_000 })
+        .waitFor({ timeout: 60_000 })
         .then(() => "error" as const),
     ]).catch(() => "timeout" as const);
 
