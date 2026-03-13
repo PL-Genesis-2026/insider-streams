@@ -239,55 +239,21 @@ async function _getOnChainBalanceImpl(userId: string): Promise<bigint> {
   if (!handle || handle === zeroHash) return 0n;
   console.log(`[marketplace] getOnChainBalance(${userId}) — handle: ${handle}`);
 
-  // Submit requestBalanceDecrypt on-chain (marks handle for public decryption).
-  // Lock only covers writeContract (nonce assignment); receipt wait is outside.
-  console.log(`[marketplace] requestBalanceDecrypt(${userId}) — submitting tx...`);
-  const decryptTxHash = await withAdminLock(() =>
-    getWalletClient().writeContract({
-      address: marketplaceAddress,
-      abi: fheSecretMarketplaceAbi,
-      functionName: "requestBalanceDecrypt",
-      args: [userId],
-    }),
-  );
-  await publicClient.waitForTransactionReceipt({ hash: decryptTxHash });
-
-  // Re-read handle after requestBalanceDecrypt in case a deposit landed between reads
-  const freshRawHandle = await publicClient.readContract({
-    address: marketplaceAddress,
-    abi: fheSecretMarketplaceAbi,
-    functionName: "getBalance",
-    args: [userId],
-  });
-  const freshHandle = freshRawHandle as `0x${string}`;
-  if (!freshHandle || freshHandle === zeroHash) return 0n;
-
-  if (freshHandle !== handle) {
-    // Handle changed (e.g. deposit landed) — need to requestBalanceDecrypt again
-    console.log(`[marketplace] handle changed: ${handle} → ${freshHandle}, re-submitting requestBalanceDecrypt...`);
-    const retryTxHash = await withAdminLock(() =>
-      getWalletClient().writeContract({
-        address: marketplaceAddress,
-        abi: fheSecretMarketplaceAbi,
-        functionName: "requestBalanceDecrypt",
-        args: [userId],
-      }),
-    );
-    await publicClient.waitForTransactionReceipt({ hash: retryTxHash });
-  }
-
-  // Decrypt via Zama relayer using the freshest handle (with timeout)
+  // Decrypt via Zama relayer — publicDecrypt works directly because the
+  // contract uses FHE.allowThis() on balance handles. No need to call
+  // requestBalanceDecrypt on-chain first (that was causing rate limiting
+  // and adding ~15s per balance check from the on-chain tx).
   const instance = await getFhevmInstance();
   const DECRYPT_TIMEOUT_MS = 60_000; // 60 seconds
-  console.log(`[marketplace] publicDecrypt(${freshHandle}) — waiting for relayer...`);
+  console.log(`[marketplace] publicDecrypt(${handle}) — waiting for relayer...`);
 
-  const decryptPromise = instance.publicDecrypt([freshHandle]);
+  const decryptPromise = instance.publicDecrypt([handle]);
   const timeoutPromise = new Promise<never>((_, reject) =>
     setTimeout(() => reject(new Error(`publicDecrypt timed out after ${DECRYPT_TIMEOUT_MS / 1000}s`)), DECRYPT_TIMEOUT_MS),
   );
   const result = await Promise.race([decryptPromise, timeoutPromise]);
 
-  const clearValue = result.clearValues[freshHandle];
+  const clearValue = result.clearValues[handle];
   console.log(`[marketplace] getOnChainBalance(${userId}) — decrypted: ${String(clearValue)}`);
   if (clearValue === undefined || clearValue === null) return 0n;
   return BigInt(clearValue as bigint);
