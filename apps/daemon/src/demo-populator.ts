@@ -15,9 +15,17 @@
  *   TEST_ACCOUNT_1..25    — private keys for test accounts
  */
 
-import { createHash, randomBytes } from "node:crypto";
 import {
-  createPublicClient,
+  EXAMPLE_PREDICTION_MARKET_ADDRESS,
+  MOCK_USDC_ADDRESS,
+  examplePredictionMarketAbi,
+  mockUsdcAbi,
+} from "@private-streams/common";
+import { GraphQLClient, gql } from "graphql-request";
+import { createHash, randomBytes } from "node:crypto";
+import OpenAI from "openai";
+import { zodResponseFormat } from "openai/helpers/zod";
+import {
   createWalletClient,
   formatUnits,
   http,
@@ -27,40 +35,31 @@ import {
 } from "viem";
 import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
-import OpenAI from "openai";
 import { z } from "zod";
-import { zodResponseFormat } from "openai/helpers/zod";
-import { GraphQLClient, gql } from "graphql-request";
-import {
-  EXAMPLE_PREDICTION_MARKET_ADDRESS,
-  MOCK_USDC_ADDRESS,
-  mockUsdcAbi,
-  examplePredictionMarketAbi,
-} from "@private-streams/common";
 
-import { config } from "./config.js";
-import { getPublicClient, getWalletClient, getAccount } from "./provider.js";
-import * as marketplace from "./marketplace.js";
-import { getOrCreateUser, recordBid, insertSecret } from "./db.js";
-import { sendNotification } from "./notify.js";
 import { withAdminLock } from "./admin-lock.js";
+import { config } from "./config.js";
+import { getOrCreateUser, insertSecret, recordBid } from "./db.js";
+import * as marketplace from "./marketplace.js";
+import { sendNotification } from "./notify.js";
+import { getAccount, getPublicClient, getWalletClient } from "./provider.js";
 
 // ─── Intervals ──────────────────────────────────────────────────────────────
 
-const CREATE_EVENTS_INTERVAL_MS = 15 * 60 * 1000;    // 15 minutes
-const SPAWN_AUCTIONS_INTERVAL_MS = 1 * 60 * 1000;    // 1 minute
-const PLACE_BIDS_INTERVAL_MS = 1 * 60 * 1000;        // 1 minute
-const REQUEST_SETTLEMENTS_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
+const CREATE_EVENTS_INTERVAL_MS = 10 * 60 * 1000; // 15 minutes
+const SPAWN_AUCTIONS_INTERVAL_MS = 1 * 60 * 1000; // 1 minute
+const PLACE_BIDS_INTERVAL_MS = 1 * 60 * 1000; // 1 minute
+const REQUEST_SETTLEMENTS_INTERVAL_MS = 1 * 60 * 1000; // 10 minutes
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const USDC_DECIMALS = 6;
-const MIN_BALANCE = 1_000_000_000n;  // 1,000 USDC
+const MIN_BALANCE = 1_000_000_000n; // 1,000 USDC
 const MINT_AMOUNT = 10_000_000_000n; // 10,000 USDC per mint
 const APPROVAL_AMOUNT = 2n ** 256n - 1n; // uint256 max
 const MIN_ALLOWANCE = 1_000_000_000n;
 
-const EVENT_DURATIONS = [1800n, 3600n]; // 30 min or 1 hour
+const EVENT_DURATIONS = [1800n, 3600n, 10800n]; // 30 min, 1 hour, or 3 hours
 const MIN_BET_USDC = 10;
 const MAX_BET_USDC = 500;
 const MIN_BETS_PER_EVENT = 3;
@@ -75,14 +74,17 @@ const AUCTION_DURATION_SECONDS: Record<string, number> = {
   "1h": 3600,
 };
 const SECRET_POOL = [
-  "YES", "NO",
-  "The answer is YES.", "The answer is NO.",
-  "Prediction: YES", "Prediction: NO",
+  "YES",
+  "NO",
+  "The answer is YES.",
+  "The answer is NO.",
+  "Prediction: YES",
+  "Prediction: NO",
 ];
 
-const BID_MIN_INCREMENT = 10_000_000n;  // 10 USDC
-const BID_MAX_INCREMENT = 50_000_000n;  // 50 USDC
-const BID_LOW_BALANCE = 100_000_000n;   // 100 USDC
+const BID_MIN_INCREMENT = 10_000_000n; // 10 USDC
+const BID_MAX_INCREMENT = 50_000_000n; // 50 USDC
+const BID_LOW_BALANCE = 100_000_000n; // 100 USDC
 const BID_DEPOSIT_AMOUNT = 1_000_000_000n; // 1,000 USDC
 
 const OUTCOMES = [1, 2] as const; // 1=No, 2=Yes
@@ -156,9 +158,13 @@ async function waitForTx(hash: Hex, label: string) {
 // ─── Venice AI ──────────────────────────────────────────────────────────────
 
 const EventSuggestionSchema = z.object({
-  events: z.array(z.object({
-    question: z.string().describe("A prediction market question in future tense"),
-  })),
+  events: z.array(
+    z.object({
+      question: z
+        .string()
+        .describe("A prediction market question in future tense"),
+    }),
+  ),
 });
 
 async function generateEventQuestions(
@@ -166,9 +172,10 @@ async function generateEventQuestions(
   existingQuestions: string[],
   count: number,
 ): Promise<string[]> {
-  const existingList = existingQuestions.length > 0
-    ? `\n\nEXISTING MARKETS (do NOT duplicate these):\n${existingQuestions.map(q => `- ${q}`).join("\n")}`
-    : "";
+  const existingList =
+    existingQuestions.length > 0
+      ? `\n\nEXISTING MARKETS (do NOT duplicate these):\n${existingQuestions.map((q) => `- ${q}`).join("\n")}`
+      : "";
 
   const systemPrompt = `You are a prediction market event creator. You suggest prediction market questions based on REAL past events that have KNOWN outcomes. The events must be real and verifiable — things like past Super Bowl winners, Oscar winners, election results, sports championships, major tech acquisitions, etc.
 
@@ -188,26 +195,39 @@ CRITICAL RULES:
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
-      response_format: zodResponseFormat(EventSuggestionSchema, "event_suggestions"),
+      response_format: zodResponseFormat(
+        EventSuggestionSchema,
+        "event_suggestions",
+      ),
       temperature: 1.0,
     });
 
     const parsed = response.choices[0]?.message?.parsed;
-    if (parsed) return parsed.events.map(e => e.question);
+    if (parsed) return parsed.events.map((e) => e.question);
 
     const content = response.choices[0]?.message?.content;
     if (content) {
       const manual = EventSuggestionSchema.parse(JSON.parse(content));
-      return manual.events.map(e => e.question);
+      return manual.events.map((e) => e.question);
     }
     throw new Error("Venice AI returned empty response");
   } catch (err) {
-    if (err instanceof Error && (err.message.includes("response_format") || err.message.includes("json_schema") || err.message.includes("400"))) {
-      console.log("[demo]   Structured output not supported, falling back to json_object mode...");
+    if (
+      err instanceof Error &&
+      (err.message.includes("response_format") ||
+        err.message.includes("json_schema") ||
+        err.message.includes("400"))
+    ) {
+      console.log(
+        "[demo]   Structured output not supported, falling back to json_object mode...",
+      );
       const response = await venice.chat.completions.create({
         model: "openai-gpt-54",
         messages: [
-          { role: "system", content: `${systemPrompt}\n\nRespond with a JSON object containing an "events" array with exactly ${count} event objects, each with a "question" field.\n\nExample format:\n{"events": [{"question": "Will the Kansas City Chiefs win Super Bowl LVIII?"}]}` },
+          {
+            role: "system",
+            content: `${systemPrompt}\n\nRespond with a JSON object containing an "events" array with exactly ${count} event objects, each with a "question" field.\n\nExample format:\n{"events": [{"question": "Will the Kansas City Chiefs win Super Bowl LVIII?"}]}`,
+          },
           { role: "user", content: userPrompt },
         ],
         response_format: { type: "json_object" },
@@ -216,7 +236,7 @@ CRITICAL RULES:
       const content = response.choices[0]?.message?.content;
       if (!content) throw new Error("Venice AI returned empty response");
       const parsed = EventSuggestionSchema.parse(JSON.parse(content));
-      return parsed.events.map(e => e.question);
+      return parsed.events.map((e) => e.question);
     }
     throw err;
   }
@@ -226,22 +246,28 @@ CRITICAL RULES:
 
 const EXISTING_EVENTS_QUERY = gql`
   query ExistingEvents($limit: Int!) {
-    eventCreateds(first: $limit, orderBy: blockTimestamp, orderDirection: desc) {
+    eventCreateds(
+      first: $limit
+      orderBy: blockTimestamp
+      orderDirection: desc
+    ) {
       eventId
       question
     }
   }
 `;
 
-const OPEN_EVENTS_QUERY = gql`{
-  eventCreateds(first: 100, orderBy: blockTimestamp, orderDirection: desc) {
-    eventId
-    question
+const OPEN_EVENTS_QUERY = gql`
+  {
+    eventCreateds(first: 100, orderBy: blockTimestamp, orderDirection: desc) {
+      eventId
+      question
+    }
+    settlementResponses(first: 1000) {
+      eventId
+    }
   }
-  settlementResponses(first: 1000) {
-    eventId
-  }
-}`;
+`;
 
 const OPEN_AUCTIONS_QUERY = gql`
   query OpenAuctions($now: BigInt!) {
@@ -290,60 +316,64 @@ async function runCreateEvents(
   const adminAddress = getAccount().address;
 
   // Read payment token from contract
-  const paymentToken = await publicClient.readContract({
+  const paymentToken = (await publicClient.readContract({
     address: EXAMPLE_PREDICTION_MARKET_ADDRESS as Address,
     abi: examplePredictionMarketAbi,
     functionName: "paymentToken",
-  }) as Address;
+  })) as Address;
 
   // Step 1: Fetch existing events
   const { eventCreateds } = await gqlClient.request<{
     eventCreateds: { eventId: string; question: string }[];
   }>(EXISTING_EVENTS_QUERY, { limit: 50 });
-  const existingQuestions = eventCreateds.map(e => e.question);
+  const existingQuestions = eventCreateds.map((e) => e.question);
   console.log(`[demo]   ${existingQuestions.length} existing events`);
 
   // Step 2: Generate new questions via Venice AI
   const count = randomInt(1, 3);
-  const questions = await generateEventQuestions(venice, existingQuestions, count);
+  const questions = await generateEventQuestions(
+    venice,
+    existingQuestions,
+    count,
+  );
   console.log(`[demo]   Generated ${questions.length} new questions`);
 
   // Step 3: Ensure admin has USDC
-  const adminBalance = await publicClient.readContract({
+  const adminBalance = (await publicClient.readContract({
     address: paymentToken,
     abi: mockUsdcAbi,
     functionName: "balanceOf",
     args: [adminAddress],
-  }) as bigint;
+  })) as bigint;
   if (adminBalance < MIN_BALANCE) {
-    await withAdminLock(async () => {
-      const h = await adminClient.writeContract({
+    const h = await withAdminLock(() =>
+      adminClient.writeContract({
         address: paymentToken,
         abi: mockUsdcAbi,
         functionName: "mint",
         args: [adminAddress, MINT_AMOUNT],
-      });
-      await waitForTx(h, "Mint USDC for admin");
-    });
+      }),
+    );
+    await waitForTx(h, "Mint USDC for admin");
   }
 
   // Ensure approval
-  const allowance = await publicClient.readContract({
+  const allowance = (await publicClient.readContract({
     address: paymentToken,
     abi: mockUsdcAbi,
     functionName: "allowance",
     args: [adminAddress, EXAMPLE_PREDICTION_MARKET_ADDRESS as Address],
-  }) as bigint;
+  })) as bigint;
   if (allowance < MIN_ALLOWANCE) {
-    await withAdminLock(async () => {
-      const h = await adminClient.writeContract({
+    const h = await withAdminLock(() =>
+      adminClient.writeContract({
         address: paymentToken,
         abi: mockUsdcAbi,
         functionName: "approve",
         args: [EXAMPLE_PREDICTION_MARKET_ADDRESS as Address, APPROVAL_AMOUNT],
-      });
-      await waitForTx(h, "Approve USDC for admin");
-    });
+      }),
+    );
+    await waitForTx(h, "Approve USDC for admin");
   }
 
   // Step 4: Create events on-chain
@@ -351,15 +381,15 @@ async function runCreateEvents(
   for (const question of questions) {
     const duration = EVENT_DURATIONS[randomInt(0, EVENT_DURATIONS.length - 1)]!;
     try {
-      const receipt = await withAdminLock(async () => {
-        const hash = await adminClient.writeContract({
+      const hash = await withAdminLock(() =>
+        adminClient.writeContract({
           address: EXAMPLE_PREDICTION_MARKET_ADDRESS as Address,
           abi: examplePredictionMarketAbi,
           functionName: "newEvent",
           args: [question, duration],
-        });
-        return waitForTx(hash, `Event: "${question.slice(0, 40)}..."`);
-      });
+        }),
+      );
+      const receipt = await waitForTx(hash, `Event: "${question.slice(0, 40)}..."`);
       const logs = parseEventLogs({
         abi: examplePredictionMarketAbi,
         logs: receipt.logs,
@@ -368,7 +398,9 @@ async function runCreateEvents(
       const eventId = (logs[0] as { args: { eventId: bigint } }).args.eventId;
       createdEvents.push({ eventId, question });
     } catch (err) {
-      console.error(`[demo]   Failed to create event: ${err instanceof Error ? err.message : err}`);
+      console.error(
+        `[demo]   Failed to create event: ${err instanceof Error ? err.message : err}`,
+      );
     }
   }
 
@@ -383,42 +415,55 @@ async function runCreateEvents(
     const selected = pickRandomN(testAccounts, numBets);
 
     for (const ta of selected) {
-      const betAmount = BigInt(randomInt(MIN_BET_USDC, MAX_BET_USDC)) * 1_000_000n;
+      const betAmount =
+        BigInt(randomInt(MIN_BET_USDC, MAX_BET_USDC)) * 1_000_000n;
       const outcome = pickRandom(OUTCOMES);
 
       try {
         // Ensure test account has USDC
-        const bal = await publicClient.readContract({
-          address: paymentToken, abi: mockUsdcAbi,
-          functionName: "balanceOf", args: [ta.address],
-        }) as bigint;
+        const bal = (await publicClient.readContract({
+          address: paymentToken,
+          abi: mockUsdcAbi,
+          functionName: "balanceOf",
+          args: [ta.address],
+        })) as bigint;
         if (bal < MIN_BALANCE) {
-          await withAdminLock(async () => {
-            const h = await adminClient.writeContract({
-              address: paymentToken, abi: mockUsdcAbi,
-              functionName: "mint", args: [ta.address, MINT_AMOUNT],
-            });
-            await waitForTx(h, `Mint for ${ta.label}`);
-          });
-          await new Promise(r => setTimeout(r, 2_000));
+          const h = await withAdminLock(() =>
+            adminClient.writeContract({
+              address: paymentToken,
+              abi: mockUsdcAbi,
+              functionName: "mint",
+              args: [ta.address, MINT_AMOUNT],
+            }),
+          );
+          await waitForTx(h, `Mint for ${ta.label}`);
+          await new Promise((r) => setTimeout(r, 2_000));
         }
 
         // Ensure approval
         const betClient = createWalletClient({
-          account: ta.account, chain: sepolia, transport: http(config.rpcUrl),
+          account: ta.account,
+          chain: sepolia,
+          transport: http(config.rpcUrl),
         });
-        const all = await publicClient.readContract({
-          address: paymentToken, abi: mockUsdcAbi,
-          functionName: "allowance", args: [ta.address, EXAMPLE_PREDICTION_MARKET_ADDRESS as Address],
-        }) as bigint;
+        const all = (await publicClient.readContract({
+          address: paymentToken,
+          abi: mockUsdcAbi,
+          functionName: "allowance",
+          args: [ta.address, EXAMPLE_PREDICTION_MARKET_ADDRESS as Address],
+        })) as bigint;
         if (all < MIN_ALLOWANCE) {
           const h = await betClient.writeContract({
-            address: paymentToken, abi: mockUsdcAbi,
+            address: paymentToken,
+            abi: mockUsdcAbi,
             functionName: "approve",
-            args: [EXAMPLE_PREDICTION_MARKET_ADDRESS as Address, APPROVAL_AMOUNT],
+            args: [
+              EXAMPLE_PREDICTION_MARKET_ADDRESS as Address,
+              APPROVAL_AMOUNT,
+            ],
           });
           await waitForTx(h, `Approve for ${ta.label}`);
-          await new Promise(r => setTimeout(r, 2_000));
+          await new Promise((r) => setTimeout(r, 2_000));
         }
 
         // Place bet (fire-and-forget receipt)
@@ -428,16 +473,22 @@ async function runCreateEvents(
           functionName: "buyShares",
           args: [eventId, outcome, betAmount],
         });
-        console.log(`[demo]   ${ta.label} bet $${formatUnits(betAmount, USDC_DECIMALS)} ${outcome === 2 ? "YES" : "NO"} on event ${eventId} (tx: ${hash.slice(0, 10)}...)`);
+        console.log(
+          `[demo]   ${ta.label} bet $${formatUnits(betAmount, USDC_DECIMALS)} ${outcome === 2 ? "YES" : "NO"} on event ${eventId} (tx: ${hash.slice(0, 10)}...)`,
+        );
       } catch (err) {
-        console.error(`[demo]   ${ta.label} bet failed: ${err instanceof Error ? err.message : err}`);
+        console.error(
+          `[demo]   ${ta.label} bet failed: ${err instanceof Error ? err.message : err}`,
+        );
       }
 
-      await new Promise(r => setTimeout(r, BET_PAUSE_MS));
+      await new Promise((r) => setTimeout(r, BET_PAUSE_MS));
     }
   }
 
-  const summary = createdEvents.map(e => `#${e.eventId}: ${e.question}`).join("\n");
+  const summary = createdEvents
+    .map((e) => `#${e.eventId}: ${e.question}`)
+    .join("\n");
   await sendNotification(`Created ${createdEvents.length} events`, summary);
   console.log(`[demo]   Created ${createdEvents.length} events`);
 }
@@ -456,8 +507,10 @@ async function runSpawnAuctions(
     settlementResponses: { eventId: string }[];
   }>(OPEN_EVENTS_QUERY);
 
-  const settledIds = new Set(data.settlementResponses.map(r => r.eventId));
-  const openEvents = data.eventCreateds.filter(e => !settledIds.has(e.eventId));
+  const settledIds = new Set(data.settlementResponses.map((r) => r.eventId));
+  const openEvents = data.eventCreateds.filter(
+    (e) => !settledIds.has(e.eventId),
+  );
 
   if (openEvents.length === 0) {
     console.log("[demo]   No open events, skipping");
@@ -478,10 +531,15 @@ async function runSpawnAuctions(
     // Generate secretDataCid and key from payload
     const keyBytes = randomBytes(32);
     const secretDataKey = BigInt("0x" + keyBytes.toString("hex"));
-    const secretDataCid = "0x" + createHash("sha256").update(secretPayload).digest("hex");
+    const secretDataCid =
+      "0x" + createHash("sha256").update(secretPayload).digest("hex");
 
-    console.log(`[demo]   Trying event ${event.eventId} — "${event.question.slice(0, 50)}..."`);
-    console.log(`[demo]   Signer: ${ta.address.slice(0, 10)}..., secret: "${secretPayload}", duration: ${duration}`);
+    console.log(
+      `[demo]   Trying event ${event.eventId} — "${event.question.slice(0, 50)}..."`,
+    );
+    console.log(
+      `[demo]   Signer: ${ta.address.slice(0, 10)}..., secret: "${secretPayload}", duration: ${duration}`,
+    );
 
     try {
       const { txHash, auctionId } = await marketplace.createAuction(
@@ -500,16 +558,34 @@ async function runSpawnAuctions(
         marketId: Number(event.eventId),
         outcome: prediction ? "yes" : "no",
       });
-      insertSecret(auctionId, user.userId, secretDataCid, "0x" + keyBytes.toString("hex"), secretPayload, eventDataJson);
+      insertSecret(
+        auctionId,
+        user.userId,
+        secretDataCid,
+        "0x" + keyBytes.toString("hex"),
+        secretPayload,
+        eventDataJson,
+      );
 
-      console.log(`[demo]   Auction ${auctionId} created (tx: ${txHash.slice(0, 10)}...)`);
-      await sendNotification("Auction Created", `Auction ${auctionId} (${duration}) for event ${event.eventId}\n"${event.question}"`);
+      console.log(
+        `[demo]   Auction ${auctionId} created (tx: ${txHash.slice(0, 10)}...)`,
+      );
+      await sendNotification(
+        "Auction Created",
+        `Auction ${auctionId} (${duration}) for event ${event.eventId}\n"${event.question}"`,
+      );
       return; // One auction per cycle
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       // Skip event-level errors, try next
-      if (msg.includes("Event not open") || msg.includes("Event not found") || msg.includes("expired")) {
-        console.log(`[demo]   Event ${event.eventId} not eligible, trying next`);
+      if (
+        msg.includes("Event not open") ||
+        msg.includes("Event not found") ||
+        msg.includes("expired")
+      ) {
+        console.log(
+          `[demo]   Event ${event.eventId} not eligible, trying next`,
+        );
         continue;
       }
       console.error(`[demo]   Auction creation failed: ${msg}`);
@@ -557,14 +633,15 @@ async function runPlaceBids(
         const mp = marketplace.getMarketplace();
         const auctionData = await mp.read.getAuction([BigInt(auctionIdNum)]);
         currentBidPlaintext = BigInt(auctionData[9]); // currentBidPlaintext (uint64)
-        previousBidderId = auctionData[3] || "";       // currentBidderId
+        previousBidderId = auctionData[3] || ""; // currentBidderId
       } catch {
         // Auction may not exist or read failed — use defaults
       }
 
       // Bid = current highest + random increment (always exceeds current)
       const range = BID_MAX_INCREMENT - BID_MIN_INCREMENT;
-      const increment = BID_MIN_INCREMENT + BigInt(Math.floor(Math.random() * Number(range)));
+      const increment =
+        BID_MIN_INCREMENT + BigInt(Math.floor(Math.random() * Number(range)));
       const bidAmount = currentBidPlaintext + increment;
 
       // Check balance — use on-chain decrypt
@@ -577,52 +654,74 @@ async function runPlaceBids(
 
       if (balance < bidAmount) {
         // Top up: mint MockUSDC to admin, then deposit for user
-        console.log(`[demo]   ${ta.label} balance ${balance} < bid ${bidAmount}, topping up`);
+        console.log(
+          `[demo]   ${ta.label} balance ${balance} < bid ${bidAmount}, topping up`,
+        );
         try {
-          await withAdminLock(async () => {
-            const mintHash = await getWalletClient().writeContract({
+          const mintHash = await withAdminLock(() =>
+            getWalletClient().writeContract({
               address: MOCK_USDC_ADDRESS as Address,
               abi: mockUsdcAbi,
               functionName: "mint",
               args: [getAccount().address, BID_DEPOSIT_AMOUNT],
-            });
-            await waitForTx(mintHash, `Mint USDC for ${ta.label}`);
-          });
+            }),
+          );
+          await waitForTx(mintHash, `Mint USDC for ${ta.label}`);
 
           await marketplace.depositFor(user.userId, BID_DEPOSIT_AMOUNT);
           balance += BID_DEPOSIT_AMOUNT;
         } catch (err) {
-          console.warn(`[demo]   Top-up failed for ${ta.label}: ${err instanceof Error ? err.message : err}`);
+          console.warn(
+            `[demo]   Top-up failed for ${ta.label}: ${err instanceof Error ? err.message : err}`,
+          );
           continue;
         }
       }
 
       if (balance < bidAmount) {
-        console.log(`[demo]   Skipping auction ${auction.auctionId} — balance ${balance} still < bid ${bidAmount}`);
+        console.log(
+          `[demo]   Skipping auction ${auction.auctionId} — balance ${balance} still < bid ${bidAmount}`,
+        );
         continue;
       }
 
-      console.log(`[demo]   Bidding ${formatUnits(bidAmount, USDC_DECIMALS)} USDC on auction ${auction.auctionId} from ${ta.label}`);
+      console.log(
+        `[demo]   Bidding ${formatUnits(bidAmount, USDC_DECIMALS)} USDC on auction ${auction.auctionId} from ${ta.label}`,
+      );
 
       // Record bid in SQLite
       const bid = recordBid(auctionIdNum, user.userId, bidAmount.toString());
 
       // Submit on-chain — await to avoid nonce collisions from parallel admin txs
       try {
-        const txHash = await marketplace.placeBid(auctionIdNum, user.userId, previousBidderId, bidAmount);
-        console.log(`[demo]   Bid ${bid.id} confirmed (tx: ${txHash.slice(0, 10)}...)`);
+        const txHash = await marketplace.placeBid(
+          auctionIdNum,
+          user.userId,
+          previousBidderId,
+          bidAmount,
+        );
+        console.log(
+          `[demo]   Bid ${bid.id} confirmed (tx: ${txHash.slice(0, 10)}...)`,
+        );
       } catch (err) {
-        console.error(`[demo]   Bid ${bid.id} failed: ${err instanceof Error ? err.message : err}`);
+        console.error(
+          `[demo]   Bid ${bid.id} failed: ${err instanceof Error ? err.message : err}`,
+        );
       }
 
       bidsPlaced++;
     } catch (err) {
-      console.error(`[demo]   Error on auction ${auction.auctionId}: ${err instanceof Error ? err.message : err}`);
+      console.error(
+        `[demo]   Error on auction ${auction.auctionId}: ${err instanceof Error ? err.message : err}`,
+      );
     }
   }
 
   if (bidsPlaced > 0) {
-    await sendNotification("Bids Placed", `Placed ${bidsPlaced} bid(s) across ${auctions.length} auction(s)`);
+    await sendNotification(
+      "Bids Placed",
+      `Placed ${bidsPlaced} bid(s) across ${auctions.length} auction(s)`,
+    );
   }
   console.log(`[demo]   Placed ${bidsPlaced} bid(s)`);
 }
@@ -638,8 +737,10 @@ async function runRequestSettlements(gqlClient: GraphQLClient): Promise<void> {
     settlementRequesteds: { eventId: string }[];
   }>(CLOSED_UNSETTLED_QUERY, { now });
 
-  const requestedIds = new Set(data.settlementRequesteds.map(r => r.eventId));
-  const toSettle = data.eventCreateds.filter(e => !requestedIds.has(e.eventId));
+  const requestedIds = new Set(data.settlementRequesteds.map((r) => r.eventId));
+  const toSettle = data.eventCreateds.filter(
+    (e) => !requestedIds.has(e.eventId),
+  );
 
   if (toSettle.length === 0) {
     console.log("[demo]   No closed-but-unsettled events");
@@ -655,19 +756,21 @@ async function runRequestSettlements(gqlClient: GraphQLClient): Promise<void> {
   for (const event of toSettle) {
     try {
       console.log(`[demo]   Requesting settlement for event ${event.eventId}`);
-      await withAdminLock(async () => {
-        const hash = await walletClient.writeContract({
+      const hash = await withAdminLock(() =>
+        walletClient.writeContract({
           address: EXAMPLE_PREDICTION_MARKET_ADDRESS as `0x${string}`,
           abi: examplePredictionMarketAbi,
           functionName: "requestSettlement",
           args: [BigInt(event.eventId)],
-        });
-        await getPublicClient().waitForTransactionReceipt({ hash });
-      });
+        }),
+      );
+      await getPublicClient().waitForTransactionReceipt({ hash });
       console.log(`[demo]   Event ${event.eventId}: confirmed`);
       succeeded.push(event.eventId);
     } catch (err) {
-      console.error(`[demo]   Event ${event.eventId}: FAILED — ${err instanceof Error ? err.message : err}`);
+      console.error(
+        `[demo]   Event ${event.eventId}: FAILED — ${err instanceof Error ? err.message : err}`,
+      );
       failed.push(event.eventId);
     }
   }
@@ -685,7 +788,9 @@ export async function startDemoPopulator(): Promise<void> {
 
   const testAccounts = loadTestAccounts();
   if (testAccounts.length === 0) {
-    console.error("[demo] No TEST_ACCOUNT_* keys found — demo populator disabled");
+    console.error(
+      "[demo] No TEST_ACCOUNT_* keys found — demo populator disabled",
+    );
     return;
   }
 
@@ -705,36 +810,65 @@ export async function startDemoPopulator(): Promise<void> {
   console.log("[demo]  Demo Populator Starting");
   console.log(`[demo]  Accounts:    ${testAccounts.length} test accounts`);
   console.log(`[demo]  Subgraph:    ${config.subgraphUrl.slice(0, 60)}...`);
-  console.log(`[demo]  Intervals:   events=15m, auctions=1m, bids=1m, settlements=10m`);
+  console.log(
+    `[demo]  Intervals:   events=15m, auctions=1m, bids=1m, settlements=10m`,
+  );
   console.log("[demo] ═══════════════════════════════════════════════");
 
   // Run create-events once immediately (seed)
   try {
     await runCreateEvents(venice, gqlClient, testAccounts);
   } catch (err) {
-    console.error("[demo] Initial create-events failed:", err instanceof Error ? err.message : err);
+    console.error(
+      "[demo] Initial create-events failed:",
+      err instanceof Error ? err.message : err,
+    );
   }
 
   // Set up interval loops — individual on-chain txs are serialized via withAdminLock
   // in marketplace.ts and other service modules. No outer lock needed here.
   setInterval(async () => {
-    try { await runCreateEvents(venice, gqlClient, testAccounts); }
-    catch (err) { console.error("[demo] create-events cycle error:", err instanceof Error ? err.message : err); }
+    try {
+      await runCreateEvents(venice, gqlClient, testAccounts);
+    } catch (err) {
+      console.error(
+        "[demo] create-events cycle error:",
+        err instanceof Error ? err.message : err,
+      );
+    }
   }, CREATE_EVENTS_INTERVAL_MS);
 
   setInterval(async () => {
-    try { await runSpawnAuctions(gqlClient, testAccounts); }
-    catch (err) { console.error("[demo] spawn-auctions cycle error:", err instanceof Error ? err.message : err); }
+    try {
+      await runSpawnAuctions(gqlClient, testAccounts);
+    } catch (err) {
+      console.error(
+        "[demo] spawn-auctions cycle error:",
+        err instanceof Error ? err.message : err,
+      );
+    }
   }, SPAWN_AUCTIONS_INTERVAL_MS);
 
   setInterval(async () => {
-    try { await runPlaceBids(gqlClient, testAccounts); }
-    catch (err) { console.error("[demo] place-bids cycle error:", err instanceof Error ? err.message : err); }
+    try {
+      await runPlaceBids(gqlClient, testAccounts);
+    } catch (err) {
+      console.error(
+        "[demo] place-bids cycle error:",
+        err instanceof Error ? err.message : err,
+      );
+    }
   }, PLACE_BIDS_INTERVAL_MS);
 
   setInterval(async () => {
-    try { await runRequestSettlements(gqlClient); }
-    catch (err) { console.error("[demo] request-settlements cycle error:", err instanceof Error ? err.message : err); }
+    try {
+      await runRequestSettlements(gqlClient);
+    } catch (err) {
+      console.error(
+        "[demo] request-settlements cycle error:",
+        err instanceof Error ? err.message : err,
+      );
+    }
   }, REQUEST_SETTLEMENTS_INTERVAL_MS);
 
   // Keep the promise alive (never resolves — runs forever)

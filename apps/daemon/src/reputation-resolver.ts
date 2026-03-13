@@ -74,16 +74,16 @@ async function handleSettlementResponse(
   console.log(`[resolver] Resolving ${auctionIds.length} auction(s) for event ${eventId} (outcomeIsYes=${actualOutcomeIsYes})`);
 
   try {
-    const txHash = await withAdminLock(async () => {
-      const hash = await getWalletClient().writeContract({
+    const hash = await withAdminLock(() =>
+      getWalletClient().writeContract({
         address: marketplaceAddress,
         abi: fheSecretMarketplaceAbi,
         functionName: "resolveEventPredictions",
         args: [eventId, actualOutcomeIsYes],
-      });
-      const receipt = await publicClient.waitForTransactionReceipt({ hash });
-      return receipt.transactionHash;
-    });
+      }),
+    );
+    const resolveReceipt = await publicClient.waitForTransactionReceipt({ hash });
+    const txHash = resolveReceipt.transactionHash;
     console.log(`[resolver] Resolved event ${eventId}: ${txHash}`);
 
     await sendNotification(

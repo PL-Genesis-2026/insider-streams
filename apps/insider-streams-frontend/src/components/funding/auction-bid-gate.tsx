@@ -49,6 +49,7 @@ export function AuctionBidGate({
     revealForAuctions,
   } = usePrivateData();
   const fundingSnapshot = useFundingSnapshot({ enabled: isRevealed });
+  const isFundingLoading = fundingSnapshot.isFetching || fundingSnapshot.isLoading;
 
   const isOwnAuction =
     !!seller?.id &&
@@ -135,12 +136,17 @@ export function AuctionBidGate({
               onClick={() => {
                 void revealForAuctions([auctionId]);
               }}
-              disabled={isRevealingPrivateData}
+              disabled={isRevealingPrivateData || (isRevealed && isFundingLoading)}
             >
               {isRevealingPrivateData ? (
                 <>
                   <RefreshCw className="size-4 animate-spin" />
                   Unlocking...
+                </>
+              ) : isRevealed && isFundingLoading ? (
+                <>
+                  <RefreshCw className="size-4 animate-spin" />
+                  Loading balance...
                 </>
               ) : (
                 <>
@@ -150,7 +156,9 @@ export function AuctionBidGate({
               )}
             </Button>
             <p className="text-xs leading-6 text-muted-foreground/70">
-              Reveal private wallet access right here to check available bidding balance and any pending withdrawal before placing a bid.
+              {isRevealed && isFundingLoading
+                ? "Fetching your on-chain balance. This may take a moment as it involves FHE decryption."
+                : "Reveal private wallet access right here to check available bidding balance and any pending withdrawal before placing a bid."}
             </p>
           </div>
         ) : null}

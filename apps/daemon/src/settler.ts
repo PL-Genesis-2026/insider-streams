@@ -175,16 +175,16 @@ async function handleSettlementRequest(eventId: bigint, question: string): Promi
   // Step 2: Settle on-chain
   const pmAddress = config.predictionMarketAddress as `0x${string}`;
   const outcome = OutcomeMap[geminiResult.result];
-  const txHash = await withAdminLock(async () => {
-    const hash = await getWalletClient().writeContract({
+  const hash = await withAdminLock(() =>
+    getWalletClient().writeContract({
       address: pmAddress,
       abi: examplePredictionMarketAbi,
       functionName: "settleEvent",
       args: [eventId, outcome, geminiResult.confidence, geminiResult.responseId],
-    });
-    const receipt = await getPublicClient().waitForTransactionReceipt({ hash });
-    return receipt.transactionHash;
-  });
+    }),
+  );
+  const settleReceipt = await getPublicClient().waitForTransactionReceipt({ hash });
+  const txHash = settleReceipt.transactionHash;
   console.log(`[settler] Settlement tx: ${txHash}`);
 
   // Step 3: Write Firestore audit
@@ -231,16 +231,18 @@ export async function startSettler(): Promise<void> {
       for (const log of logs) {
         const { eventId } = log.args as { eventId: bigint };
         console.log(`[settler] EventAdminClosed: event ${eventId} — requesting settlement`);
-        withAdminLock(async () => {
-          const hash = await getWalletClient().writeContract({
-            address: pmAddress,
-            abi: examplePredictionMarketAbi,
-            functionName: "requestSettlement",
-            args: [eventId],
-          });
+        (async () => {
+          const hash = await withAdminLock(() =>
+            getWalletClient().writeContract({
+              address: pmAddress,
+              abi: examplePredictionMarketAbi,
+              functionName: "requestSettlement",
+              args: [eventId],
+            }),
+          );
           await publicClient.waitForTransactionReceipt({ hash });
           console.log(`[settler] Settlement requested for admin-closed event ${eventId}`);
-        }).catch((err) => {
+        })().catch((err) => {
           const msg = err instanceof Error ? err.message : String(err);
           console.error(`[settler] Failed to request settlement for event ${eventId}:`, msg);
         });

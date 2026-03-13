@@ -27,24 +27,37 @@ async function getErrorMessage(response: Response) {
 export async function fetchFundingSnapshot(
   session: SignedWalletSession,
 ): Promise<FundingServerSnapshot> {
-  const response = await fetch("/api/funding/snapshot", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    cache: "no-store",
-    body: JSON.stringify(session),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 90_000); // 90s — allows for FHE decrypt
 
-  if (!response.ok) {
-    throw new Error(await getErrorMessage(response));
+  try {
+    const response = await fetch("/api/funding/snapshot", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      cache: "no-store",
+      body: JSON.stringify(session),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(await getErrorMessage(response));
+    }
+
+    const body = await response.json();
+    return {
+      userId: body.userId ?? null,
+      balance: body.balance ?? "0",
+    };
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error("Balance request timed out. The FHE decryption may still be processing — try again.");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
   }
-
-  const body = await response.json();
-  return {
-    userId: body.userId ?? null,
-    balance: body.balance ?? "0",
-  };
 }
 
 export async function requestFundingWithdrawal(payload: {
