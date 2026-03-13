@@ -742,13 +742,14 @@ describe("POST /seller", () => {
     assert.equal(res.data.isSeller, false);
   });
 
-  it("returns null userId for unknown signer", async () => {
+  it("auto-creates user and returns isSeller false for unknown signer", async () => {
     const pk = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" as Hex;
     const account = privateKeyToAccount(pk);
     const res = await signedPost("/seller", account);
     assert.equal(res.status, 200);
     assert.equal(res.data.isSeller, false);
-    assert.equal(res.data.userId, null);
+    // /seller now auto-creates the user so they get a pseudonymous ID
+    assert.ok(typeof res.data.userId === "string" && res.data.userId.length > 0);
   });
 
   it("rejects without signature", async () => {
