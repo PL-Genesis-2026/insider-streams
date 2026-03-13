@@ -619,17 +619,24 @@ export function CreateAuctionDraftForm({
                   <SelectValue placeholder="Select duration" />
                 </SelectTrigger>
                 <SelectContent>
-                  {CREATE_AUCTION_DURATIONS.map((duration) => (
-                    <SelectItem key={duration} value={duration}>
-                      {duration === "6h"
-                        ? "6 hours"
-                        : duration === "12h"
-                          ? "12 hours"
-                          : duration === "24h"
-                            ? "24 hours"
-                            : "48 hours"}
-                    </SelectItem>
-                  ))}
+                  {CREATE_AUCTION_DURATIONS.map((duration) => {
+                    const labels: Record<string, string> = {
+                      "5m": "5 minutes",
+                      "15m": "15 minutes",
+                      "30m": "30 minutes",
+                      "1h": "1 hour",
+                      "3h": "3 hours",
+                      "6h": "6 hours",
+                      "12h": "12 hours",
+                      "24h": "24 hours",
+                      "48h": "48 hours",
+                    };
+                    return (
+                      <SelectItem key={duration} value={duration}>
+                        {labels[duration] ?? duration}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>

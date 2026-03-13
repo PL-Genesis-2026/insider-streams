@@ -300,7 +300,7 @@ export function startApi(): void {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error("[api] POST /create-auction error:", msg);
-      res.status(500).json({ error: msg });
+      res.status(500).json({ success: false, error: msg, code: "UNHANDLED_ERROR" });
     }
   });
 

@@ -137,5 +137,10 @@ test.describe("Bid placement", () => {
     }
 
     expect(outcome).toBe("success");
+
+    // Step 7: Verify optimistic bid banner appears after modal closes
+    const bidBanner = page.getByText(/your bid of .* USDC has been placed/i);
+    await expect(bidBanner).toBeVisible({ timeout: 10_000 });
+    console.log("[bid] Optimistic bid banner visible");
   });
 });

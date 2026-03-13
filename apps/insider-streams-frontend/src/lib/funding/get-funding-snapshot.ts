@@ -57,6 +57,18 @@ export function getFundingStatusCopy(status: FundingStatus): FundingStatusCopy {
   return fundingStatusCopy.private_data_hidden;
 }
 
+function friendlyRelayerError(raw?: string): string {
+  if (!raw) return "Balance could not be decrypted. You can still place bids.";
+  const lower = raw.toLowerCase();
+  if (lower.includes("rate limit") || lower.includes("429"))
+    return "Encryption service is busy. Try again in a few minutes.";
+  if (lower.includes("timed out"))
+    return "Balance decryption timed out. Try refreshing.";
+  if (lower.includes("bad json") || lower.includes("econnrefused"))
+    return "Encryption service temporarily unavailable.";
+  return "Balance could not be decrypted. You can still place bids.";
+}
+
 type FundingSnapshotOptions = {
   errorMessage?: string;
   fundingNotYetChecked?: boolean;
@@ -127,6 +139,7 @@ export function getFundingSnapshot(
       canPlaceBid: true,
       isReconciling: false,
       balance,
+      balanceError: friendlyRelayerError(serverSnapshot.error),
     };
   }
 
