@@ -21,7 +21,7 @@ test.describe("Bid placement", () => {
 
     if (!auctionId) {
       console.log("[bid] No test state, querying subgraph for open auction...");
-      const auctions = await findOpenAuctions();
+      const auctions = await findOpenAuctions(20, 600);
       auctionId = auctions[0]?.auctionId ?? null;
     }
 
@@ -64,15 +64,17 @@ test.describe("Bid placement", () => {
       const unlockVisible = await unlockButton.isVisible().catch(() => false);
       if (unlockVisible) {
         await unlockButton.click();
-        // Wait a moment for the reveal to complete
         await page.waitForTimeout(3_000);
       }
 
+      // Balance may still be loading (FHE decrypt via daemon)
+      const loadingButton = page.getByRole("button", { name: "Loading balance" });
+      const isLoading = await loadingButton.isVisible().catch(() => false);
+      if (isLoading) throw new Error("STILL_LOADING");
+
       // Check if we landed on "not funded" — skip the test
       const needsDeposit = await depositLink.isVisible().catch(() => false);
-      if (needsDeposit) {
-        throw new Error("NEEDS_DEPOSIT");
-      }
+      if (needsDeposit) throw new Error("NEEDS_DEPOSIT");
 
       // Assert "Place Bid" is visible
       await expect(placeBidButton).toBeVisible({ timeout: 5_000 });
@@ -91,16 +93,16 @@ test.describe("Bid placement", () => {
     // Step 3: Click "Place Bid" to open the bid modal
     await placeBidButton.click();
 
-    // Step 4: Fill in bid amount — $5 USDC
+    // Step 4: Fill in bid amount — $100 USDC (high enough to exceed any current bid)
     const bidAmountInput = page.locator("#bid-amount");
-    await expect(bidAmountInput).toBeVisible();
-    await bidAmountInput.fill("5");
+    await expect(bidAmountInput).toBeVisible({ timeout: 10_000 });
+    await bidAmountInput.fill("100");
 
     // Step 5: Click submit in the modal dialog
     const modalSubmit = page
       .locator('[role="dialog"]')
       .getByRole("button", { name: "Place Bid" });
-    await expect(modalSubmit).toBeEnabled();
+    await expect(modalSubmit).toBeEnabled({ timeout: 5_000 });
     await modalSubmit.click();
 
     // Step 6: Wait for "Bid placed successfully" confirmation
