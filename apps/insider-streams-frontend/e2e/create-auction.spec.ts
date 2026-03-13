@@ -62,15 +62,15 @@ test.describe("Create auction flow", () => {
 
     // Step 8: Wait for the success card "Auction live" or an error.
     // The daemon submits an FHE-encrypted createAuction tx to Sepolia.
-    // This takes ~30-60s (FHE encryption + block confirmation).
+    // This takes ~30-120s (FHE encryption + block confirmation).
     const outcome = await Promise.race([
       page
         .getByText("Auction live")
-        .waitFor({ timeout: 90_000 })
+        .waitFor({ timeout: 180_000 })
         .then(() => "success" as const),
       page
         .getByText("Creation failed")
-        .waitFor({ timeout: 90_000 })
+        .waitFor({ timeout: 180_000 })
         .then(() => "error" as const),
     ]);
 

@@ -6,96 +6,23 @@
  *
  * Can run standalone without global-setup: queries the subgraph for an open auction.
  */
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { test, expect, TEST_ACCOUNTS } from "./fixtures";
-import type { TestState } from "./global-setup";
+import { readTestState, findOpenAuctions } from "./helpers";
 
 test.use({ walletPrivateKey: TEST_ACCOUNTS.bidder1 });
-
-function getTestState(): TestState | null {
-  try {
-    return JSON.parse(
-      readFileSync(resolve(__dirname, ".test-state.json"), "utf-8"),
-    );
-  } catch {
-    return null;
-  }
-}
-
-/** Query the subgraph for an open auction (not cancelled/closed). */
-async function findOpenAuction(): Promise<string | null> {
-  const subgraphUrl =
-    process.env.NEXT_PUBLIC_SUBGRAPH_URL ||
-    "https://api.studio.thegraph.com/query/1743303/insider-streams-zama/version/latest";
-
-  const now = Math.floor(Date.now() / 1000);
-  // Get recent auctions that haven't expired, then exclude cancelled/closed
-  const query = `{
-    auctionCreateds(
-      where: { endTime_gt: "${now}" }
-      first: 20
-      orderBy: endTime
-      orderDirection: asc
-    ) {
-      auctionId
-      sellerId
-    }
-    auctionCancelleds(first: 1000) {
-      auctionId
-    }
-    auctionCloseds(first: 1000) {
-      auctionId
-    }
-  }`;
-
-  try {
-    const res = await fetch(subgraphUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query }),
-      signal: AbortSignal.timeout(10_000),
-    });
-    const json = (await res.json()) as {
-      data?: {
-        auctionCreateds?: { auctionId: string; sellerId: string }[];
-        auctionCancelleds?: { auctionId: string }[];
-        auctionCloseds?: { auctionId: string }[];
-      };
-    };
-    const created = json.data?.auctionCreateds ?? [];
-    const cancelledIds = new Set(
-      (json.data?.auctionCancelleds ?? []).map((a) => a.auctionId),
-    );
-    const closedIds = new Set(
-      (json.data?.auctionCloseds ?? []).map((a) => a.auctionId),
-    );
-    const open = created.filter(
-      (a) => !cancelledIds.has(a.auctionId) && !closedIds.has(a.auctionId),
-    );
-    if (open.length > 0) {
-      console.log(
-        `[bid-debug] Found ${open.length} open auction(s): ${open.map((a) => `#${a.auctionId}`).join(", ")}`,
-      );
-    }
-    return open[0]?.auctionId ?? null;
-  } catch (err) {
-    console.log(`[bid-debug] Subgraph query failed: ${err}`);
-    return null;
-  }
-}
 
 test.describe("Bid debug", () => {
   test("trace bid submission end-to-end", async ({ page }) => {
     // Find an auction to bid on
-    const state = getTestState();
+    const state = readTestState();
     let auctionId = state?.bidAuctionId || null;
 
     if (!auctionId) {
       console.log(
         "[bid-debug] No test state, querying subgraph for open auction...",
       );
-      auctionId = await findOpenAuction();
+      const auctions = await findOpenAuctions();
+      auctionId = auctions[0]?.auctionId ?? null;
     }
 
     if (!auctionId) {

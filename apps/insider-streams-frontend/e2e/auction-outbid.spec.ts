@@ -6,32 +6,34 @@
  *
  * Runs after auction-lifecycle.spec.ts (alphabetical order).
  */
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { test, expect, TEST_ACCOUNTS } from "./fixtures";
-import type { TestState } from "./global-setup";
+import { readTestState, findOpenAuctions } from "./helpers";
 
 test.use({ walletPrivateKey: TEST_ACCOUNTS.bidder2 });
 
-function getTestState(): TestState {
-  return JSON.parse(
-    readFileSync(resolve(__dirname, ".test-state.json"), "utf-8"),
-  );
-}
-
 test.describe("Outbid flow", () => {
   test("outbid the current leader with a higher bid", async ({ page }) => {
-    const state = getTestState();
-    if (!state.bidAuctionId) {
-      test.skip(true, "No bid auction created in global setup");
+    const state = readTestState();
+    let auctionId = state?.bidAuctionId || null;
+
+    if (!auctionId) {
+      console.log("[outbid] No test state, querying subgraph for open auction...");
+      const auctions = await findOpenAuctions();
+      auctionId = auctions[0]?.auctionId ?? null;
+    }
+
+    if (!auctionId) {
+      test.skip(true, "No open auction found");
       return;
     }
 
-    await page.goto(`/auction/${state.bidAuctionId}`);
+    console.log(`[outbid] Using auction #${auctionId}`);
+
+    await page.goto(`/auction/${auctionId}`);
 
     // Wait for auction page to load
     await expect(
-      page.getByText(`#${state.bidAuctionId}`).first(),
+      page.getByText(`#${auctionId}`).first(),
     ).toBeVisible({ timeout: 15_000 });
 
     // Unlock wallet and wait for "Place Bid" to appear.
