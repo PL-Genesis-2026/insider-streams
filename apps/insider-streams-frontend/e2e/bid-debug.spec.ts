@@ -266,13 +266,15 @@ test.describe("Bid debug", () => {
 
     // Log modal state
     const currentBidText = await dialog
-      .getByText("Current bid:")
+      .getByText(/current bid|no bids/i)
+      .first()
       .textContent()
       .catch(() => "not found");
     console.log(`[bid-debug] ${currentBidText}`);
 
     const availableText = await dialog
-      .getByText("Available:")
+      .getByText(/available/i)
+      .first()
       .textContent()
       .catch(() => "not found");
     console.log(`[bid-debug] ${availableText}`);
@@ -307,15 +309,18 @@ test.describe("Bid debug", () => {
 
     const checkPhase = async () => {
       const signing = await dialog
-        .getByText("Check your wallet")
+        .getByText(/check your wallet|signing/i)
+        .first()
         .isVisible()
         .catch(() => false);
       const submitting = await dialog
-        .getByText("Submitting bid")
+        .getByText(/submitting|placing bid/i)
+        .first()
         .isVisible()
         .catch(() => false);
       const success = await page
         .getByText("Bid placed successfully")
+        .first()
         .isVisible()
         .catch(() => false);
       const error = await dialog
@@ -346,16 +351,17 @@ test.describe("Bid debug", () => {
       }
     };
 
-    // Poll phases for up to 60s
+    // Poll phases for up to 120s (FHE bid submission can be slow)
     const outcome = await Promise.race([
       page
         .getByText("Bid placed successfully")
-        .waitFor({ timeout: 60_000 })
+        .first()
+        .waitFor({ timeout: 120_000 })
         .then(() => "success" as const),
       dialog
         .locator(".text-destructive")
         .first()
-        .waitFor({ timeout: 60_000 })
+        .waitFor({ timeout: 120_000 })
         .then(() => "error" as const),
     ]).catch(() => "timeout" as const);
 
