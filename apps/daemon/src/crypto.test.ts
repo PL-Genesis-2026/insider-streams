@@ -10,8 +10,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-// Set a test PRIVATE_KEY before importing crypto module
-process.env.PRIVATE_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+// Derive a deterministic test-only key from a fixed seed (not a real key)
+import { createHash } from "node:crypto";
+process.env.PRIVATE_KEY = "0x" + createHash("sha256").update("crypto-test-seed").digest("hex");
 
 const { encryptWithKek, decryptWithKek } = await import("./crypto.js");
 

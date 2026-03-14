@@ -508,6 +508,9 @@ export function CreateAuctionDraftForm({
                   setDraftField("eventId", eventId);
                   setDraftField("privateLeg", "");
                 }}
+                onOpenChange={(open) => {
+                  if (open) (document.activeElement as HTMLElement)?.blur();
+                }}
                 disabled={eventCatalog.status === "loading" || isSubmitting}
               >
                 <SelectTrigger className="h-11 w-full rounded-[calc(var(--radius)-4px)] border-input bg-background/80 px-4 text-sm">
@@ -678,6 +681,9 @@ export function CreateAuctionDraftForm({
                 onValueChange={(value) =>
                   setDraftField("duration", value as CreateAuctionDuration)
                 }
+                onOpenChange={(open) => {
+                  if (open) (document.activeElement as HTMLElement)?.blur();
+                }}
                 disabled={isSubmitting}
               >
                 <SelectTrigger className="h-11 w-full rounded-[calc(var(--radius)-4px)] border-input bg-background/80 px-4 text-sm">

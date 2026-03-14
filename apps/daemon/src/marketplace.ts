@@ -180,9 +180,13 @@ export async function createAuction(
   );
   const receipt = await waitForReceipt(hash);
 
-  // Parse AuctionCreated event to get the auction ID
+  // Parse AuctionCreated event to get the auction ID.
+  // Filter by contract address to avoid matching events from other contracts
+  // (e.g. TFHE executor, Gateway) that happen to share a topic signature.
+  const marketplaceAddr = (config.secretMarketplaceAddress as string).toLowerCase();
   let auctionId = -1;
   for (const log of receipt.logs) {
+    if (log.address.toLowerCase() !== marketplaceAddr) continue;
     try {
       const decoded = decodeEventLog({
         abi: fheSecretMarketplaceAbi,
@@ -198,6 +202,13 @@ export async function createAuction(
     }
   }
 
+  if (auctionId === -1) {
+    console.warn(
+      `[marketplace] createAuction: AuctionCreated event NOT found in ${receipt.logs.length} logs. ` +
+      `Log addresses: ${receipt.logs.map((l) => l.address).join(", ")}. ` +
+      `Receipt status: ${receipt.status}, tx: ${receipt.transactionHash}`,
+    );
+  }
   console.log(`[marketplace] createAuction confirmed: ${receipt.transactionHash}, auctionId=${auctionId}`);
   return { txHash: receipt.transactionHash, auctionId };
 }
