@@ -20,7 +20,7 @@ export function getPublicClient(): PublicClient {
   if (!_publicClient) {
     _publicClient = createPublicClient({
       chain: sepolia,
-      transport: http(config.rpcUrl),
+      transport: http(config.rpcUrl, { timeout: 30_000 }),
     });
   }
   return _publicClient;
@@ -31,7 +31,7 @@ export function getWalletClient(): AppWalletClient {
     _walletClient = createWalletClient({
       account: getAccount(),
       chain: sepolia,
-      transport: http(config.rpcUrl),
+      transport: http(config.rpcUrl, { timeout: 30_000 }),
     });
   }
   return _walletClient;
