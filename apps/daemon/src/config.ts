@@ -42,8 +42,10 @@ export const config = {
   // Demo populator (opt-in)
   demoMode: process.env.DEMO_MODE === "true",
   veniceApiKey: process.env.VENICE_API_KEY || "",
+  // Subgraph — prod gateway URL. Set SUBGRAPH_API_KEY for Bearer auth.
   subgraphUrl: process.env.SUBGRAPH_URL ||
-    "https://gateway.thegraph.com/api/a075bc6e2e48577d2588bb458b939bdc/subgraphs/id/BttcQ7pVTEz7L94PgnhkFJCY33K5Vwk1vhffckmjgf5f",
+    "https://gateway.thegraph.com/api/subgraphs/id/BttcQ7pVTEz7L94PgnhkFJCY33K5Vwk1vhffckmjgf5f",
+  subgraphApiKey: process.env.SUBGRAPH_API_KEY || "a075bc6e2e48577d2588bb458b939bdc",
 } as const;
 
 export function requireConfig(keys: (keyof typeof config)[]): void {

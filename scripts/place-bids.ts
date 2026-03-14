@@ -29,7 +29,8 @@ import { type Hex } from "viem";
 
 const SUBGRAPH_URL =
   process.env.SUBGRAPH_URL ??
-  "https://api.studio.thegraph.com/query/1743303/insider-streams-zama/version/latest";
+  "https://gateway.thegraph.com/api/subgraphs/id/BttcQ7pVTEz7L94PgnhkFJCY33K5Vwk1vhffckmjgf5f";
+const SUBGRAPH_API_KEY = process.env.SUBGRAPH_API_KEY ?? "a075bc6e2e48577d2588bb458b939bdc";
 
 const DAEMON_URL =
   process.env.DAEMON_URL ?? process.env.BASE_URL ?? "http://localhost:3001";
@@ -200,7 +201,9 @@ async function main() {
   }
   console.log(`[place-bids] Loaded ${accounts.length} test account(s)`);
 
-  const gqlClient = new GraphQLClient(SUBGRAPH_URL);
+  const gqlClient = new GraphQLClient(SUBGRAPH_URL, {
+    headers: { Authorization: `Bearer ${SUBGRAPH_API_KEY}` },
+  });
   const now = Math.floor(Date.now() / 1000).toString();
 
   let auctions: OpenAuctionsResponse["auctionCreateds"];

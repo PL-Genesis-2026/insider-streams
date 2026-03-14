@@ -1,12 +1,31 @@
 #!/usr/bin/env tsx
+/**
+ * spawn-auctions.ts — Create auctions on open prediction market events.
+ *
+ * Uses the daemon HTTP API directly (POST /create-auction) with personal_sign
+ * authentication, matching verifySignedRequest in @private-streams/common.
+ *
+ * Runs once per invocation; scheduling is handled by cron.
+ *
+ * Flow:
+ *   1. Load test accounts from env (TEST_ACCOUNT_1..25)
+ *   2. Query subgraph for open events (exclude settled)
+ *   3. Pick a random account and event
+ *   4. Sign and POST to daemon /create-auction
+ *
+ * Env vars (scripts/.env):
+ *   TEST_ACCOUNT_1..25      — private keys for auction creators
+ *   DAEMON_URL / BASE_URL   — daemon origin (default: http://localhost:3001)
+ *   SUBGRAPH_URL            — subgraph endpoint (default: insider-streams-zama)
+ */
 
+import stringify from "fast-json-stable-stringify";
 import { GraphQLClient, gql } from "graphql-request";
 import { privateKeyToAccount } from "viem/accounts";
-import { createWalletClient, http, type Hex } from "viem";
-import { sepolia } from "viem/chains";
+import { type Hex } from "viem";
 import {
-  CREATE_AUCTION_EIP712_DOMAIN,
-  CREATE_AUCTION_EIP712_TYPES,
+  CREATE_AUCTION_DURATION_SECONDS,
+  type CreateAuctionDuration,
 } from "@private-streams/common";
 
 // ---------------------------------------------------------------------------
@@ -14,15 +33,13 @@ import {
 // ---------------------------------------------------------------------------
 
 const SUBGRAPH_URL = process.env.SUBGRAPH_URL ??
-  "https://api.studio.thegraph.com/query/1743303/insider-streams-zama/version/latest";
+  "https://gateway.thegraph.com/api/subgraphs/id/BttcQ7pVTEz7L94PgnhkFJCY33K5Vwk1vhffckmjgf5f";
+const SUBGRAPH_API_KEY = process.env.SUBGRAPH_API_KEY ?? "a075bc6e2e48577d2588bb458b939bdc";
 
-const BASE_URL =
-  process.env.FRONTEND_BASE_URL ??
-  process.env.BASE_URL ??
-  "http://localhost:3000";
+const DAEMON_URL =
+  process.env.DAEMON_URL ?? process.env.BASE_URL ?? "http://localhost:3001";
 
-const DURATIONS = ["5m", "15m", "30m", "1h"] as const;
-type Duration = (typeof DURATIONS)[number];
+const DURATIONS: CreateAuctionDuration[] = ["5m", "15m", "30m", "1h"];
 
 const SECRET_POOL = [
   "YES",
@@ -76,13 +93,21 @@ function normalizePrivateKey(value: string): Hex {
   return normalized as Hex;
 }
 
-function getTestAccounts(): Hex[] {
-  const keys: Hex[] = [];
+interface TestAccount {
+  privateKey: Hex;
+  address: `0x${string}`;
+  account: ReturnType<typeof privateKeyToAccount>;
+}
+
+function getTestAccounts(): TestAccount[] {
+  const keys: TestAccount[] = [];
   for (let i = 1; i <= 25; i++) {
     const raw = process.env[`TEST_ACCOUNT_${i}`];
     if (raw) {
       try {
-        keys.push(normalizePrivateKey(raw));
+        const pk = normalizePrivateKey(raw);
+        const account = privateKeyToAccount(pk);
+        keys.push({ privateKey: pk, address: account.address, account });
       } catch {
         console.warn(`[spawn-auctions] TEST_ACCOUNT_${i} is invalid, skipping`);
       }
@@ -93,6 +118,38 @@ function getTestAccounts(): Hex[] {
 
 function timestamp(): number {
   return Math.floor(Date.now() / 1000);
+}
+
+// ---------------------------------------------------------------------------
+// Daemon API helper (personal_sign, matches verifySignedRequest)
+// ---------------------------------------------------------------------------
+
+async function signedPost(
+  account: TestAccount,
+  endpoint: string,
+  fields: Record<string, unknown> = {},
+): Promise<{ ok: boolean; status: number; body: unknown }> {
+  const ts = timestamp();
+  const payload = { ...fields, timestamp: ts };
+  const message = stringify(payload);
+  const signature = await account.account.signMessage({ message });
+
+  const response = await fetch(`${DAEMON_URL}${endpoint}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...payload, signature }),
+    signal: AbortSignal.timeout(120_000),
+  });
+
+  const text = await response.text();
+  let body: unknown = text;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    // keep raw text
+  }
+
+  return { ok: response.ok, status: response.status, body };
 }
 
 // ---------------------------------------------------------------------------
@@ -125,76 +182,9 @@ async function fetchOpenEvents(
 }
 
 // ---------------------------------------------------------------------------
-// Auction creation
-// ---------------------------------------------------------------------------
-
-async function createAuction(
-  pk: Hex,
-  eventId: string,
-  secretPayload: string,
-  duration: Duration,
-): Promise<{ auctionId?: string; ok: boolean; status: number; body: unknown }> {
-  const account = privateKeyToAccount(pk);
-  const walletClient = createWalletClient({
-    account,
-    chain: sepolia,
-    transport: http(),
-  });
-
-  const ts = timestamp();
-  const signature = await walletClient.signTypedData({
-    account,
-    domain: CREATE_AUCTION_EIP712_DOMAIN,
-    types: CREATE_AUCTION_EIP712_TYPES,
-    primaryType: "CreateAuction",
-    message: {
-      eventId,
-      privateLeg: "yes",
-      duration,
-      timestamp: BigInt(ts),
-    },
-  });
-
-  const payload = {
-    eventId,
-    privateLeg: "yes",
-    secretPayload,
-    duration,
-    timestamp: ts,
-    signature,
-  };
-
-  const response = await fetch(`${BASE_URL}/api/create-auction`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-
-  const text = await response.text();
-  let body: unknown = text;
-  try {
-    body = JSON.parse(text);
-  } catch {
-    // keep raw text
-  }
-
-  const auctionId =
-    body != null &&
-    typeof body === "object" &&
-    "auctionId" in body &&
-    typeof (body as Record<string, unknown>).auctionId === "string"
-      ? ((body as Record<string, unknown>).auctionId as string)
-      : undefined;
-
-  return { auctionId, ok: response.ok, status: response.status, body };
-}
-
-// ---------------------------------------------------------------------------
 // Main cycle
 // ---------------------------------------------------------------------------
 
-// Codes returned by the API when the event itself is the problem (not a bug).
-// On these, we skip the event and try the next one rather than giving up.
 const SKIPPABLE_CODES = new Set([
   "EVENT_NOT_FOUND",
   "EVENT_NOT_OPEN",
@@ -210,7 +200,7 @@ function shuffle<T>(arr: T[]): T[] {
   return out;
 }
 
-async function runCycle(client: GraphQLClient, accounts: Hex[]): Promise<void> {
+async function runCycle(client: GraphQLClient, accounts: TestAccount[]): Promise<void> {
   const label = new Date().toISOString();
   console.log(`[spawn-auctions] ${label} — starting cycle`);
 
@@ -227,30 +217,41 @@ async function runCycle(client: GraphQLClient, accounts: Hex[]): Promise<void> {
     return;
   }
 
-  // Shuffle so each cycle tries events in a different order.
   const candidates = shuffle(openEvents);
-  const pk = pickRandom(accounts);
-  const account = privateKeyToAccount(pk);
+  const ta = pickRandom(accounts);
 
   for (const event of candidates) {
     const secretPayload = pickRandom(SECRET_POOL);
     const duration = pickRandom(DURATIONS);
+    const durationSeconds = CREATE_AUCTION_DURATION_SECONDS[duration];
+    const endTime = timestamp() + durationSeconds;
+    const prediction = secretPayload.includes("YES") ? "true" : "false";
 
     console.log(
       `[spawn-auctions] trying event ${event.eventId} — "${event.question}"`,
     );
-    console.log(`[spawn-auctions] signer: ${account.address}`);
+    console.log(`[spawn-auctions] signer: ${ta.address}`);
     console.log(`[spawn-auctions] secret: "${secretPayload}", duration: ${duration}`);
 
     try {
-      const result = await createAuction(pk, event.eventId, secretPayload, duration);
+      const result = await signedPost(ta, "/create-auction", {
+        eventId: event.eventId,
+        eventTitle: event.question,
+        endTime: String(endTime),
+        prediction,
+        secretPayload,
+      });
 
       if (result.ok) {
-        const auctionId = result.auctionId ?? "?";
-        const url = `${BASE_URL}/auction/${auctionId}`;
+        const auctionId =
+          result.body != null &&
+          typeof result.body === "object" &&
+          "auctionId" in result.body
+            ? String((result.body as Record<string, unknown>).auctionId)
+            : "?";
         const msg = `Auction ${auctionId} (${duration}) for event ${event.eventId}\n"${event.question}"`;
-        console.log(`[spawn-auctions] ${msg}\n${url}`);
-        await ntfy("Auction Created", msg, ["tada"], url);
+        console.log(`[spawn-auctions] ${msg}`);
+        await ntfy("Auction Created", msg, ["tada"]);
         return;
       }
 
@@ -296,10 +297,12 @@ if (accounts.length === 0) {
 }
 
 console.log(`[spawn-auctions] loaded ${accounts.length} test account(s)`);
-console.log(`[spawn-auctions] base URL: ${BASE_URL}`);
+console.log(`[spawn-auctions] daemon: ${DAEMON_URL}`);
 console.log(`[spawn-auctions] subgraph: ${SUBGRAPH_URL}`);
 
-const client = new GraphQLClient(SUBGRAPH_URL);
+const client = new GraphQLClient(SUBGRAPH_URL, {
+  headers: { Authorization: `Bearer ${SUBGRAPH_API_KEY}` },
+});
 
 runCycle(client, accounts)
   .then(() => process.exit(0))

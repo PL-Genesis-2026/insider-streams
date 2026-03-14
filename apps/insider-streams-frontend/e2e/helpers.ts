@@ -87,7 +87,8 @@ export function readTestState(): TestState | null {
 
 const SUBGRAPH_URL =
   process.env.NEXT_PUBLIC_SUBGRAPH_URL ||
-  "https://api.studio.thegraph.com/query/1743303/insider-streams-zama/version/latest";
+  "https://gateway.thegraph.com/api/subgraphs/id/BttcQ7pVTEz7L94PgnhkFJCY33K5Vwk1vhffckmjgf5f";
+const SUBGRAPH_API_KEY = process.env.NEXT_PUBLIC_SUBGRAPH_API_KEY || "a075bc6e2e48577d2588bb458b939bdc";
 
 /** Query the subgraph for open auctions (not cancelled/closed). */
 export async function findOpenAuctions(
@@ -114,7 +115,10 @@ export async function findOpenAuctions(
   try {
     const res = await fetch(SUBGRAPH_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(SUBGRAPH_API_KEY ? { Authorization: `Bearer ${SUBGRAPH_API_KEY}` } : {}),
+      },
       body: JSON.stringify({ query }),
       signal: AbortSignal.timeout(10_000),
     });
