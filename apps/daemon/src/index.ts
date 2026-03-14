@@ -55,7 +55,13 @@ async function main() {
     console.warn("[daemon] No background services configured. Only HTTP API is running.");
   }
 
-  await Promise.all(services);
+  const results = await Promise.allSettled(services);
+  const failed = results.filter((r) => r.status === "rejected");
+  if (failed.length > 0) {
+    for (const f of failed) {
+      console.error("[daemon] Service startup failed:", (f as PromiseRejectedResult).reason);
+    }
+  }
 
   console.log("\n[daemon] All services started. Press Ctrl+C to stop.");
 }
