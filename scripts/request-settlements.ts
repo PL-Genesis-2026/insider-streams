@@ -49,7 +49,7 @@ const SUBGRAPH_API_KEY = process.env.SUBGRAPH_API_KEY ?? "a075bc6e2e48577d2588bb
 
 const ENABLE_NTFY = process.env.ENABLE_NTFY === "true";
 const NTFY_HOST = process.env.NTFY_HOST ?? "http://localhost:8090";
-const NTFY_TOPIC = process.env.NTFY_TOPIC ?? "settlement-requester-script";
+const NTFY_TOPIC = process.env.NTFY_TOPIC_SETTLEMENTS ?? "zama-script-settlements";
 const NTFY_USER = process.env.NTFY_USER ?? "UNKNOWN";
 
 async function ntfy(title: string, message: string, tags?: string[]) {

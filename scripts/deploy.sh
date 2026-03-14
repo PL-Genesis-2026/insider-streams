@@ -194,14 +194,14 @@ if [ "$DAEMON_ENV_EXISTS" = "no" ]; then
   echo "  scp apps/daemon/.env $REMOTE_HOST:$REPO_PATH/apps/daemon/.env"
   echo ""
   echo "  Required keys: PRIVATE_KEY, RPC_URL, GEMINI_API_KEY"
-  echo "  Set NTFY_TOPIC=private-streams-daemon-zama"
+  echo "  Set NTFY_TOPIC_SETTLER=zama-settler (and other NTFY_TOPIC_* vars)"
   echo "  Set API_PORT=$DAEMON_PORT"
 else
   success "apps/daemon/.env exists"
-  # Verify ntfy topic has -zama suffix
-  NTFY_TOPIC=$(ssh "$REMOTE_HOST" "grep '^NTFY_TOPIC=' '$REPO_PATH/apps/daemon/.env' | cut -d= -f2" 2>/dev/null || echo "")
-  if [ -n "$NTFY_TOPIC" ] && ! echo "$NTFY_TOPIC" | grep -q "\-zama"; then
-    warn "NTFY_TOPIC=$NTFY_TOPIC — consider adding -zama suffix"
+  # Verify ntfy topics use zama- prefix
+  NTFY_CHECK=$(ssh "$REMOTE_HOST" "grep '^NTFY_TOPIC_' '$REPO_PATH/apps/daemon/.env' | head -1" 2>/dev/null || echo "")
+  if [ -z "$NTFY_CHECK" ]; then
+    warn "No NTFY_TOPIC_* vars found — per-service ntfy topics not configured"
   fi
 fi
 

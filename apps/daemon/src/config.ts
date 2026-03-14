@@ -24,11 +24,17 @@ export const config = {
   firebaseApiKey: process.env.FIREBASE_API_KEY || "",
   firebaseProjectId: process.env.FIREBASE_PROJECT_ID || "",
 
-  // Ntfy notifications
+  // Ntfy notifications — per-service topics
   ntfyEnabled: process.env.NTFY_ENABLED !== "false",
   ntfyHost: process.env.NTFY_HOST || "https://api.insider-streams.com",
-  ntfyTopic: process.env.NTFY_TOPIC || "private-streams-daemon",
   ntfyUser: process.env.NTFY_USER || "daemon",
+  ntfyTopicSettler: process.env.NTFY_TOPIC_SETTLER || "zama-settler",
+  ntfyTopicCloser: process.env.NTFY_TOPIC_AUCTION_CLOSER || "zama-auction-closer",
+  ntfyTopicReputation: process.env.NTFY_TOPIC_REPUTATION_RESOLVER || "zama-reputation-resolver",
+  ntfyTopicCreateEvents: process.env.NTFY_TOPIC_CREATE_EVENTS || "zama-create-events",
+  ntfyTopicSpawnAuctions: process.env.NTFY_TOPIC_SPAWN_AUCTIONS || "zama-spawn-auctions",
+  ntfyTopicPlaceBids: process.env.NTFY_TOPIC_PLACE_BIDS || "zama-place-bids",
+  ntfyTopicSettlements: process.env.NTFY_TOPIC_SETTLEMENTS || "zama-settlements",
 
   // Polling intervals
   auctionCloserIntervalMs: Number(process.env.AUCTION_CLOSER_INTERVAL_MS || 30_000),

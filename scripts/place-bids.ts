@@ -45,7 +45,7 @@ const LOW_BALANCE_THRESHOLD = 100_000_000n; // 100 USDC
 
 const ENABLE_NTFY = process.env.ENABLE_NTFY === "true";
 const NTFY_HOST = process.env.NTFY_HOST ?? "http://localhost:8090";
-const NTFY_TOPIC = process.env.NTFY_TOPIC ?? "place-bids";
+const NTFY_TOPIC = process.env.NTFY_TOPIC_PLACE_BIDS ?? "zama-script-place-bids";
 const NTFY_USER = process.env.NTFY_USER ?? "UNKNOWN";
 
 async function ntfy(title: string, message: string, tags?: string[]) {

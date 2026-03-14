@@ -488,7 +488,7 @@ async function runCreateEvents(
   const summary = createdEvents
     .map((e) => `#${e.eventId}: ${e.question}`)
     .join("\n");
-  await sendNotification(`Created ${createdEvents.length} events`, summary);
+  await sendNotification(`Created ${createdEvents.length} events`, summary, undefined, config.ntfyTopicCreateEvents);
   console.log(`[demo]   Created ${createdEvents.length} events`);
 }
 
@@ -572,6 +572,8 @@ async function runSpawnAuctions(
       await sendNotification(
         "Auction Created",
         `Auction ${auctionId} (${duration}) for event ${event.eventId}\n"${event.question}"`,
+        undefined,
+        config.ntfyTopicSpawnAuctions,
       );
       return; // One auction per cycle
     } catch (err) {
@@ -720,6 +722,8 @@ async function runPlaceBids(
     await sendNotification(
       "Bids Placed",
       `Placed ${bidsPlaced} bid(s) across ${auctions.length} auction(s)`,
+      undefined,
+      config.ntfyTopicPlaceBids,
     );
   }
   console.log(`[demo]   Placed ${bidsPlaced} bid(s)`);
@@ -782,7 +786,7 @@ async function runRequestSettlements(gqlClient: GraphQLClient): Promise<void> {
   const lines: string[] = [];
   if (succeeded.length > 0) lines.push(`Settled: [${succeeded.join(", ")}]`);
   if (failed.length > 0) lines.push(`Failed: [${failed.join(", ")}]`);
-  if (lines.length > 0) await sendNotification("Settlements Requested", lines.join("\n"));
+  if (lines.length > 0) await sendNotification("Settlements Requested", lines.join("\n"), undefined, config.ntfyTopicSettlements);
 }
 
 // ─── Entry Point ────────────────────────────────────────────────────────────

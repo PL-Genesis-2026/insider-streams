@@ -14,10 +14,10 @@
  *   VENICE_API_KEY            — Venice AI API key
  *
  * Optional:
- *   ENABLE_NTFY=true          — send notifications via ntfy
- *   NTFY_HOST                 — ntfy server URL (default: http://localhost:8090)
- *   NTFY_TOPIC                — ntfy topic (default: event-creator)
- *   NTFY_USER                 — user tag in notifications (default: unknown)
+ *   ENABLE_NTFY=true              — send notifications via ntfy
+ *   NTFY_HOST                     — ntfy server URL (default: http://localhost:8090)
+ *   NTFY_TOPIC_CREATE_EVENTS      — ntfy topic (default: zama-script-create-events)
+ *   NTFY_USER                     — user tag in notifications (default: unknown)
  *
  * Usage: pnpm create-events
  */
@@ -93,7 +93,7 @@ const VENICE_API_KEY = envRequired("VENICE_API_KEY");
 
 const ENABLE_NTFY = process.env.ENABLE_NTFY === "true";
 const NTFY_HOST = process.env.NTFY_HOST ?? "http://localhost:8090";
-const NTFY_TOPIC = process.env.NTFY_TOPIC ?? "event-creator-script";
+const NTFY_TOPIC = process.env.NTFY_TOPIC_CREATE_EVENTS ?? "zama-script-create-events";
 const NTFY_USER = process.env.NTFY_USER ?? "UNKNOWN";
 
 async function ntfy(

@@ -4,11 +4,13 @@ export async function sendNotification(
   title: string,
   message: string,
   clickUrl?: string,
+  topic?: string,
 ): Promise<void> {
   if (!config.ntfyEnabled) return;
+  if (!topic) return; // no topic = no notification
 
   try {
-    const url = `${config.ntfyHost}/${config.ntfyTopic}`;
+    const url = `${config.ntfyHost}/${topic}`;
     const body = `[${config.ntfyUser}] ${message}`;
 
     const headers: Record<string, string> = { Title: title };
