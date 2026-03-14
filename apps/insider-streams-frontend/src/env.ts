@@ -21,6 +21,7 @@ export const env = createEnv({
       .url()
       .optional()
       .default("http://localhost:3001"),
+    OWNER_PK: z.string().optional(),
   },
   client: {
     NEXT_PUBLIC_PROJECT_ID: z.string().min(1),
@@ -37,6 +38,7 @@ export const env = createEnv({
       process.env.EXAMPLE_PREDICTION_MARKET_ADDRESS,
     RPC_URL: process.env.RPC_URL,
     DAEMON_API_URL: process.env.DAEMON_API_URL,
+    OWNER_PK: process.env.OWNER_PK,
     NEXT_PUBLIC_PROJECT_ID: process.env.NEXT_PUBLIC_PROJECT_ID,
     NEXT_PUBLIC_SUBGRAPH_URL: process.env.NEXT_PUBLIC_SUBGRAPH_URL,
     NEXT_PUBLIC_SUBGRAPH_API_KEY: process.env.NEXT_PUBLIC_SUBGRAPH_API_KEY,
