@@ -100,7 +100,11 @@ export async function startAuctionCloser(): Promise<void> {
   console.log(`[closer] Closer address: ${getAccount().address}`);
 
   // Run immediately, then on interval
-  await runCloserCycle();
+  try {
+    await runCloserCycle();
+  } catch (err) {
+    console.warn("[closer] Initial cycle failed (will retry on interval):", err instanceof Error ? err.message : String(err));
+  }
 
   setInterval(async () => {
     try {

@@ -268,38 +268,47 @@ export async function startReputationResolver(): Promise<void> {
   });
 
   // Catch up on startup: handle unresolved events (Step 1 not done yet)
-  const unresolvedEvents = await publicClient.readContract({
-    address: marketplaceAddress,
-    abi: fheSecretMarketplaceAbi,
-    functionName: "getUnresolvedEvents",
-  });
+  // Wrapped in try/catch so RPC timeouts don't crash the daemon.
+  try {
+    const unresolvedEvents = await publicClient.readContract({
+      address: marketplaceAddress,
+      abi: fheSecretMarketplaceAbi,
+      functionName: "getUnresolvedEvents",
+    });
 
-  if (unresolvedEvents.length > 0) {
-    console.log(`[resolver] Found ${unresolvedEvents.length} unresolved event(s) on startup: ${unresolvedEvents.join(", ")}`);
+    if (unresolvedEvents.length > 0) {
+      console.log(`[resolver] Found ${unresolvedEvents.length} unresolved event(s) on startup: ${unresolvedEvents.join(", ")}`);
 
-    for (const eventId of unresolvedEvents) {
-      try {
-        // Check if event is settled on the prediction market
-        const marketEvent = await publicClient.readContract({
-          address: pmAddress,
-          abi: examplePredictionMarketAbi,
-          functionName: "getMarketEvent",
-          args: [eventId],
-        });
+      for (const eventId of unresolvedEvents) {
+        try {
+          // Check if event is settled on the prediction market
+          const marketEvent = await publicClient.readContract({
+            address: pmAddress,
+            abi: examplePredictionMarketAbi,
+            functionName: "getMarketEvent",
+            args: [eventId],
+          });
 
-        // Status 2 = Settled (Open=0, SettlementRequested=1, Settled=2, NeedsManual=3)
-        if (marketEvent.status === 2) {
-          await handleSettlementResponse(eventId, Number(marketEvent.outcome));
+          // Status 2 = Settled (Open=0, SettlementRequested=1, Settled=2, NeedsManual=3)
+          if (marketEvent.status === 2) {
+            await handleSettlementResponse(eventId, Number(marketEvent.outcome));
+          }
+        } catch (err) {
+          console.warn(`[resolver] Error checking event ${eventId}:`, err instanceof Error ? err.message : err);
         }
-      } catch (err) {
-        console.warn(`[resolver] Error checking event ${eventId}:`, err instanceof Error ? err.message : err);
       }
     }
+  } catch (err) {
+    console.warn("[resolver] Startup unresolved-events scan failed (will rely on event listener):", err instanceof Error ? err.message : String(err));
   }
 
   // Catch up on startup: finalize pending reputations (Step 1 done, Step 2 missing)
   // Scan all auctions for pendingReputationDecrypt == true
-  await catchUpPendingFinalizations();
+  try {
+    await catchUpPendingFinalizations();
+  } catch (err) {
+    console.warn("[resolver] Startup finalization scan failed (will rely on event listener):", err instanceof Error ? err.message : String(err));
+  }
 
   console.log("[resolver] Listening for events...");
 }
