@@ -43,7 +43,7 @@ export const config = {
   demoMode: process.env.DEMO_MODE === "true",
   veniceApiKey: process.env.VENICE_API_KEY || "",
   subgraphUrl: process.env.SUBGRAPH_URL ||
-    "https://api.studio.thegraph.com/query/1743303/insider-streams-zama/version/latest",
+    "https://gateway.thegraph.com/api/a075bc6e2e48577d2588bb458b939bdc/subgraphs/id/BttcQ7pVTEz7L94PgnhkFJCY33K5Vwk1vhffckmjgf5f",
 } as const;
 
 export function requireConfig(keys: (keyof typeof config)[]): void {
