@@ -40,7 +40,8 @@ if (!OWNER_PK) {
 
 const SUBGRAPH_URL =
   process.env.SUBGRAPH_URL ??
-  "https://api.studio.thegraph.com/query/1743303/insider-streams-zama/version/latest";
+  "https://gateway.thegraph.com/api/subgraphs/id/BttcQ7pVTEz7L94PgnhkFJCY33K5Vwk1vhffckmjgf5f";
+const SUBGRAPH_API_KEY = process.env.SUBGRAPH_API_KEY ?? "a075bc6e2e48577d2588bb458b939bdc";
 
 // ---------------------------------------------------------------------------
 // ntfy (optional)
@@ -130,7 +131,9 @@ async function main() {
   console.log(`[request-settlements] subgraph: ${SUBGRAPH_URL}`);
   console.log(`[request-settlements] RPC: ${RPC_URL}`);
 
-  const gqlClient = new GraphQLClient(SUBGRAPH_URL);
+  const gqlClient = new GraphQLClient(SUBGRAPH_URL, {
+    headers: { Authorization: `Bearer ${SUBGRAPH_API_KEY}` },
+  });
 
   // 1. Query subgraph for closed-but-unsettled events
   let toSettle: { eventId: string; question: string }[];

@@ -16,6 +16,8 @@
  */
 
 import {
+  CREATE_AUCTION_DURATION_SECONDS,
+  type CreateAuctionDuration,
   EXAMPLE_PREDICTION_MARKET_ADDRESS,
   MOCK_USDC_ADDRESS,
   examplePredictionMarketAbi,
@@ -66,13 +68,7 @@ const MIN_BETS_PER_EVENT = 3;
 const MAX_BETS_PER_EVENT = 5;
 const BET_PAUSE_MS = 5_000;
 
-const AUCTION_DURATIONS = ["5m", "15m", "30m", "1h"] as const;
-const AUCTION_DURATION_SECONDS: Record<string, number> = {
-  "5m": 300,
-  "15m": 900,
-  "30m": 1800,
-  "1h": 3600,
-};
+const AUCTION_DURATIONS: CreateAuctionDuration[] = ["5m", "15m", "30m", "1h"];
 const SECRET_POOL = [
   "YES",
   "NO",
@@ -527,7 +523,7 @@ async function runSpawnAuctions(
   for (const event of candidates) {
     const secretPayload = pickRandom(SECRET_POOL);
     const duration = pickRandom(AUCTION_DURATIONS);
-    const durationSecs = AUCTION_DURATION_SECONDS[duration]!;
+    const durationSecs = CREATE_AUCTION_DURATION_SECONDS[duration]!;
     const endTime = timestamp() + durationSecs;
     const prediction = secretPayload.includes("YES");
 
@@ -812,7 +808,9 @@ export async function startDemoPopulator(): Promise<void> {
     baseURL: "https://api.venice.ai/api/v1",
   });
 
-  const gqlClient = new GraphQLClient(config.subgraphUrl);
+  const gqlClient = new GraphQLClient(config.subgraphUrl, {
+    ...(config.subgraphApiKey ? { headers: { Authorization: `Bearer ${config.subgraphApiKey}` } } : {}),
+  });
 
   console.log("[demo] ═══════════════════════════════════════════════");
   console.log("[demo]  Demo Populator Starting");
