@@ -12,7 +12,11 @@
 import { fheSecretMarketplaceAbi } from "@private-streams/common";
 import { config, requireConfig } from "./config.js";
 import { getPublicClient, getWalletClient, getAccount, waitForReceipt } from "./provider.js";
-import { sendNotification } from "./notify.js";
+import { sendNotification as _sendNotification } from "./notify.js";
+
+function sendNotification(title: string, message: string, clickUrl?: string) {
+  return _sendNotification(title, message, clickUrl, config.ntfyTopicCloser);
+}
 import { markBidsForAuction } from "./db.js";
 import { withAdminLock } from "./admin-lock.js";
 

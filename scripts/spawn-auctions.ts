@@ -56,7 +56,7 @@ const SECRET_POOL = [
 
 const ENABLE_NTFY = process.env.ENABLE_NTFY === "true";
 const NTFY_HOST = process.env.NTFY_HOST ?? "http://localhost:8090";
-const NTFY_TOPIC = process.env.NTFY_TOPIC ?? "auction-creator-script";
+const NTFY_TOPIC = process.env.NTFY_TOPIC_SPAWN_AUCTIONS ?? "zama-script-spawn-auctions";
 const NTFY_USER = process.env.NTFY_USER ?? "UNKNOWN";
 
 async function ntfy(title: string, message: string, tags?: string[], clickUrl?: string) {
