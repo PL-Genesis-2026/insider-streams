@@ -20,7 +20,7 @@ set -euo pipefail
 # ─── Constants ────────────────────────────────────────────────────────────────
 REMOTE_HOST="bawler@195.201.8.147"
 REPO_PATH="/home/bawler/private-streams-zama"
-REMOTE_URL="git@github.com:PL-Genesis-2026/insider-streams.git"
+REMOTE_URL="git@github-plgenesis:PL-Genesis-2026/insider-streams.git"
 DAEMON_PORT=3001
 SERVICE_NAME="ps-zama-daemon"
 
