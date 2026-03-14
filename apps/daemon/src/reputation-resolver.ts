@@ -169,6 +169,38 @@ async function handleSettlementResponse(
 
   console.log(`[resolver] Resolving ${auctionIds.length} auction(s) for event ${eventId} (outcomeIsYes=${actualOutcomeIsYes})`);
 
+  // Pre-close any expired auctions with bids before resolving.
+  // Without this, resolveEventPredictions() auto-cancels open auctions
+  // (refunding the bidder) instead of closing them (paying the seller).
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  for (const auctionId of auctionIds) {
+    try {
+      const auction = await publicClient.readContract({
+        address: marketplaceAddress,
+        abi: fheSecretMarketplaceAbi,
+        functionName: "getAuction",
+        args: [auctionId],
+      });
+      const endTime = auction[1]; // endTime
+      const status = auction[6]; // status (0 = Open)
+      if (Number(status) === 0 && endTime <= now) {
+        console.log(`[resolver] Pre-closing expired auction ${auctionId} before reputation resolution`);
+        const closeHash = await withAdminLock(() =>
+          getWalletClient().writeContract({
+            address: marketplaceAddress,
+            abi: fheSecretMarketplaceAbi,
+            functionName: "closeAuction",
+            args: [auctionId],
+          }),
+        );
+        await waitForReceipt(closeHash);
+        console.log(`[resolver] Pre-closed auction ${auctionId}`);
+      }
+    } catch (err) {
+      console.warn(`[resolver] Pre-close failed for auction ${auctionId}:`, err instanceof Error ? err.message : err);
+    }
+  }
+
   try {
     const hash = await withAdminLock(() =>
       getWalletClient().writeContract({
