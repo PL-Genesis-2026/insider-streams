@@ -618,7 +618,7 @@ async function runSpawnAuctions(
     const { prediction, content: secretContent, format } = research;
 
     const duration = pickRandom(AUCTION_DURATIONS);
-    const durationSecs = AUCTION_DURATION_SECONDS[duration]!;
+    const durationSecs = CREATE_AUCTION_DURATION_SECONDS[duration]!;
     const endTime = timestamp() + durationSecs;
 
     // Generate secretDataCid and key from content
