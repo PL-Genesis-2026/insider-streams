@@ -278,38 +278,43 @@ export async function startSettler(): Promise<void> {
 
   // Catch up on any SettlementRequested events missed while the daemon was down.
   // The contract has no getter for these, so scan all events for status=1.
-  const nextEventId = await publicClient.readContract({
-    address: pmAddress,
-    abi: examplePredictionMarketAbi,
-    functionName: "nextEventId",
-  });
+  // Wrapped in try/catch so RPC timeouts don't crash the daemon.
+  try {
+    const nextEventId = await publicClient.readContract({
+      address: pmAddress,
+      abi: examplePredictionMarketAbi,
+      functionName: "nextEventId",
+    });
 
-  let pendingCount = 0;
-  for (let i = 0n; i < nextEventId; i++) {
-    try {
-      const ev = await publicClient.readContract({
-        address: pmAddress,
-        abi: examplePredictionMarketAbi,
-        functionName: "getMarketEvent",
-        args: [i],
-      });
-      // Status 1 = SettlementRequested
-      if (ev.status === 1) {
-        pendingCount++;
-        console.log(`[settler] Found pending settlement: event ${i}`);
-        handleSettlementRequest(i, ev.question).catch((err) => {
-          const msg = err instanceof Error ? err.message : String(err);
-          console.error(`[settler] Error processing event ${i}:`, msg);
-          sendNotification("Settlement FAILED", `Event ${i}: ${msg}`);
+    let pendingCount = 0;
+    for (let i = 0n; i < nextEventId; i++) {
+      try {
+        const ev = await publicClient.readContract({
+          address: pmAddress,
+          abi: examplePredictionMarketAbi,
+          functionName: "getMarketEvent",
+          args: [i],
         });
+        // Status 1 = SettlementRequested
+        if (ev.status === 1) {
+          pendingCount++;
+          console.log(`[settler] Found pending settlement: event ${i}`);
+          handleSettlementRequest(i, ev.question).catch((err) => {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error(`[settler] Error processing event ${i}:`, msg);
+            sendNotification("Settlement FAILED", `Event ${i}: ${msg}`);
+          });
+        }
+      } catch {
+        // Event may not exist or read failed
       }
-    } catch {
-      // Event may not exist or read failed
     }
-  }
 
-  if (pendingCount > 0) {
-    console.log(`[settler] Processing ${pendingCount} pending settlement(s) from startup scan`);
+    if (pendingCount > 0) {
+      console.log(`[settler] Processing ${pendingCount} pending settlement(s) from startup scan`);
+    }
+  } catch (err) {
+    console.warn("[settler] Startup catch-up scan failed (will rely on event listener):", err instanceof Error ? err.message : String(err));
   }
 
   console.log("[settler] Listening for events...");
