@@ -23,6 +23,7 @@ import {
   getUserByAddress,
   recordBid,
   getActiveBid,
+  getWonBid,
   updateBidTxHash,
   markBidFailed,
   getBidsByUserId,
@@ -707,9 +708,9 @@ export function startApi(): void {
       // For each secret, check if the caller has access to the key
       const results = secrets.map((s) => {
         const isSeller = s.sellerId === user.userId;
-        // Check if user is the winning bidder (active bid = winner after auction closes)
-        const activeBid = getActiveBid(s.auctionId);
-        const isWinner = activeBid?.bidderId === user.userId;
+        // Check if user is the winning bidder (bid status = "won" after auction closes)
+        const wonBid = getWonBid(s.auctionId);
+        const isWinner = wonBid?.bidderId === user.userId;
         const hasAccess = isSeller || isWinner;
 
         // Build file metadata if Filecoin data exists

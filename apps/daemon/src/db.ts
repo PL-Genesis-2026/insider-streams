@@ -214,6 +214,14 @@ export function getActiveBid(auctionId: number): Bid | undefined {
   return row ? toBid(row) : undefined;
 }
 
+export function getWonBid(auctionId: number): Bid | undefined {
+  const db = getDb();
+  const row = db.prepare(
+    "SELECT id, auction_id, bidder_id, amount, status, tx_hash FROM bids WHERE auction_id = ? AND status = 'won'",
+  ).get(auctionId) as BidRow | undefined;
+  return row ? toBid(row) : undefined;
+}
+
 export function getActiveBidPreviousBidderId(auctionId: number): string | null {
   const db = getDb();
   // Get the most recent outbid entry for this auction (that's the previous bidder)
