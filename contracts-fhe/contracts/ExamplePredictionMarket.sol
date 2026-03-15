@@ -317,7 +317,7 @@ contract ExamplePredictionMarket is Ownable {
         emit SettlementResponse(eventId, e.status, e.outcome);
     }
 
-    function settleEventManually(uint256 eventId, Outcome outcome) public {
+    function settleEventManually(uint256 eventId, Outcome outcome) public onlyOwner {
         Event storage e = events[eventId];
         if (outcome != Outcome.No && outcome != Outcome.Yes) revert InvalidOutcome();
         if (e.status != Status.NeedsManual) revert ManualSettlementNotAllowed(e.status);

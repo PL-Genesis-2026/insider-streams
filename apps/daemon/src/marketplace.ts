@@ -235,10 +235,6 @@ export function getOnChainBalance(userId: string): Promise<bigint> {
   return promise;
 }
 
-// Track handles that have been marked for public decryption so we don't
-// submit the on-chain tx every time — only when we see a new handle.
-const _decryptedHandles = new Set<string>();
-
 async function _publicDecryptWithTimeout(
   instance: Awaited<ReturnType<typeof getFhevmInstance>>,
   handle: `0x${string}`,
@@ -247,10 +243,16 @@ async function _publicDecryptWithTimeout(
   console.log(`[marketplace] publicDecrypt(${handle}) — waiting for relayer...`);
 
   const decryptPromise = instance.publicDecrypt([handle]);
-  const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error(`publicDecrypt timed out after ${DECRYPT_TIMEOUT_MS / 1000}s`)), DECRYPT_TIMEOUT_MS),
-  );
-  const result = await Promise.race([decryptPromise, timeoutPromise]);
+  let timer: ReturnType<typeof setTimeout>;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`publicDecrypt timed out after ${DECRYPT_TIMEOUT_MS / 1000}s`)), DECRYPT_TIMEOUT_MS);
+  });
+  let result;
+  try {
+    result = await Promise.race([decryptPromise, timeoutPromise]);
+  } finally {
+    clearTimeout(timer!);
+  }
 
   const clearValue = result.clearValues[handle];
   if (clearValue === undefined || clearValue === null) return 0n;
@@ -280,7 +282,6 @@ async function _getOnChainBalanceImpl(userId: string): Promise<bigint> {
   // requestBalanceDecrypt tx and retry.
   try {
     const value = await _publicDecryptWithTimeout(instance, handle);
-    _decryptedHandles.add(handle);
     console.log(`[marketplace] getOnChainBalance(${userId}) — decrypted: ${String(value)}`);
     return value;
   } catch (err) {
@@ -303,7 +304,6 @@ async function _getOnChainBalanceImpl(userId: string): Promise<bigint> {
   await waitForReceipt(decryptTxHash);
 
   const value = await _publicDecryptWithTimeout(instance, handle);
-  _decryptedHandles.add(handle);
   console.log(`[marketplace] getOnChainBalance(${userId}) — decrypted: ${String(value)}`);
   return value;
 }

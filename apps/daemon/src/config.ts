@@ -34,7 +34,6 @@ export const config = {
 
   // Polling intervals
   auctionCloserIntervalMs: Number(process.env.AUCTION_CLOSER_INTERVAL_MS || 30_000),
-  reputationResolverIntervalMs: Number(process.env.REPUTATION_RESOLVER_INTERVAL_MS || 60_000),
   // HTTP API
   apiPort: Number(process.env.API_PORT || 3001),
 
@@ -49,10 +48,6 @@ export const config = {
   filecoinRpcUrl: process.env.FILECOIN_RPC_URL || "",
   maxUploadBytes: Number(process.env.MAX_UPLOAD_BYTES || 10_485_760), // 10 MB
 
-  // Subgraph — prod gateway URL. Set SUBGRAPH_API_KEY for Bearer auth.
-  subgraphUrl: process.env.SUBGRAPH_URL ||
-    "https://gateway.thegraph.com/api/subgraphs/id/BttcQ7pVTEz7L94PgnhkFJCY33K5Vwk1vhffckmjgf5f",
-  subgraphApiKey: process.env.SUBGRAPH_API_KEY || "a075bc6e2e48577d2588bb458b939bdc",
 } as const;
 
 export function requireConfig(keys: (keyof typeof config)[]): void {

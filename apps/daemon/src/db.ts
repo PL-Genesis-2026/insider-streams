@@ -238,7 +238,19 @@ export function updateBidTxHash(bidId: number, txHash: string): void {
 
 export function markBidFailed(bidId: number): void {
   const db = getDb();
-  db.prepare("UPDATE bids SET status = 'failed' WHERE id = ?").run(bidId);
+  db.transaction(() => {
+    // Get the auction for this bid so we can restore the previous bid
+    const bid = db.prepare("SELECT auction_id FROM bids WHERE id = ?").get(bidId) as { auction_id: number } | undefined;
+    db.prepare("UPDATE bids SET status = 'failed' WHERE id = ?").run(bidId);
+
+    // Restore the most recent outbid entry for this auction back to active,
+    // since the on-chain state still has the previous bid as current.
+    if (bid) {
+      db.prepare(
+        "UPDATE bids SET status = 'active' WHERE id = (SELECT id FROM bids WHERE auction_id = ? AND status = 'outbid' ORDER BY id DESC LIMIT 1)",
+      ).run(bid.auction_id);
+    }
+  })();
 }
 
 export function markBidsForAuction(auctionId: number, status: "won" | "refunded" | "cancelled"): void {

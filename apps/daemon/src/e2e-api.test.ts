@@ -467,17 +467,16 @@ describe("POST /create-auction", () => {
 // ────────────────────────────────────────────────────────────────────────────
 
 describe("POST /withdraw", () => {
-  it("submits withdrawal for known user", async () => {
+  it("rejects withdrawal when user has insufficient on-chain balance", async () => {
     // Ensure Alice exists
     await signedPost("/user", ALICE);
 
+    // Alice has 0 on-chain balance, so withdrawal should be rejected
     const { status, data } = await signedPost("/withdraw", ALICE, {
       amount: "500000",
     });
-    assert.equal(status, 200);
-    assert.ok(data.withdrawalId);
-    assert.equal(data.status, "pending");
-    assert.equal(data.amount, "500000");
+    // May get 400 (insufficient balance) or 503 (balance check failed) depending on chain state
+    assert.ok(status === 400 || status === 503, `expected 400 or 503, got ${status}`);
   });
 
   it("rejects withdrawal for unknown signer (no prior interaction)", async () => {
@@ -513,7 +512,7 @@ describe("POST /withdraw", () => {
 // ────────────────────────────────────────────────────────────────────────────
 
 describe("POST /deposit", () => {
-  it("accepts deposit for new user (auto-creates)", async () => {
+  it("rejects deposit with non-existent txHash", async () => {
     const pk = "0x4444444444444444444444444444444444444444444444444444444444444444" as Hex;
     const account = privateKeyToAccount(pk);
 
@@ -521,23 +520,19 @@ describe("POST /deposit", () => {
       txHash: "0x0000000000000000000000000000000000000000000000000000000000000001",
       amount: "5000000",
     });
-    assert.equal(status, 200);
-    assert.ok(data.userId);
-    assert.equal(data.amount, "5000000");
-    assert.equal(data.status, "pending");
+    assert.equal(status, 400);
+    assert.ok((data.code as string) === "TX_NOT_FOUND");
   });
 
-  it("accepts deposit for existing user", async () => {
+  it("rejects deposit with non-existent txHash for existing user", async () => {
     await signedPost("/user", ALICE);
 
     const { status, data } = await signedPost("/deposit", ALICE, {
       txHash: "0x0000000000000000000000000000000000000000000000000000000000000002",
       amount: "10000000",
     });
-    assert.equal(status, 200);
-    assert.ok(data.userId);
-    assert.equal(data.amount, "10000000");
-    assert.equal(data.status, "pending");
+    assert.equal(status, 400);
+    assert.ok((data.code as string) === "TX_NOT_FOUND");
   });
 
   it("rejects invalid amount", async () => {
@@ -556,6 +551,14 @@ describe("POST /deposit", () => {
     });
     assert.equal(status, 400);
     assert.ok((data.error as string).includes("greater than 0"));
+  });
+
+  it("rejects missing txHash", async () => {
+    const { status, data } = await signedPost("/deposit", ALICE, {
+      amount: "5000000",
+    });
+    assert.equal(status, 400);
+    assert.equal(data.error, "Missing txHash");
   });
 
   it("rejects without signature", async () => {

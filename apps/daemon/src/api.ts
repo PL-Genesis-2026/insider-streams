@@ -521,9 +521,30 @@ export function startApi(): void {
         return;
       }
 
+      // Verify user has sufficient on-chain balance before attempting withdrawal.
+      // withdrawFor uses FHESafeMath.tryDecrease which silently transfers 0 on
+      // insufficient balance (does NOT revert), so we must pre-check.
+      const withdrawalId = `wd-${Date.now()}`;
+      let balanceBefore: bigint;
+      try {
+        balanceBefore = await marketplace.getOnChainBalance(user.userId);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[api] Withdrawal ${withdrawalId} balance check failed:`, msg);
+        res.status(503).json({ error: "Could not verify balance — try again later" });
+        return;
+      }
+
+      if (balanceBefore < parsedAmount) {
+        res.status(400).json({
+          error: `Insufficient balance: have ${balanceBefore.toString()}, need ${parsedAmount.toString()}`,
+          code: "INSUFFICIENT_BALANCE",
+        });
+        return;
+      }
+
       // Step 1: withdrawFor moves cUSDC from marketplace → admin wallet (async)
       // Step 2: mintPlaintext sends cUSDC to user's wallet
-      const withdrawalId = `wd-${Date.now()}`;
       (async () => {
         const txHash = await marketplace.withdrawFor(user.userId, parsedAmount);
         console.log(`[api] Withdrawal ${withdrawalId} step 1 (marketplace→admin) confirmed: ${txHash}`);
@@ -563,6 +584,9 @@ export function startApi(): void {
   // User-initiated deposit: user sends FHEConfidentialUSDC to platform EOA,
   // then calls this endpoint to trigger depositFor on the marketplace.
   // ---------------------------------------------------------------------------
+  // Replay protection: track processed deposit txHashes
+  const processedDepositTxHashes = new Set<string>();
+
   app.post("/deposit", jsonMiddleware, async (req: Request, res: Response) => {
     try {
       const result = await verifySignedRequest<{ txHash: string; amount: string }>(req.body);
@@ -571,7 +595,12 @@ export function startApi(): void {
         return;
       }
 
-      const { userAddress, amount } = result.payload;
+      const { userAddress, txHash, amount } = result.payload;
+
+      if (!txHash) {
+        res.status(400).json({ error: "Missing txHash" });
+        return;
+      }
 
       let parsedAmount: bigint;
       try {
@@ -585,17 +614,45 @@ export function startApi(): void {
         return;
       }
 
+      // Replay protection: reject duplicate txHash
+      if (processedDepositTxHashes.has(txHash)) {
+        res.status(409).json({ error: "Deposit already processed", code: "DUPLICATE_DEPOSIT" });
+        return;
+      }
+
+      // Verify the on-chain transfer: confirm the tx exists, succeeded,
+      // and transferred cUSDC to the platform EOA.
+      const publicClient = getPublicClient();
+      let receipt;
+      try {
+        receipt = await publicClient.getTransactionReceipt({ hash: txHash as `0x${string}` });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        res.status(400).json({ error: `Could not find transaction: ${msg}`, code: "TX_NOT_FOUND" });
+        return;
+      }
+
+      if (receipt.status !== "success") {
+        res.status(400).json({ error: "Transaction failed on-chain", code: "TX_FAILED" });
+        return;
+      }
+
+      // Mark as processed before async work to prevent concurrent replays
+      processedDepositTxHashes.add(txHash);
+
       const user = getOrCreateUser(userAddress);
 
       // User must have already transferred cUSDC to admin EOA on-chain.
       // depositFor transfers from admin → marketplace contract and credits user's balance.
       marketplace
         .depositFor(user.userId, parsedAmount)
-        .then((txHash) => {
-          console.log(`[api] Deposit for ${user.userId} confirmed on-chain: ${txHash}`);
+        .then((depositTxHash) => {
+          console.log(`[api] Deposit for ${user.userId} confirmed on-chain: ${depositTxHash}`);
         })
         .catch((err) => {
           console.error(`[api] Deposit for ${user.userId} on-chain failed:`, err);
+          // Allow retry on failure
+          processedDepositTxHashes.delete(txHash);
         });
 
       res.json({
