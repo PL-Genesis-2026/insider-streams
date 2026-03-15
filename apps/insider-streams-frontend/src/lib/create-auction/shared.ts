@@ -25,7 +25,7 @@ const nonNegativeIntegerString = z
 export const createAuctionInputSchema = z.object({
   eventId: nonNegativeIntegerString,
   privateLeg: z.enum(["yes", "no"], "privateLeg must be yes or no"),
-  secretPayload: z.string().trim().optional().default(""),
+  secretPayload: z.string().optional().default(""),
   duration: z.enum(
     CREATE_AUCTION_DURATIONS,
     "duration must be 6h, 12h, 24h, or 48h",
