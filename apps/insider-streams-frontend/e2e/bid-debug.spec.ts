@@ -44,9 +44,11 @@ test.describe("Bid debug", () => {
       responseBody?: string;
     }[] = [];
 
+    const daemonHost = (process.env.DAEMON_URL || "http://localhost:3001").replace(/^https?:\/\//, "");
+
     page.on("request", (req) => {
       const url = req.url();
-      if (url.includes("/api/") || url.includes("localhost:3001")) {
+      if (url.includes("/api/") || url.includes(daemonHost)) {
         apiLog.push({
           url,
           method: req.method(),
@@ -57,7 +59,7 @@ test.describe("Bid debug", () => {
 
     page.on("response", async (res) => {
       const url = res.url();
-      if (url.includes("/api/") || url.includes("localhost:3001")) {
+      if (url.includes("/api/") || url.includes(daemonHost)) {
         const entry = apiLog.find(
           (e) => e.url === url && e.status === undefined,
         );

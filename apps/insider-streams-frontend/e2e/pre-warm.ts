@@ -55,7 +55,8 @@ async function main() {
 
   // Check daemon health
   try {
-    const res = await fetch("http://localhost:3001/health", {
+    const daemonUrl = process.env.DAEMON_URL || "http://localhost:3001";
+    const res = await fetch(`${daemonUrl}/health`, {
       signal: AbortSignal.timeout(5_000),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);

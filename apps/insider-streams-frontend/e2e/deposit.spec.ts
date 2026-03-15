@@ -76,9 +76,10 @@ test.describe("Deposit flow", () => {
     });
 
     const apiLog: { url: string; status?: number; body?: string }[] = [];
+    const daemonHost = (process.env.DAEMON_URL || "http://localhost:3001").replace(/^https?:\/\//, "");
     page.on("response", async (res) => {
       const url = res.url();
-      if (url.includes("/api/") || url.includes("localhost:3001")) {
+      if (url.includes("/api/") || url.includes(daemonHost)) {
         const entry: (typeof apiLog)[0] = { url, status: res.status() };
         try { entry.body = (await res.text()).slice(0, 200); } catch { /* */ }
         apiLog.push(entry);

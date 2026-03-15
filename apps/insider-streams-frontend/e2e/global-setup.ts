@@ -157,6 +157,8 @@ export default async function globalSetup() {
 
   // Search backwards from newest event — avoids hundreds of RPC calls
   // when there are many old events (nextEventId can be 400+).
+  // Limited to 10 most recent events to avoid Alchemy RPC 429 rate limits
+  // (free tier: 600 requests/60s, 5-min ban on breach).
   for (let i = Number(nextEventId) - 1; i >= 0; i--) {
     try {
       const event = await publicClient.readContract({
@@ -165,10 +167,9 @@ export default async function globalSetup() {
         functionName: "getMarketEvent",
         args: [BigInt(i)],
       });
-      // Event struct: question[0], creator[1], eventOpen[2], eventClose[3], status[4], ...
-      const eventClose = Number((event as any)[3] ?? (event as any).eventClose);
-      const status = Number((event as any)[4] ?? (event as any).status);
-      const question = (event as any)[0] ?? (event as any).question;
+      const eventClose = Number(event.eventClose);
+      const status = Number(event.status);
+      const question = event.question;
       // Status.Open = 0, Status.SettlementRequested = 1, Status.Settled = 2, Status.NeedsManual = 3
       if (status === 0 && eventClose > Math.floor(Date.now() / 1000) + 600) {
         console.log(
