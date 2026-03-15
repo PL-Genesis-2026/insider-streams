@@ -19,7 +19,7 @@ export const wagmiAdapter = new WagmiAdapter({
     storage: cookieStorage,
   }),
   transports: {
-    [requiredChain.id]: http("https://eth-sepolia.g.alchemy.com/v2/59LCREaM5uGpTVXZgR8A7z6IiULWjwG6"),
+    [requiredChain.id]: http("https://ethereum-sepolia-rpc.publicnode.com"),
   },
 });
 

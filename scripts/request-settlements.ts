@@ -30,7 +30,7 @@ import {
 
 const RPC_URL =
   process.env.RPC_URL ??
-  "https://eth-sepolia.g.alchemy.com/v2/59LCREaM5uGpTVXZgR8A7z6IiULWjwG6";
+  "https://ethereum-sepolia-rpc.publicnode.com";
 
 const OWNER_PK = process.env.OWNER_PK;
 if (!OWNER_PK) {
