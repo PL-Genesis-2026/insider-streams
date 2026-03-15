@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { proxyToDaemon } from "@/lib/daemon-client";
 import type { PrivateBidRecord } from "@/lib/private-data/types";
 
-export const maxDuration = 60;
+export const maxDuration = 90;
 
 type DaemonBid = {
   id: number;
