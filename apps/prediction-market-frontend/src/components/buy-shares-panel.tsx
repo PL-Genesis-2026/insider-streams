@@ -4,9 +4,8 @@ import { useState, useCallback } from "react";
 import { usePublicClient, useWriteContract } from "wagmi";
 import {
   examplePredictionMarketAbi,
-  confidentialUsdcAbi,
+  mockUsdcAbi,
   EXAMPLE_PREDICTION_MARKET_ADDRESS,
-  CONFIDENTIAL_USDC_DECIMALS,
 } from "@private-streams/common";
 import { maxUint256, parseUnits, type Address } from "viem";
 import { ArrowRight, Loader2, TrendingUp, TrendingDown } from "lucide-react";
@@ -69,7 +68,7 @@ function BuySharesPanelWithWallet({ eventId }: BuySharesPanelProps) {
     try {
       const trimmed = amount.trim();
       if (!trimmed || Number(trimmed) <= 0) return null;
-      return parseUnits(trimmed, CONFIDENTIAL_USDC_DECIMALS);
+      return parseUnits(trimmed, 6);
     } catch {
       return null;
     }
@@ -114,7 +113,7 @@ function BuySharesPanelWithWallet({ eventId }: BuySharesPanelProps) {
 
       const currentAllowance = await publicClient.readContract({
         address: usdcAddress,
-        abi: confidentialUsdcAbi,
+        abi: mockUsdcAbi,
         functionName: "allowance",
         args: [account, contractAddress],
       });
@@ -123,13 +122,13 @@ function BuySharesPanelWithWallet({ eventId }: BuySharesPanelProps) {
         const approveGas = await publicClient.estimateContractGas({
           account,
           address: usdcAddress,
-          abi: confidentialUsdcAbi,
+          abi: mockUsdcAbi,
           functionName: "approve",
           args: [contractAddress, maxUint256],
         });
         const approveHash = await writeContractAsync({
           address: usdcAddress,
-          abi: confidentialUsdcAbi,
+          abi: mockUsdcAbi,
           functionName: "approve",
           args: [contractAddress, maxUint256],
           gas: approveGas,
@@ -378,7 +377,7 @@ function BuySharesPanelWithWallet({ eventId }: BuySharesPanelProps) {
         )}
 
         <p className="text-center text-xs text-muted-foreground">
-          Requires ConfidentialUSDC on Sepolia. Winning shares redeem 1:1 for
+          Requires MockUSDC on Sepolia. Winning shares redeem 1:1 for
           USDC after settlement.
         </p>
       </div>

@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import {
   CONFIDENTIAL_USDC_FAUCET_ACTION,
   CONFIDENTIAL_USDC_FAUCET_AMOUNT_DISPLAY,
-  type ConfidentialUsdcFaucetResponse,
 } from "@/lib/faucet/shared";
 import { useWalletSession } from "@/lib/wallet/use-wallet-session";
 
@@ -62,12 +61,9 @@ export function ConfidentialUsdcFaucetButton({ onSuccess }: ConfidentialUsdcFauc
         }),
       });
 
-      const result = (await response.json()) as ConfidentialUsdcFaucetResponse;
-
-      if (!response.ok || !result.success) {
-        throw new Error(
-          result.success ? "Faucet mint failed." : result.error,
-        );
+      if (!response.ok) {
+        const data = await response.json().catch(() => null) as { error?: string } | null;
+        throw new Error(data?.error ?? `Faucet mint failed (${response.status})`);
       }
 
       toast.success(

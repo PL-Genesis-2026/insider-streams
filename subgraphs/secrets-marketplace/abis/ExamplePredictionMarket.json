@@ -1,1145 +1,900 @@
 [
   {
-    "type": "constructor",
     "inputs": [
       {
+        "internalType": "address",
         "name": "token",
-        "type": "address",
-        "internalType": "address"
+        "type": "address"
       },
       {
-        "name": "forwarderAddress",
-        "type": "address",
-        "internalType": "address"
+        "internalType": "address",
+        "name": "settlerAddress",
+        "type": "address"
       }
     ],
-    "stateMutability": "nonpayable"
+    "stateMutability": "nonpayable",
+    "type": "constructor"
   },
   {
-    "type": "function",
-    "name": "INITIAL_LIQUIDITY",
+    "inputs": [
+      {
+        "internalType": "enum ExamplePredictionMarket.Status",
+        "name": "current",
+        "type": "uint8"
+      }
+    ],
+    "name": "AlreadySettled",
+    "type": "error"
+  },
+  {
     "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
+    "name": "AmountZero",
+    "type": "error"
   },
   {
-    "type": "function",
-    "name": "adminCloseEvent",
+    "inputs": [],
+    "name": "DurationZero",
+    "type": "error"
+  },
+  {
     "inputs": [
       {
+        "internalType": "uint256",
+        "name": "nowTs",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "closeTs",
+        "type": "uint256"
+      }
+    ],
+    "name": "EventNotClosed",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "nowTs",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "closeTs",
+        "type": "uint256"
+      }
+    ],
+    "name": "EventNotOpen",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "InvalidOutcome",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "LiquidityAlreadyWithdrawn",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "enum ExamplePredictionMarket.Status",
+        "name": "current",
+        "type": "uint8"
+      }
+    ],
+    "name": "ManualSettlementNotAllowed",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "NotCreator",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "enum ExamplePredictionMarket.Status",
+        "name": "current",
+        "type": "uint8"
+      }
+    ],
+    "name": "NotSettledYet",
+    "type": "error"
+  },
+  {
+    "inputs": [],
+    "name": "NotSettler",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "owner",
+        "type": "address"
+      }
+    ],
+    "name": "OwnableInvalidOwner",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      }
+    ],
+    "name": "OwnableUnauthorizedAccount",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
+      }
+    ],
+    "name": "SafeERC20FailedOperation",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "enum ExamplePredictionMarket.Status",
+        "name": "current",
+        "type": "uint8"
+      }
+    ],
+    "name": "SettlementNotRequested",
+    "type": "error"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "enum ExamplePredictionMarket.Status",
+        "name": "current",
+        "type": "uint8"
+      }
+    ],
+    "name": "StatusNotOpen",
+    "type": "error"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
         "name": "eventId",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "uint256"
       }
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    "name": "EventAdminClosed",
+    "type": "event"
   },
   {
-    "type": "function",
-    "name": "buyShares",
+    "anonymous": false,
     "inputs": [
       {
+        "indexed": true,
+        "internalType": "uint256",
         "name": "eventId",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "uint256"
       },
       {
-        "name": "outcome",
-        "type": "uint8",
-        "internalType": "enum ExamplePredictionMarket.Outcome"
-      },
-      {
-        "name": "usdcAmount",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "events",
-    "inputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "question",
-        "type": "string",
-        "internalType": "string"
-      },
-      {
+        "indexed": true,
+        "internalType": "address",
         "name": "creator",
-        "type": "address",
-        "internalType": "address"
+        "type": "address"
       },
       {
+        "indexed": false,
+        "internalType": "string",
+        "name": "question",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
         "name": "eventOpen",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "uint256"
       },
       {
+        "indexed": false,
+        "internalType": "uint256",
         "name": "eventClose",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "uint256"
       },
       {
-        "name": "status",
-        "type": "uint8",
-        "internalType": "enum ExamplePredictionMarket.Status"
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "duration",
+        "type": "uint256"
       },
       {
-        "name": "outcome",
-        "type": "uint8",
-        "internalType": "enum ExamplePredictionMarket.Outcome"
-      },
-      {
-        "name": "settledAt",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "evidenceURI",
-        "type": "string",
-        "internalType": "string"
-      },
-      {
-        "name": "confidenceBps",
-        "type": "uint16",
-        "internalType": "uint16"
-      },
-      {
+        "indexed": false,
+        "internalType": "address",
         "name": "yesToken",
-        "type": "address",
-        "internalType": "contract ExamplePredictionMarketShareToken"
+        "type": "address"
       },
       {
+        "indexed": false,
+        "internalType": "address",
         "name": "noToken",
-        "type": "address",
-        "internalType": "contract ExamplePredictionMarketShareToken"
-      },
-      {
-        "name": "yesReserve",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "noReserve",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "liquidityWithdrawn",
-        "type": "bool",
-        "internalType": "bool"
+        "type": "address"
       }
     ],
-    "stateMutability": "view"
+    "name": "EventCreated",
+    "type": "event"
   },
   {
-    "type": "function",
-    "name": "forceSettle",
+    "anonymous": false,
     "inputs": [
       {
+        "indexed": true,
+        "internalType": "uint256",
         "name": "eventId",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "uint256"
       },
       {
+        "indexed": true,
+        "internalType": "address",
+        "name": "creator",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "usdcOut",
+        "type": "uint256"
+      }
+    ],
+    "name": "LiquidityWithdrawn",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "previousOwner",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "newOwner",
+        "type": "address"
+      }
+    ],
+    "name": "OwnershipTransferred",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "eventId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "question",
+        "type": "string"
+      }
+    ],
+    "name": "SettlementRequested",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "eventId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "enum ExamplePredictionMarket.Status",
+        "name": "status",
+        "type": "uint8"
+      },
+      {
+        "indexed": true,
+        "internalType": "enum ExamplePredictionMarket.Outcome",
         "name": "outcome",
-        "type": "uint8",
-        "internalType": "enum ExamplePredictionMarket.Outcome"
-      },
-      {
-        "name": "confidenceBps",
-        "type": "uint16",
-        "internalType": "uint16"
-      },
-      {
-        "name": "evidenceURI",
-        "type": "string",
-        "internalType": "string"
+        "type": "uint8"
       }
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    "name": "SettlementResponse",
+    "type": "event"
   },
   {
-    "type": "function",
-    "name": "getEvent",
+    "anonymous": false,
     "inputs": [
       {
-        "name": "eventId",
-        "type": "uint256",
-        "internalType": "uint256"
+        "indexed": true,
+        "internalType": "address",
+        "name": "previousSettler",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "newSettler",
+        "type": "address"
       }
     ],
+    "name": "SettlerUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "eventId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "buyer",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "enum ExamplePredictionMarket.Outcome",
+        "name": "outcome",
+        "type": "uint8"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "usdcIn",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "sharesOut",
+        "type": "uint256"
+      }
+    ],
+    "name": "SharesPurchased",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "eventId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "redeemer",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "sharesIn",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "usdcOut",
+        "type": "uint256"
+      }
+    ],
+    "name": "SharesRedeemed",
+    "type": "event"
+  },
+  {
+    "inputs": [],
+    "name": "INITIAL_LIQUIDITY",
     "outputs": [
       {
+        "internalType": "uint256",
         "name": "",
-        "type": "tuple",
-        "internalType": "struct ExamplePredictionMarket.Event",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "eventId",
+        "type": "uint256"
+      }
+    ],
+    "name": "adminCloseEvent",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "eventId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "enum ExamplePredictionMarket.Outcome",
+        "name": "outcome",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint256",
+        "name": "usdcAmount",
+        "type": "uint256"
+      }
+    ],
+    "name": "buyShares",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "events",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "question",
+        "type": "string"
+      },
+      {
+        "internalType": "address",
+        "name": "creator",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "eventOpen",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "eventClose",
+        "type": "uint256"
+      },
+      {
+        "internalType": "enum ExamplePredictionMarket.Status",
+        "name": "status",
+        "type": "uint8"
+      },
+      {
+        "internalType": "enum ExamplePredictionMarket.Outcome",
+        "name": "outcome",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint256",
+        "name": "settledAt",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "evidenceURI",
+        "type": "string"
+      },
+      {
+        "internalType": "uint16",
+        "name": "confidenceBps",
+        "type": "uint16"
+      },
+      {
+        "internalType": "contract ExamplePredictionMarketShareToken",
+        "name": "yesToken",
+        "type": "address"
+      },
+      {
+        "internalType": "contract ExamplePredictionMarketShareToken",
+        "name": "noToken",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "yesReserve",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "noReserve",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bool",
+        "name": "liquidityWithdrawn",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "eventId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "enum ExamplePredictionMarket.Outcome",
+        "name": "outcome",
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint16",
+        "name": "confidenceBps",
+        "type": "uint16"
+      },
+      {
+        "internalType": "string",
+        "name": "evidenceURI",
+        "type": "string"
+      }
+    ],
+    "name": "forceSettle",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "eventId",
+        "type": "uint256"
+      }
+    ],
+    "name": "getMarketEvent",
+    "outputs": [
+      {
         "components": [
           {
+            "internalType": "string",
             "name": "question",
-            "type": "string",
-            "internalType": "string"
+            "type": "string"
           },
           {
+            "internalType": "address",
             "name": "creator",
-            "type": "address",
-            "internalType": "address"
+            "type": "address"
           },
           {
+            "internalType": "uint256",
             "name": "eventOpen",
-            "type": "uint256",
-            "internalType": "uint256"
+            "type": "uint256"
           },
           {
+            "internalType": "uint256",
             "name": "eventClose",
-            "type": "uint256",
-            "internalType": "uint256"
+            "type": "uint256"
           },
           {
+            "internalType": "enum ExamplePredictionMarket.Status",
             "name": "status",
-            "type": "uint8",
-            "internalType": "enum ExamplePredictionMarket.Status"
+            "type": "uint8"
           },
           {
+            "internalType": "enum ExamplePredictionMarket.Outcome",
             "name": "outcome",
-            "type": "uint8",
-            "internalType": "enum ExamplePredictionMarket.Outcome"
+            "type": "uint8"
           },
           {
+            "internalType": "uint256",
             "name": "settledAt",
-            "type": "uint256",
-            "internalType": "uint256"
+            "type": "uint256"
           },
           {
+            "internalType": "string",
             "name": "evidenceURI",
-            "type": "string",
-            "internalType": "string"
+            "type": "string"
           },
           {
+            "internalType": "uint16",
             "name": "confidenceBps",
-            "type": "uint16",
-            "internalType": "uint16"
+            "type": "uint16"
           },
           {
+            "internalType": "contract ExamplePredictionMarketShareToken",
             "name": "yesToken",
-            "type": "address",
-            "internalType": "contract ExamplePredictionMarketShareToken"
+            "type": "address"
           },
           {
+            "internalType": "contract ExamplePredictionMarketShareToken",
             "name": "noToken",
-            "type": "address",
-            "internalType": "contract ExamplePredictionMarketShareToken"
+            "type": "address"
           },
           {
+            "internalType": "uint256",
             "name": "yesReserve",
-            "type": "uint256",
-            "internalType": "uint256"
+            "type": "uint256"
           },
           {
+            "internalType": "uint256",
             "name": "noReserve",
-            "type": "uint256",
-            "internalType": "uint256"
+            "type": "uint256"
           },
           {
+            "internalType": "bool",
             "name": "liquidityWithdrawn",
-            "type": "bool",
-            "internalType": "bool"
+            "type": "bool"
           }
-        ]
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getExpectedAuthor",
-    "inputs": [],
-    "outputs": [
-      {
+        ],
+        "internalType": "struct ExamplePredictionMarket.Event",
         "name": "",
-        "type": "address",
-        "internalType": "address"
+        "type": "tuple"
       }
     ],
-    "stateMutability": "view"
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    "type": "function",
-    "name": "getExpectedWorkflowId",
-    "inputs": [],
-    "outputs": [
+    "inputs": [
       {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
+        "internalType": "uint256",
+        "name": "eventId",
+        "type": "uint256"
       }
     ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getExpectedWorkflowName",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bytes10",
-        "internalType": "bytes10"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getForwarderAddress",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "getNoPrice",
-    "inputs": [
-      {
-        "name": "eventId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
     "outputs": [
       {
+        "internalType": "uint256",
         "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "uint256"
       }
     ],
-    "stateMutability": "view"
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    "type": "function",
-    "name": "getUri",
     "inputs": [
       {
+        "internalType": "uint256",
         "name": "eventId",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "uint256"
       }
     ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "string",
-        "internalType": "string"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "getYesPrice",
-    "inputs": [
-      {
-        "name": "eventId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
     "outputs": [
       {
+        "internalType": "uint256",
         "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "uint256"
       }
     ],
-    "stateMutability": "view"
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    "type": "function",
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "question",
+        "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "duration",
+        "type": "uint256"
+      }
+    ],
     "name": "newEvent",
-    "inputs": [
-      {
-        "name": "question",
-        "type": "string",
-        "internalType": "string"
-      },
-      {
-        "name": "duration",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
     "outputs": [
       {
+        "internalType": "uint256",
         "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "uint256"
       }
     ],
-    "stateMutability": "nonpayable"
+    "stateMutability": "nonpayable",
+    "type": "function"
   },
   {
-    "type": "function",
+    "inputs": [],
     "name": "nextEventId",
-    "inputs": [],
     "outputs": [
       {
+        "internalType": "uint256",
         "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "uint256"
       }
     ],
-    "stateMutability": "view"
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    "type": "function",
-    "name": "onReport",
-    "inputs": [
-      {
-        "name": "metadata",
-        "type": "bytes",
-        "internalType": "bytes"
-      },
-      {
-        "name": "report",
-        "type": "bytes",
-        "internalType": "bytes"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
+    "inputs": [],
     "name": "owner",
-    "inputs": [],
     "outputs": [
       {
+        "internalType": "address",
         "name": "",
-        "type": "address",
-        "internalType": "address"
+        "type": "address"
       }
     ],
-    "stateMutability": "view"
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    "type": "function",
+    "inputs": [],
     "name": "paymentToken",
-    "inputs": [],
     "outputs": [
       {
+        "internalType": "contract IERC20",
         "name": "",
-        "type": "address",
-        "internalType": "contract IERC20"
+        "type": "address"
       }
     ],
-    "stateMutability": "view"
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    "type": "function",
-    "name": "redeemShares",
     "inputs": [
       {
+        "internalType": "uint256",
         "name": "eventId",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "uint256"
       },
       {
+        "internalType": "uint256",
         "name": "amount",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "uint256"
       }
     ],
+    "name": "redeemShares",
     "outputs": [],
-    "stateMutability": "nonpayable"
+    "stateMutability": "nonpayable",
+    "type": "function"
   },
   {
-    "type": "function",
-    "name": "renounceOwnership",
     "inputs": [],
+    "name": "renounceOwnership",
     "outputs": [],
-    "stateMutability": "nonpayable"
+    "stateMutability": "nonpayable",
+    "type": "function"
   },
   {
-    "type": "function",
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "eventId",
+        "type": "uint256"
+      }
+    ],
     "name": "requestSettlement",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
     "inputs": [
       {
+        "internalType": "address",
+        "name": "newSettler",
+        "type": "address"
+      }
+    ],
+    "name": "setSettler",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
         "name": "eventId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setExpectedAuthor",
-    "inputs": [
-      {
-        "name": "_author",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setExpectedWorkflowId",
-    "inputs": [
-      {
-        "name": "_id",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setExpectedWorkflowName",
-    "inputs": [
-      {
-        "name": "_name",
-        "type": "string",
-        "internalType": "string"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setForwarderAddress",
-    "inputs": [
-      {
-        "name": "_forwarder",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "settleEventManually",
-    "inputs": [
-      {
-        "name": "eventId",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "uint256"
       },
       {
+        "internalType": "enum ExamplePredictionMarket.Outcome",
         "name": "outcome",
-        "type": "uint8",
-        "internalType": "enum ExamplePredictionMarket.Outcome"
+        "type": "uint8"
+      },
+      {
+        "internalType": "uint16",
+        "name": "confidenceBps",
+        "type": "uint16"
+      },
+      {
+        "internalType": "string",
+        "name": "evidenceURI",
+        "type": "string"
       }
     ],
+    "name": "settleEvent",
     "outputs": [],
-    "stateMutability": "nonpayable"
+    "stateMutability": "nonpayable",
+    "type": "function"
   },
   {
-    "type": "function",
-    "name": "supportsInterface",
     "inputs": [
       {
-        "name": "interfaceId",
-        "type": "bytes4",
-        "internalType": "bytes4"
+        "internalType": "uint256",
+        "name": "eventId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "enum ExamplePredictionMarket.Outcome",
+        "name": "outcome",
+        "type": "uint8"
       }
     ],
+    "name": "settleEventManually",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "settler",
     "outputs": [
       {
+        "internalType": "address",
         "name": "",
-        "type": "bool",
-        "internalType": "bool"
+        "type": "address"
       }
     ],
-    "stateMutability": "pure"
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    "type": "function",
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "newOwner",
+        "type": "address"
+      }
+    ],
     "name": "transferOwnership",
-    "inputs": [
-      {
-        "name": "newOwner",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
     "outputs": [],
-    "stateMutability": "nonpayable"
+    "stateMutability": "nonpayable",
+    "type": "function"
   },
   {
-    "type": "function",
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "eventId",
+        "type": "uint256"
+      }
+    ],
     "name": "withdrawLiquidity",
-    "inputs": [
-      {
-        "name": "eventId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
     "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "event",
-    "name": "EventAdminClosed",
-    "inputs": [
-      {
-        "name": "eventId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "EventCreated",
-    "inputs": [
-      {
-        "name": "eventId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "creator",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "question",
-        "type": "string",
-        "indexed": false,
-        "internalType": "string"
-      },
-      {
-        "name": "eventOpen",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "eventClose",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "duration",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "yesToken",
-        "type": "address",
-        "indexed": false,
-        "internalType": "address"
-      },
-      {
-        "name": "noToken",
-        "type": "address",
-        "indexed": false,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "ExpectedAuthorUpdated",
-    "inputs": [
-      {
-        "name": "previousAuthor",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "newAuthor",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "ExpectedWorkflowIdUpdated",
-    "inputs": [
-      {
-        "name": "previousId",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "newId",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "ExpectedWorkflowNameUpdated",
-    "inputs": [
-      {
-        "name": "previousName",
-        "type": "bytes10",
-        "indexed": true,
-        "internalType": "bytes10"
-      },
-      {
-        "name": "newName",
-        "type": "bytes10",
-        "indexed": true,
-        "internalType": "bytes10"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "ForwarderAddressUpdated",
-    "inputs": [
-      {
-        "name": "previousForwarder",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "newForwarder",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "LiquidityWithdrawn",
-    "inputs": [
-      {
-        "name": "eventId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "creator",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "usdcOut",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "OwnershipTransferred",
-    "inputs": [
-      {
-        "name": "previousOwner",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "newOwner",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "SecurityWarning",
-    "inputs": [
-      {
-        "name": "message",
-        "type": "string",
-        "indexed": false,
-        "internalType": "string"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "SettlementRequested",
-    "inputs": [
-      {
-        "name": "eventId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "question",
-        "type": "string",
-        "indexed": false,
-        "internalType": "string"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "SettlementResponse",
-    "inputs": [
-      {
-        "name": "eventId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "status",
-        "type": "uint8",
-        "indexed": true,
-        "internalType": "enum ExamplePredictionMarket.Status"
-      },
-      {
-        "name": "outcome",
-        "type": "uint8",
-        "indexed": true,
-        "internalType": "enum ExamplePredictionMarket.Outcome"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "SharesPurchased",
-    "inputs": [
-      {
-        "name": "eventId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "buyer",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "outcome",
-        "type": "uint8",
-        "indexed": true,
-        "internalType": "enum ExamplePredictionMarket.Outcome"
-      },
-      {
-        "name": "usdcIn",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "sharesOut",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "SharesRedeemed",
-    "inputs": [
-      {
-        "name": "eventId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "redeemer",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "sharesIn",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "usdcOut",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "error",
-    "name": "AlreadySettled",
-    "inputs": [
-      {
-        "name": "current",
-        "type": "uint8",
-        "internalType": "enum ExamplePredictionMarket.Status"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "AmountZero",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "DurationZero",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "EventNotClosed",
-    "inputs": [
-      {
-        "name": "nowTs",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "closeTs",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "EventNotOpen",
-    "inputs": [
-      {
-        "name": "nowTs",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "closeTs",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "InvalidAuthor",
-    "inputs": [
-      {
-        "name": "received",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "expected",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "InvalidForwarderAddress",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "InvalidOutcome",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "InvalidSender",
-    "inputs": [
-      {
-        "name": "sender",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "expected",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "InvalidWorkflowId",
-    "inputs": [
-      {
-        "name": "received",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "expected",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "InvalidWorkflowName",
-    "inputs": [
-      {
-        "name": "received",
-        "type": "bytes10",
-        "internalType": "bytes10"
-      },
-      {
-        "name": "expected",
-        "type": "bytes10",
-        "internalType": "bytes10"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "LiquidityAlreadyWithdrawn",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "ManualSettlementNotAllowed",
-    "inputs": [
-      {
-        "name": "current",
-        "type": "uint8",
-        "internalType": "enum ExamplePredictionMarket.Status"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "NotCreator",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "NotSettledYet",
-    "inputs": [
-      {
-        "name": "current",
-        "type": "uint8",
-        "internalType": "enum ExamplePredictionMarket.Status"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "OwnableInvalidOwner",
-    "inputs": [
-      {
-        "name": "owner",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "OwnableUnauthorizedAccount",
-    "inputs": [
-      {
-        "name": "account",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "SafeERC20FailedOperation",
-    "inputs": [
-      {
-        "name": "token",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "SettlementNotRequested",
-    "inputs": [
-      {
-        "name": "current",
-        "type": "uint8",
-        "internalType": "enum ExamplePredictionMarket.Status"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "StatusNotOpen",
-    "inputs": [
-      {
-        "name": "current",
-        "type": "uint8",
-        "internalType": "enum ExamplePredictionMarket.Status"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "WorkflowNameRequiresAuthorValidation",
-    "inputs": []
+    "stateMutability": "nonpayable",
+    "type": "function"
   }
 ]

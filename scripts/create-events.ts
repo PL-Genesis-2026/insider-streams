@@ -14,10 +14,10 @@
  *   VENICE_API_KEY            — Venice AI API key
  *
  * Optional:
- *   ENABLE_NTFY=true          — send notifications via ntfy
- *   NTFY_HOST                 — ntfy server URL (default: http://localhost:8090)
- *   NTFY_TOPIC                — ntfy topic (default: event-creator)
- *   NTFY_USER                 — user tag in notifications (default: unknown)
+ *   ENABLE_NTFY=true              — send notifications via ntfy
+ *   NTFY_HOST                     — ntfy server URL (default: http://localhost:8090)
+ *   NTFY_TOPIC_CREATE_EVENTS      — ntfy topic (default: zama-script-create-events)
+ *   NTFY_USER                     — user tag in notifications (default: unknown)
  *
  * Usage: pnpm create-events
  */
@@ -26,7 +26,7 @@ import "dotenv/config";
 
 import {
   EXAMPLE_PREDICTION_MARKET_ADDRESS,
-  confidentialUsdcAbi,
+  mockUsdcAbi,
   examplePredictionMarketAbi,
 } from "@private-streams/common";
 import { GraphQLClient } from "graphql-request";
@@ -49,7 +49,8 @@ import { getSdk } from "./__generated__/graphql";
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const SUBGRAPH_URL = process.env.SUBGRAPH_URL ??
-  "https://api.studio.thegraph.com/query/1743303/insider-streams-2/version/latest";
+  "https://gateway.thegraph.com/api/subgraphs/id/BttcQ7pVTEz7L94PgnhkFJCY33K5Vwk1vhffckmjgf5f";
+const SUBGRAPH_API_KEY = process.env.SUBGRAPH_API_KEY ?? "";
 
 const USDC_DECIMALS = 6;
 // Balance threshold: if below 1,000 CUSDC, mint more (reads first — writes are expensive)
@@ -61,7 +62,7 @@ const APPROVAL_AMOUNT =
 // Re-approve when allowance drops below 1,000 CUSDC
 const MIN_ALLOWANCE = 1_000_000_000n;
 
-const DURATIONS = [1800n, 3600n]; // 30 min or 1 hour
+const DURATIONS = [1800n, 3600n, 10800n]; // 30 min, 1 hour, or 3 hours
 const MIN_BET_USDC = 10; // $10
 const MAX_BET_USDC = 500; // $500
 const MIN_BETS_PER_EVENT = 3;
@@ -92,7 +93,7 @@ const VENICE_API_KEY = envRequired("VENICE_API_KEY");
 
 const ENABLE_NTFY = process.env.ENABLE_NTFY === "true";
 const NTFY_HOST = process.env.NTFY_HOST ?? "http://localhost:8090";
-const NTFY_TOPIC = process.env.NTFY_TOPIC ?? "event-creator-script";
+const NTFY_TOPIC = process.env.NTFY_TOPIC_CREATE_EVENTS ?? "zama-script-create-events";
 const NTFY_USER = process.env.NTFY_USER ?? "UNKNOWN";
 
 async function ntfy(
@@ -149,7 +150,9 @@ const venice = new OpenAI({
   baseURL: "https://api.venice.ai/api/v1",
 });
 
-const subgraphSdk = getSdk(new GraphQLClient(SUBGRAPH_URL));
+const subgraphSdk = getSdk(new GraphQLClient(SUBGRAPH_URL, {
+  headers: { Authorization: `Bearer ${SUBGRAPH_API_KEY}` },
+}));
 
 // Read the actual payment token from the deployed contract so we always
 // mint/approve the right token regardless of what's in common's consts.
@@ -175,7 +178,7 @@ async function waitForTx(hash: Hex, label: string) {
 async function ensureBalance(target: Address) {
   const balance = (await publicClient.readContract({
     address: paymentTokenAddress,
-    abi: confidentialUsdcAbi,
+    abi: mockUsdcAbi,
     functionName: "balanceOf",
     args: [target],
   })) as bigint;
@@ -183,7 +186,7 @@ async function ensureBalance(target: Address) {
   if (balance < MIN_BALANCE) {
     const h = await ownerClient.writeContract({
       address: paymentTokenAddress,
-      abi: confidentialUsdcAbi,
+      abi: mockUsdcAbi,
       functionName: "mint",
       args: [target, MINT_AMOUNT],
     });
@@ -202,7 +205,7 @@ async function ensureApproval(
 ) {
   const allowance = (await publicClient.readContract({
     address: paymentTokenAddress,
-    abi: confidentialUsdcAbi,
+    abi: mockUsdcAbi,
     functionName: "allowance",
     args: [owner, EXAMPLE_PREDICTION_MARKET_ADDRESS],
   })) as bigint;
@@ -210,7 +213,7 @@ async function ensureApproval(
   if (allowance < MIN_ALLOWANCE) {
     const h = await walletClient.writeContract({
       address: paymentTokenAddress,
-      abi: confidentialUsdcAbi,
+      abi: mockUsdcAbi,
       functionName: "approve",
       args: [EXAMPLE_PREDICTION_MARKET_ADDRESS, APPROVAL_AMOUNT],
     });

@@ -25,6 +25,7 @@ import {
 import { formatUnits } from "viem";
 import { PredictionMarketLink } from "@/components/prediction-market-link";
 import { cn } from "@/lib/utils";
+import { getEffectiveStatus } from "@/lib/auction-status";
 import type { PrivateBidRecord } from "@/lib/private-data/types";
 
 export type AuctionCardData = {
@@ -104,12 +105,13 @@ function MetaRail({
   privateBid?: PrivateBidRecord;
   isOwnAuction?: boolean;
 }) {
+  const effectiveStatus = getEffectiveStatus(auction.status, auction.endTime);
   const statusVariant =
-    auction.status === "Settled" || auction.status === "Closed"
+    effectiveStatus === "Settled" || effectiveStatus === "Closed" || effectiveStatus === "Ended"
       ? "secondary"
       : "accent";
 
-  const timeLabel = closesInLabel(auction.endTime, auction.status);
+  const timeLabel = closesInLabel(auction.endTime, effectiveStatus);
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -117,7 +119,7 @@ function MetaRail({
         <span>{EXAMPLE_PREDICTION_MARKET_NAME}</span>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <Badge variant={statusVariant}>{auction.status}</Badge>
+        <Badge variant={statusVariant}>{effectiveStatus}</Badge>
         {isOwnAuction && <Badge variant="outline">Your auction</Badge>}
         {privateBid && <BidStatusBadge bid={privateBid} />}
         {timeLabel && (

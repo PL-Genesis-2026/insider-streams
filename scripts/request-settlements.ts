@@ -30,7 +30,7 @@ import {
 
 const RPC_URL =
   process.env.RPC_URL ??
-  "https://eth-sepolia.g.alchemy.com/v2/59LCREaM5uGpTVXZgR8A7z6IiULWjwG6";
+  "https://ethereum-sepolia-rpc.publicnode.com";
 
 const OWNER_PK = process.env.OWNER_PK;
 if (!OWNER_PK) {
@@ -40,7 +40,8 @@ if (!OWNER_PK) {
 
 const SUBGRAPH_URL =
   process.env.SUBGRAPH_URL ??
-  "https://gateway.thegraph.com/api/a075bc6e2e48577d2588bb458b939bdc/subgraphs/id/2vVUkMCH5m48s8Qj1ChgR2z3c98vAX3raBoJoYZ9RrBW";
+  "https://gateway.thegraph.com/api/subgraphs/id/BttcQ7pVTEz7L94PgnhkFJCY33K5Vwk1vhffckmjgf5f";
+const SUBGRAPH_API_KEY = process.env.SUBGRAPH_API_KEY ?? "";
 
 // ---------------------------------------------------------------------------
 // ntfy (optional)
@@ -48,7 +49,7 @@ const SUBGRAPH_URL =
 
 const ENABLE_NTFY = process.env.ENABLE_NTFY === "true";
 const NTFY_HOST = process.env.NTFY_HOST ?? "http://localhost:8090";
-const NTFY_TOPIC = process.env.NTFY_TOPIC ?? "settlement-requester-script";
+const NTFY_TOPIC = process.env.NTFY_TOPIC_SETTLEMENTS ?? "zama-script-settlements";
 const NTFY_USER = process.env.NTFY_USER ?? "UNKNOWN";
 
 async function ntfy(title: string, message: string, tags?: string[]) {
@@ -87,12 +88,16 @@ const CLOSED_UNSETTLED_QUERY = gql`
     settlementRequesteds(first: 1000) {
       eventId
     }
+    settlementResponses(first: 1000) {
+      eventId
+    }
   }
 `;
 
 type ClosedUnsettledResponse = {
   eventCreateds: { eventId: string; question: string; eventClose: string }[];
   settlementRequesteds: { eventId: string }[];
+  settlementResponses: { eventId: string }[];
 };
 
 async function fetchClosedUnsettledEvents(
@@ -107,8 +112,13 @@ async function fetchClosedUnsettledEvents(
   const requestedIds = new Set(
     data.settlementRequesteds.map((r) => r.eventId),
   );
+  const settledIds = new Set(
+    data.settlementResponses.map((r) => r.eventId),
+  );
 
-  return data.eventCreateds.filter((e) => !requestedIds.has(e.eventId));
+  return data.eventCreateds.filter(
+    (e) => !requestedIds.has(e.eventId) && !settledIds.has(e.eventId),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -121,7 +131,9 @@ async function main() {
   console.log(`[request-settlements] subgraph: ${SUBGRAPH_URL}`);
   console.log(`[request-settlements] RPC: ${RPC_URL}`);
 
-  const gqlClient = new GraphQLClient(SUBGRAPH_URL);
+  const gqlClient = new GraphQLClient(SUBGRAPH_URL, {
+    headers: { Authorization: `Bearer ${SUBGRAPH_API_KEY}` },
+  });
 
   // 1. Query subgraph for closed-but-unsettled events
   let toSettle: { eventId: string; question: string }[];
@@ -180,22 +192,38 @@ async function main() {
       succeeded.push(event.eventId);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(
-        `[request-settlements] event ${event.eventId}: FAILED — ${msg}`,
-      );
-      failed.push({ eventId: event.eventId, error: msg });
+      if (msg.includes("StatusNotOpen")) {
+        console.log(
+          `[request-settlements] event ${event.eventId}: already settled, skipping`,
+        );
+      } else {
+        console.error(
+          `[request-settlements] event ${event.eventId}: FAILED — ${msg}`,
+        );
+        failed.push({ eventId: event.eventId, error: msg });
+      }
     }
   }
 
   // 4. Summary + ntfy
+  const eventMap = new Map(toSettle.map((e) => [e.eventId, e.question]));
+
   const lines: string[] = [];
   if (succeeded.length > 0) {
-    lines.push(`Settled: [${succeeded.join(", ")}] (${succeeded.length})`);
+    lines.push(`Settled ${succeeded.length} event(s):`);
+    for (const id of succeeded) {
+      const q = eventMap.get(id) ?? "Unknown";
+      lines.push(`  #${id}: ${q}`);
+    }
   }
   if (failed.length > 0) {
     lines.push(
       `Failed: [${failed.map((f) => f.eventId).join(", ")}] (${failed.length})`,
     );
+    for (const f of failed) {
+      const shortErr = f.error.length > 120 ? f.error.slice(0, 120) + "..." : f.error;
+      lines.push(`  event ${f.eventId}: ${shortErr}`);
+    }
   }
   const summary = lines.join("\n");
   console.log(`[request-settlements] ${summary}`);

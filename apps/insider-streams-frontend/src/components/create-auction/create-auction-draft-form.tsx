@@ -7,6 +7,7 @@ import {
   AlertCircle,
   Calendar,
   Check,
+  FileUp,
   Hash,
   Loader2,
   Store,
@@ -23,6 +24,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -100,6 +102,9 @@ const CLOSE_DATE_FORMAT: Intl.DateTimeFormatOptions = {
   timeZoneName: "short",
 };
 
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+const ALLOWED_FILE_EXTENSIONS = [".txt", ".md", ".json", ".png", ".jpg", ".jpeg", ".pdf"];
+
 function isPredictionMarketEventsResponse(
   value: PredictionMarketEventsResponse | PredictionMarketEventError,
 ): value is PredictionMarketEventsResponse {
@@ -134,6 +139,16 @@ function getErrorDetails(result: CreateAuctionResponse) {
   };
 }
 
+function validateFile(file: File): string | null {
+  if (file.size === 0) return "File is empty";
+  if (file.size > MAX_FILE_SIZE_BYTES) return `File too large (max ${MAX_FILE_SIZE_BYTES / 1024 / 1024} MB)`;
+  const ext = file.name.includes(".") ? `.${file.name.split(".").pop()?.toLowerCase()}` : "";
+  if (!ALLOWED_FILE_EXTENSIONS.includes(ext)) {
+    return `Unsupported file type. Allowed: ${ALLOWED_FILE_EXTENSIONS.join(", ")}`;
+  }
+  return null;
+}
+
 export function CreateAuctionDraftForm({
   initialEventId,
   initialPrivateLeg,
@@ -149,6 +164,8 @@ export function CreateAuctionDraftForm({
   const [eventCatalog, setEventCatalog] = useState<EventCatalogState>({
     status: "idle",
   });
+  const [attachment, setAttachment] = useState<File | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
   const [submitState, setSubmitState] = useState<SubmitState>({
     status: "idle",
   });
@@ -246,7 +263,8 @@ export function CreateAuctionDraftForm({
     walletSession.isSupportedChain &&
     selectedEvent !== null &&
     draft.privateLeg !== "" &&
-    draft.secretPayload.trim().length > 0 &&
+    (draft.secretPayload.trim().length > 0 || attachment !== null) &&
+    !fileError &&
     !isSubmitting;
 
   async function handleSubmit() {
@@ -283,17 +301,21 @@ export function CreateAuctionDraftForm({
     setSubmitState({ status: "submitting" });
 
     try {
+      const formData = new FormData();
+      formData.set("eventId", draft.eventId);
+      formData.set("eventTitle", selectedEvent.title);
+      formData.set("privateLeg", draft.privateLeg);
+      formData.set("secretPayload", draft.secretPayload);
+      formData.set("duration", draft.duration);
+      formData.set("timestamp", String(timestamp));
+      formData.set("signature", signature);
+      if (attachment) {
+        formData.set("file", attachment);
+      }
+
       const response = await fetch("/api/create-auction", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          eventId: draft.eventId,
-          privateLeg: draft.privateLeg,
-          secretPayload: draft.secretPayload,
-          duration: draft.duration,
-          timestamp,
-          signature,
-        }),
+        body: formData,
       });
 
       const result = (await response.json()) as CreateAuctionResponse;
@@ -486,6 +508,9 @@ export function CreateAuctionDraftForm({
                   setDraftField("eventId", eventId);
                   setDraftField("privateLeg", "");
                 }}
+                onOpenChange={(open) => {
+                  if (open) (document.activeElement as HTMLElement)?.blur();
+                }}
                 disabled={eventCatalog.status === "loading" || isSubmitting}
               >
                 <SelectTrigger className="h-11 w-full rounded-[calc(var(--radius)-4px)] border-input bg-background/80 px-4 text-sm">
@@ -597,12 +622,56 @@ export function CreateAuctionDraftForm({
                 id="secret-payload"
                 rows={6}
                 disabled={isSubmitting}
-                placeholder="Your thesis, reasoning, and what makes this trade actionable..."
+                placeholder="Optional if you attach a file. Use this for the thesis, context, or instructions..."
                 value={draft.secretPayload}
                 onChange={(event) =>
                   setDraftField("secretPayload", event.target.value)
                 }
               />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="secret-file">Attachment</Label>
+              <Input
+                id="secret-file"
+                type="file"
+                accept={ALLOWED_FILE_EXTENSIONS.join(",")}
+                disabled={isSubmitting}
+                onChange={(event) => {
+                  const nextFile = event.target.files?.[0] ?? null;
+                  if (nextFile) {
+                    const error = validateFile(nextFile);
+                    setFileError(error);
+                    setAttachment(error ? null : nextFile);
+                  } else {
+                    setFileError(null);
+                    setAttachment(null);
+                  }
+                  setSubmitState((current) =>
+                    current.status === "error" ? { status: "idle" } : current,
+                  );
+                }}
+              />
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                Files are encrypted server-side before upload to Filecoin.
+                Buyers and sellers will see the download link and
+                the decryption key after reveal.
+              </p>
+              {fileError ? (
+                <Alert variant="destructive" className="py-2">
+                  <AlertCircle className="size-3.5" />
+                  <AlertDescription className="text-xs">{fileError}</AlertDescription>
+                </Alert>
+              ) : null}
+              {attachment ? (
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <Badge variant="outline" className="gap-1.5">
+                    <FileUp className="size-3" />
+                    {attachment.name}
+                  </Badge>
+                  <span>{(attachment.size / 1024).toFixed(1)} KB</span>
+                </div>
+              ) : null}
             </div>
 
             <div className="grid gap-2 md:max-w-xs">
@@ -612,23 +681,33 @@ export function CreateAuctionDraftForm({
                 onValueChange={(value) =>
                   setDraftField("duration", value as CreateAuctionDuration)
                 }
+                onOpenChange={(open) => {
+                  if (open) (document.activeElement as HTMLElement)?.blur();
+                }}
                 disabled={isSubmitting}
               >
                 <SelectTrigger className="h-11 w-full rounded-[calc(var(--radius)-4px)] border-input bg-background/80 px-4 text-sm">
                   <SelectValue placeholder="Select duration" />
                 </SelectTrigger>
                 <SelectContent>
-                  {CREATE_AUCTION_DURATIONS.map((duration) => (
-                    <SelectItem key={duration} value={duration}>
-                      {duration === "6h"
-                        ? "6 hours"
-                        : duration === "12h"
-                          ? "12 hours"
-                          : duration === "24h"
-                            ? "24 hours"
-                            : "48 hours"}
-                    </SelectItem>
-                  ))}
+                  {CREATE_AUCTION_DURATIONS.map((duration) => {
+                    const labels: Record<string, string> = {
+                      "5m": "5 minutes",
+                      "15m": "15 minutes",
+                      "30m": "30 minutes",
+                      "1h": "1 hour",
+                      "3h": "3 hours",
+                      "6h": "6 hours",
+                      "12h": "12 hours",
+                      "24h": "24 hours",
+                      "48h": "48 hours",
+                    };
+                    return (
+                      <SelectItem key={duration} value={duration}>
+                        {labels[duration] ?? duration}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>

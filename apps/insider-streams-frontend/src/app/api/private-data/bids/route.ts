@@ -1,15 +1,14 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
-import { verifyPrivateDataRequest } from "@/lib/signed-request";
-import { getSupabaseServiceClient } from "@/lib/supabase/server";
-import type {
-  PrivateBidRecord,
-  PrivateBidStatus,
-} from "@/lib/private-data/types";
+import { proxyToDaemon } from "@/lib/daemon-client";
+import type { PrivateBidRecord } from "@/lib/private-data/types";
 
-const MAX_AUCTION_IDS = 100;
-const auctionIdsSchema = z.array(z.string().min(1)).min(1).max(MAX_AUCTION_IDS);
-const privateBidStatusSchema = z.enum(["active", "outbid", "won", "refunded"]);
+type DaemonBid = {
+  id: number;
+  auction_id: number;
+  amount: string;
+  status: string;
+  created_at: string;
+};
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -19,66 +18,38 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const verified = await verifyPrivateDataRequest<{
-    auctionIds: string[];
-  }>(body, ["auctionIds"]);
-  if (!verified.ok) return verified.response;
+  // Proxy only { signature, timestamp } to the daemon.
+  // The client signs only { timestamp }, so extra fields (like auctionIds)
+  // would cause verifySignedRequest to recover the wrong address.
+  const { signature, timestamp } = body as {
+    signature?: string;
+    timestamp?: number;
+  };
+  const res = await proxyToDaemon("/bids", { signature, timestamp });
+  const json = await res.json();
 
-  const { userAddress } = verified.payload;
-
-  // Validate auctionIds
-  const parsed = auctionIdsSchema.safeParse(verified.payload.auctionIds);
-  if (!parsed.success) {
-    return NextResponse.json(
-      {
-        error: parsed.error.issues
-          .map((e: { message: string }) => e.message)
-          .join("; "),
-        code: "VALIDATION_ERROR",
-      },
-      { status: 400 },
-    );
-  }
-  const auctionIds = parsed.data;
-
-  const supabase = getSupabaseServiceClient();
-  const { data, error } = await supabase
-    .from("private_bids")
-    .select("id, auction_id, amount, status, created_at")
-    .eq("bidder_address", userAddress)
-    .in("auction_id", auctionIds)
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    console.error("[private-data/bids] Supabase error:", error);
-    return NextResponse.json(
-      { error: "Internal server error", code: "DB_ERROR" },
-      { status: 500 },
-    );
+  if (!res.ok) {
+    return NextResponse.json(json, { status: res.status });
   }
 
-  // Results are sorted by created_at DESC, so the first bid per auction is the
-  // latest. The private-data contract intentionally returns latest bid by
-  // auction, not a full bid history.
-  const latestBids: Record<string, PrivateBidRecord> = {};
-  for (const bid of data) {
-    if (!latestBids[bid.auction_id]) {
-      const parsedStatus = privateBidStatusSchema.safeParse(bid.status);
+  // Transform daemon's flat array into Record<auctionId, PrivateBidRecord>
+  // (keyed by auction_id, latest bid per auction) matching the original format.
+  const bids: DaemonBid[] = json.bids ?? [];
+  const data: Record<string, PrivateBidRecord> = {};
 
-      if (!parsedStatus.success) {
-        console.error("[private-data/bids] Unexpected bid status:", bid.status);
-        return NextResponse.json(
-          { error: "Internal server error", code: "INVALID_BID_STATUS" },
-          { status: 500 },
-        );
-      }
-
-      latestBids[bid.auction_id] = {
-        ...bid,
-        status: parsedStatus.data as PrivateBidStatus,
+  for (const bid of bids) {
+    const key = String(bid.auction_id);
+    // Keep latest bid per auction (daemon returns sorted by created_at desc)
+    if (!data[key]) {
+      data[key] = {
+        id: String(bid.id),
+        auction_id: key,
+        amount: bid.amount,
+        status: bid.status as PrivateBidRecord["status"],
+        created_at: bid.created_at,
       };
     }
   }
 
-  return NextResponse.json({ data: latestBids });
+  return NextResponse.json({ data }, { status: 200 });
 }

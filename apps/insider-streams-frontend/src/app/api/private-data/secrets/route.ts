@@ -1,9 +1,28 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
-import { verifyPrivateDataRequest } from "@/lib/signed-request";
-import { getSupabaseServiceClient } from "@/lib/supabase/server";
+import { proxyToDaemon } from "@/lib/daemon-client";
+import type { PrivateSecretState, PrivateFileAttachment } from "@/lib/private-data/types";
 
-const auctionIdsSchema = z.array(z.string().min(1)).min(1).max(100);
+type DaemonSecret = {
+  auctionId: number;
+  secretDataCid: string;
+  secretDataKey: string | null;
+  secretData: string | null;
+  eventData: string | null;
+  hasAccess: boolean;
+  file: {
+    encryptionKey: string | null;
+    encryptionAlgorithm: string | null;
+    fileName: string;
+    encryptedFileName: string | null;
+    contentType: string | null;
+    fileMd5: string | null;
+    fileSizeBytes: string | null;
+    encryptedFileSizeBytes: string | null;
+    pieceCid: string | null;
+    retrievalUrl: string;
+    copies: PrivateFileAttachment["copies"];
+  } | null;
+};
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -13,107 +32,70 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const verified = await verifyPrivateDataRequest<{
-    auctionIds: string[];
-  }>(body, ["auctionIds"]);
-  if (!verified.ok) return verified.response;
+  const { auctionIds: requestedIds, signature, timestamp } = body as {
+    auctionIds?: string[];
+    signature?: string;
+    timestamp?: number;
+  };
 
-  const { userAddress } = verified.payload;
+  const res = await proxyToDaemon("/secrets", { signature, timestamp, auctionIds: requestedIds });
+  const json = await res.json();
 
-  // Validate auctionIds
-  const parsed = auctionIdsSchema.safeParse(verified.payload.auctionIds);
-  if (!parsed.success) {
-    return NextResponse.json(
-      {
-        error: parsed.error.issues
-          .map((e: { message: string }) => e.message)
-          .join("; "),
-        code: "VALIDATION_ERROR",
-      },
-      { status: 400 },
-    );
-  }
-  const auctionIds = parsed.data;
-
-  const supabase = getSupabaseServiceClient();
-
-  const { data: seller, error: sellerError } = await supabase
-    .from("sellers")
-    .select("id")
-    .eq("address", userAddress)
-    .maybeSingle();
-
-  if (sellerError) {
-    console.error("[private-data/secrets] Supabase seller error:", sellerError);
-    return NextResponse.json(
-      { error: "Internal server error", code: "DB_ERROR" },
-      { status: 500 },
-    );
+  if (!res.ok) {
+    return NextResponse.json(json, { status: res.status });
   }
 
-  const { data: winningBids, error: bidsError } = await supabase
-    .from("private_bids")
-    .select("auction_id")
-    .eq("bidder_address", userAddress)
-    .eq("status", "won")
-    .in("auction_id", auctionIds);
+  const secrets: DaemonSecret[] = json.secrets ?? [];
+  const data: Record<string, PrivateSecretState> = {};
 
-  if (bidsError) {
-    console.error("[private-data/secrets] Supabase bids error:", bidsError);
-    return NextResponse.json(
-      { error: "Internal server error", code: "DB_ERROR" },
-      { status: 500 },
-    );
-  }
-
-  const { data: secrets, error: secretsError } = await supabase
-    .from("secrets")
-    .select("auction_id, seller_id, secret_data, event_data")
-    .in("auction_id", auctionIds);
-
-  if (secretsError) {
-    console.error(
-      "[private-data/secrets] Supabase secrets error:",
-      secretsError,
-    );
-    return NextResponse.json(
-      { error: "Internal server error", code: "DB_ERROR" },
-      { status: 500 },
-    );
-  }
-
-  const winningBidAuctionIds = new Set(
-    winningBids.map((bid) => bid.auction_id),
-  );
-  const secretsByAuctionId = new Map(
-    secrets.map((secret) => [secret.auction_id, secret]),
-  );
-
-  const result = Object.fromEntries(
-    auctionIds.map((auctionId) => {
-      const secret = secretsByAuctionId.get(auctionId);
-
-      if (!secret) {
-        return [auctionId, { kind: "not_found" as const }];
+  for (const s of secrets) {
+    const key = String(s.auctionId);
+    if (s.hasAccess) {
+      let eventData = null;
+      if (s.eventData) {
+        try {
+          eventData = JSON.parse(s.eventData);
+        } catch {
+          // malformed event_data — ignore
+        }
       }
 
-      const canAccessSecret =
-        secret.seller_id === seller?.id || winningBidAuctionIds.has(auctionId);
-
-      if (!canAccessSecret) {
-        return [auctionId, { kind: "forbidden" as const }];
+      let file: PrivateFileAttachment | null = null;
+      if (s.file && s.file.retrievalUrl && s.file.fileName && s.file.encryptionKey) {
+        file = {
+          encryptionKey: s.file.encryptionKey,
+          encryptionAlgorithm: s.file.encryptionAlgorithm,
+          fileName: s.file.fileName,
+          encryptedFileName: s.file.encryptedFileName,
+          contentType: s.file.contentType,
+          fileMd5: s.file.fileMd5,
+          fileSizeBytes: s.file.fileSizeBytes,
+          encryptedFileSizeBytes: s.file.encryptedFileSizeBytes,
+          pieceCid: s.file.pieceCid,
+          retrievalUrl: s.file.retrievalUrl,
+          copies: s.file.copies ?? [],
+        };
       }
 
-      return [
-        auctionId,
-        {
-          kind: "accessible" as const,
-          secret_data: secret.secret_data,
-          event_data: secret.event_data,
-        },
-      ];
-    }),
-  );
+      data[key] = {
+        kind: "accessible",
+        secret_data: s.secretData ?? s.secretDataKey ?? "",
+        event_data: eventData,
+        file,
+      };
+    } else {
+      data[key] = { kind: "forbidden" };
+    }
+  }
 
-  return NextResponse.json({ data: result });
+  // Any requested auction IDs not returned by daemon → not_found
+  if (Array.isArray(requestedIds)) {
+    for (const id of requestedIds) {
+      if (!(String(id) in data)) {
+        data[String(id)] = { kind: "not_found" };
+      }
+    }
+  }
+
+  return NextResponse.json({ data }, { status: 200 });
 }

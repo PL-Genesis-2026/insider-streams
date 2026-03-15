@@ -2,10 +2,7 @@
 
 import { useCallback, useMemo } from "react";
 import { getFundingSnapshot } from "./get-funding-snapshot";
-import {
-  useFundingSnapshotQuery,
-  useReconcileFundingMutation,
-} from "./queries";
+import { useFundingSnapshotQuery } from "./queries";
 import { useWalletSession } from "@/lib/wallet/use-wallet-session";
 import { useSignedWalletSession } from "@/lib/wallet/use-signed-wallet-session";
 
@@ -27,10 +24,6 @@ export function useFundingSnapshot(options?: UseFundingSnapshotOptions) {
     getSignedSession,
     canQueryFunding,
   );
-  const reconcileFundingMutation = useReconcileFundingMutation(
-    walletSession.address,
-    getSignedSession,
-  );
   const errorMessage =
     fundingSnapshotQuery.error instanceof Error
       ? fundingSnapshotQuery.error.message
@@ -42,7 +35,6 @@ export function useFundingSnapshot(options?: UseFundingSnapshotOptions) {
   const fundingSnapshot = useMemo(
     () =>
       getFundingSnapshot(walletSession, fundingSnapshotQuery.data, {
-        isReconcilePending: reconcileFundingMutation.isPending,
         errorMessage,
         fundingNotYetChecked,
       }),
@@ -50,7 +42,6 @@ export function useFundingSnapshot(options?: UseFundingSnapshotOptions) {
       errorMessage,
       fundingNotYetChecked,
       fundingSnapshotQuery.data,
-      reconcileFundingMutation.isPending,
       walletSession,
     ],
   );
@@ -64,9 +55,9 @@ export function useFundingSnapshot(options?: UseFundingSnapshotOptions) {
     isLoading: fundingSnapshotQuery.isLoading,
     isFetching: fundingSnapshotQuery.isFetching,
     error: fundingSnapshotQuery.error,
-    reconcileError: reconcileFundingMutation.error,
+    reconcileError: null as Error | null,
     refresh,
-    reconcile: reconcileFundingMutation.mutateAsync,
-    reconcileResult: reconcileFundingMutation.data,
+    reconcile: null as unknown,
+    reconcileResult: null as unknown,
   };
 }

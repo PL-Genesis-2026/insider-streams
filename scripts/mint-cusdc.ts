@@ -9,7 +9,11 @@
 
 import "dotenv/config";
 
-import { confidentialUsdcAbi } from "@private-streams/common";
+import {
+  fheConfidentialUsdcAbi,
+  CONFIDENTIAL_USDC_ADDRESS,
+  CONFIDENTIAL_USDC_DECIMALS,
+} from "@private-streams/common";
 import {
   createPublicClient,
   createWalletClient,
@@ -20,9 +24,6 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
-
-const TOKEN = "0xee3A0Cccb31fF816615C18E1d1DB480df8a0f9F1" as Address;
-const DECIMALS = 6;
 
 function envRequired(name: string): string {
   const val = process.env[name];
@@ -36,7 +37,7 @@ function envRequired(name: string): string {
 async function main() {
   const amountDisplay = process.argv[2] ?? "100000";
   const recipient = (process.argv[3] ?? "0x3aeE8108d04090f68d16d1Ac9Bd8e4459D39003e") as Address;
-  const amount = BigInt(amountDisplay) * 10n ** BigInt(DECIMALS);
+  const amount = BigInt(amountDisplay) * 10n ** BigInt(CONFIDENTIAL_USDC_DECIMALS);
 
   const raw = envRequired("OWNER_PK").trim().replace(/^["']|["']$/g, "");
   const ownerPk = (raw.startsWith("0x") ? raw : `0x${raw}`) as Hex;
@@ -53,12 +54,12 @@ async function main() {
     transport: http(rpcUrl),
   });
 
-  console.log(`Minting ${formatUnits(amount, DECIMALS)} CUSDC to ${recipient}...`);
+  console.log(`Minting ${formatUnits(amount, CONFIDENTIAL_USDC_DECIMALS)} CUSDC to ${recipient}...`);
 
   const hash = await walletClient!.writeContract({
-    address: TOKEN,
-    abi: confidentialUsdcAbi,
-    functionName: "mint",
+    address: CONFIDENTIAL_USDC_ADDRESS,
+    abi: fheConfidentialUsdcAbi,
+    functionName: "mintPlaintext",
     args: [recipient, amount],
   });
 

@@ -1,41 +1,28 @@
 # Private Streams
 
-AI-powered prediction market built on Chainlink Runtime Environment (CRE) with Google Gemini AI, plus Compliant Private Token Transfers via Chainlink ACE. All deployed on Ethereum Sepolia.
+Encrypted prediction marketplace built on Zama fhEVM with FHE (Fully Homomorphic Encryption) privacy. Daemon-based automation for settlement, auction lifecycle, and reputation. Deployed on Ethereum Sepolia.
 
 ## Project Structure
 
 ```
 private-streams/
 ├── apps/
-│   ├── prediction-market-frontend/  # Next.js — settlement history UI (Firebase/Firestore)
-│   ├── insider-streams-frontend/    # Next.js — main app (scaffolded, not yet built)
-│   └── event-watcher/               # Long-running event watcher that triggers CRE workflow simulations
+│   ├── insider-streams-frontend/    # Next.js — main marketplace UI
+│   └── daemon/                      # Express daemon — settler, auction-closer, reputation-resolver, HTTP API
 ├── packages/
-│   ├── common/                          # Shared ABIs, addresses, utilities (@private-streams/common)
-│   └── chainlink-private-token-api-client/  # Typed API client for Compliant Private Token API
-├── contracts/                       # Foundry — ConfidentialUSDC + ExamplePredictionMarket + SecretMarketplace
-├── cre-workflows/                   # CRE TypeScript workflows (Bun-managed)
-│   ├── external-prediction-market-settler/      # Gemini AI settlement workflow
-│   ├── secret-marketplace-auction-closer/             # Cron-based auction closer workflow
-│   ├── external-marketplace-settlement-resolved-handler/  # Cron-based per-auction reputation resolution workflow
-│   ├── auction-cancelled-handler/ # Log-triggered bid refund on AuctionCancelled
-│   └── user-balance-recording-fallback/         # Cron-based private token deposit/withdrawal reconciler
-├── subgraphs/secrets-marketplace/   # The Graph subgraph
-├── scripts/                         # E2E test scripts and utilities
-│   ├── e2e_tests/                   # E2E test scripts
-│   │   ├── simple-market-e2e.ts         # ExamplePredictionMarket + CRE settlement E2E
-│   │   ├── secret-marketplace-auction-closer-e2e.ts        # Auction closer CRE workflow E2E
-│   │   ├── secret-marketplace-e2e.ts    # SecretMarketplace full event lifecycle E2E
-│   │   ├── external-marketplace-settlement-resolved-handler-e2e.ts  # Settlement resolved handler CRE workflow E2E
-│   │   ├── auction-cancelled-handler-e2e.ts   # Auction cancelled handler CRE workflow E2E
-│   │   └── user-balance-recording-fallback-e2e.ts    # Deposit reconciler workflow E2E
-│   ├── cre-runner.ts                # Shared runCRE helper (used by E2E tests)
-│   ├── generate-contract-types.sh   # Compile contracts + regenerate types/ABIs
-│   ├── generate-supabase-types.sh   # Regenerate Supabase TypeScript types
-│   ├── deploy-contracts.sh          # Interactive contract deploy + address replacement
-│   ├── deploy-subgraph.sh           # Build + deploy subgraph (with optional address update)
-│   ├── migrations/                  # Supabase SQL migrations
-│   └── ...
+│   └── common/                      # Shared ABIs, addresses, utilities (@private-streams/common)
+├── contracts-fhe/                   # Hardhat — FHEConfidentialUSDC, FHESecretMarketplace, ExamplePredictionMarket, MockUSDC
+├── subgraphs/secrets-marketplace/   # The Graph subgraph (insider-streams-zama)
+├── scripts/                         # Demo scripts, E2E tests, deploy helpers
+│   ├── e2e_tests/
+│   │   └── e2e-helpers.ts               # Shared E2E test utilities
+│   ├── create-events.ts             # One-shot: generate AI events + place bets
+│   ├── spawn-auctions.ts            # One-shot: create auction via daemon API
+│   ├── place-bids.ts                # One-shot: place bids on open auctions via daemon API
+│   ├── request-settlements.ts       # One-shot: request settlement for closed events
+│   ├── deploy-subgraph.sh           # Build + deploy subgraph
+│   └── codegen.ts                   # GraphQL codegen config
+├── docs/plans/                      # Implementation plans
 └── CLAUDE.md
 ```
 
@@ -43,8 +30,7 @@ private-streams/
 
 - **pnpm** workspace for `apps/*`, `packages/*`, `scripts`
 - **Turborepo** for task orchestration and caching across pnpm workspace packages
-- **Bun** for `cre-workflows/*` (CRE SDK requires Bun)
-- `cre-workflows/` and `subgraphs/` are NOT in the pnpm workspace
+- `subgraphs/` is NOT in the pnpm workspace
 
 ## Telemetry
 
@@ -56,37 +42,12 @@ private-streams/
 
 `packages/common/src/index.ts` exports:
 
-- ABI constants: `secretMarketplaceAbi`, `examplePredictionMarketAbi`, `mockUsdcAbi`
-- Address constants: `MOCK_USDC_ADDRESS`, `SIMPLE_MARKET_ADDRESS`, `SECRET_MARKETPLACE_ADDRESS`
-- Compliant Private Token addresses: `POLICY_ENGINE_ADDRESS`, `VAULT_ADDRESS`
+- ABI constants: `fheSecretMarketplaceAbi`, `fheConfidentialUsdcAbi`, `examplePredictionMarketAbi`, `mockUsdcAbi`
+- Backward-compatible aliases: `confidentialUsdcAbi`, `secretMarketplaceAbi`
+- Address constants: `CONFIDENTIAL_USDC_ADDRESS`, `MOCK_USDC_ADDRESS`, `EXAMPLE_PREDICTION_MARKET_ADDRESS`, `SECRET_MARKETPLACE_ADDRESS`, `PLATFORM_EOA_ADDRESS`
+- Utilities: `createAuction`, `faucet`, `verifySignedRequest`
 
-ABIs are generated by wagmi (`pnpm wagmi`). Addresses must be updated manually after deploying new contracts.
-
-## Compliant Private Token API Client (@private-streams/chainlink-private-token-api-client)
-
-Typed client for the Compliant Private Token REST API at `https://convergence2026-token-api.cldev.cloud`.
-
-```typescript
-import { PrivateTokenApiClient } from "@private-streams/chainlink-private-token-api-client";
-import { MOCK_USDC_ADDRESS } from "@private-streams/common";
-
-const client = new PrivateTokenApiClient(privateKey);
-
-await client.getBalances();
-await client.listTransactions({ limit: 10 });
-await client.privateTransfer({
-  recipient,
-  token: MOCK_USDC_ADDRESS,
-  amount: "1000000",
-});
-await client.withdraw({
-  token: MOCK_USDC_ADDRESS,
-  amount: "1000000",
-});
-await client.generateShieldedAddress();
-```
-
-Handles EIP-712 signing, timestamp generation, and auth internally. Imports `VAULT_ADDRESS` from `@private-streams/common` for the EIP-712 domain.
+ABIs are generated by wagmi (`pnpm wagmi`). Addresses are in `packages/common/src/consts.ts` — update manually after deploying new contracts.
 
 ## Key Commands
 
@@ -94,140 +55,100 @@ Handles EIP-712 signing, timestamp generation, and auth internally. Imports `VAU
 
 ```bash
 turbo run build                                    # build all packages (cached)
-turbo run build --filter=prediction-market-frontend # build one package
+turbo run build --filter=insider-streams-frontend   # build one package
 turbo run dev                                      # start all dev servers
 turbo run lint                                     # lint all packages
 turbo run codegen                                  # GraphQL codegen across packages
 turbo run wagmi                                    # regenerate contract ABIs/types
 ```
 
-### Contracts
+### Contracts (Hardhat + fhEVM)
 
 ```bash
-pnpm build:contracts    # forge build --via-ir --skip SetupAll DeployPolicyEngine
-pnpm test:contracts     # forge test --via-ir --skip SetupAll DeployPolicyEngine
+cd contracts-fhe
+npx hardhat compile                    # compile contracts
+npx hardhat test                       # run tests (mock FHE, local)
+npx hardhat test --network sepolia     # run smoke test (real FHE, Sepolia)
+npx hardhat deploy --network sepolia   # deploy to Sepolia
 ```
 
-### CRE Workflows
+### Daemon
+
+The daemon (`apps/daemon/`) is a unified Express server with background services:
+
+- **Settler**: watches `SettlementRequested` events, calls Gemini AI, submits settlement on-chain
+- **Auction Closer**: polls for expired auctions, closes them, marks winning bids in SQLite
+- **Reputation Resolver**: watches `SettlementResponse` events, resolves per-auction predictions
+- **Deposit Watcher**: monitors on-chain deposits to the platform
+- **HTTP API**: signature-authenticated POST endpoints for frontend interaction (`/health`, `/user`, `/balance`, `/bid`, `/create-auction`, `/withdraw`, `/deposit`, `/bids`, `/seller`, `/secrets`, `/dashboard`, `/faucet`)
 
 ```bash
-# From cre-workflows/ directory
-cre workflow simulate external-prediction-market-settler --target local-simulation
-cre workflow simulate external-prediction-market-settler --target local-simulation --broadcast
-
-# Prediction Market (non-interactive, for scripts)
-cre workflow simulate external-prediction-market-settler --target local-simulation \
-  --evm-tx-hash <TX_HASH> --evm-event-index 0 --non-interactive --trigger-index 0
-
-# Auction Closer (cron-triggered, non-interactive)
-cre workflow simulate secret-marketplace-auction-closer --target local-simulation --non-interactive --trigger-index 0
-cre workflow simulate secret-marketplace-auction-closer --target local-simulation --non-interactive --trigger-index 0 --broadcast
-
-# Settlement Resolved Handler (cron-triggered, non-interactive)
-cre workflow simulate external-marketplace-settlement-resolved-handler --target local-simulation --non-interactive --trigger-index 0
-cre workflow simulate external-marketplace-settlement-resolved-handler --target local-simulation --non-interactive --trigger-index 0 --broadcast
-
-# Auction Cancelled Handler (log-triggered, non-interactive)
-cre workflow simulate auction-cancelled-handler --target local-simulation --non-interactive --trigger-index 0 \
-  --evm-tx-hash <TX_HASH> --evm-event-index <EVENT_INDEX>
-
-# Deposit Reconciler (cron-triggered, non-interactive)
-cre workflow simulate user-balance-recording-fallback --target local-simulation --non-interactive --trigger-index 0
+cd apps/daemon
+pnpm start                # run all services
+pnpm api                  # run API only
+pnpm closer               # run auction closer only
+pnpm settler              # run settler only
+pnpm resolver             # run reputation resolver only
+pnpm test:db              # run db unit tests (11 tests)
+pnpm test:e2e             # run API E2E tests (52 tests)
+pnpm test:sepolia         # run Sepolia FHE integration tests
+pnpm build                # typecheck
 ```
 
-### Event Watcher
+### Demo Scripts
 
-Long-running background process (`apps/event-watcher/`) that monitors the chain via WebSocket and HTTP polling, then triggers CRE workflow simulations. Needed because simulated CRE workflows are one-shot — only deployed workflows on the Chainlink DON run continuously.
+Scripts for populating the marketplace with test data. Scheduled via OS cron on the VPS (deployed by `scripts/deploy.sh` Phase 6):
+
+| Script | Cron | What |
+| ------ | ---- | ---- |
+| `create-events` | `*/15 * * * *` | Generate AI events + place bets |
+| `spawn-auctions` | `*/10 * * * *` | Create auction via daemon API |
+| `place-bids` | `* * * * *` | Place bids on open auctions via daemon API |
+| `request-settlements` | `* * * * *` | Request settlement for closed events |
 
 ```bash
-pnpm watch                           # from repo root
-pnpm start                           # from apps/event-watcher/
+cd scripts
+pnpm create-events        # one-shot: generate AI events + place bets
+pnpm spawn-auctions       # one-shot: create auction via daemon API
+pnpm place-bids           # one-shot: place bids on open auctions via daemon API
+pnpm request-settlements  # one-shot: request settlement for closed events
 ```
 
-Watches for:
-- `AuctionCancelled` events → triggers `auction-cancelled-handler`
-- `SettlementRequested` events → triggers `external-prediction-market-settler`
-- `SettlementResponse` events → triggers `external-marketplace-settlement-resolved-handler`
-- Expired auctions (via `getOpenAuctions()`) → triggers `secret-marketplace-auction-closer`
+**`create-events`** — requires `OWNER_PK`, `TEST_ACCOUNT_1..25`, `RPC_URL`, `VENICE_API_KEY` in `scripts/.env`.
 
-Deployed as a systemd service (`event-watcher.service`) on the remote server.
+**`spawn-auctions`** — requires `TEST_ACCOUNT_1..25`, `DAEMON_URL` and the daemon running.
 
-### Local Testing Helpers
+**`place-bids`** — requires `TEST_ACCOUNT_1..25`, `DAEMON_URL` and the daemon running. Uses daemon HTTP API (`/bid`, `/faucet`, `/deposit`, `/balance`). Auto-tops up accounts when balance is low.
 
-Four scripts for populating the marketplace with test data during development. Run them all at once with the orchestrator:
-
-```bash
-# Run everything together (recommended)
-pnpm run-demo    # from scripts/ — seeds events, then runs spawn-auctions + place-bids concurrently
-```
-
-Or run individually:
-
-```bash
-pnpm create-events   # one-shot: generate AI events + place random bets on the prediction market
-pnpm spawn-auctions  # daemon: create one auction per cycle (default 5 min) via /api/create-auction
-pnpm place-bids      # daemon: place one bid per cycle on open auctions (debug only — reads private Supabase data)
-```
-
-**`create-events`** — requires `OWNER_PK`, `TEST_ACCOUNT_1..25`, `RPC_URL`, `VENICE_API_KEY` in `scripts/.env`. Reads `paymentToken()` from the deployed contract at startup to avoid token address mismatches.
-
-**`spawn-auctions`** — requires `TEST_ACCOUNT_1..25` and the frontend dev server running. Skips settled/expired events automatically. Override cycle frequency with `INTERVAL_MS`.
-
-**`place-bids`** — requires `TEST_ACCOUNT_1..25`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`. Queries `private_bids` and `sellers` tables directly (debug only — this data is normally secret). Auto-tops up test accounts with synthetic Supabase deposits when balance drops below 100 USDC.
-
-**`run-demo`** — runs `create-events` once at startup, starts `spawn-auctions` and `place-bids` as daemons, then re-runs `create-events` every 30 min (override with `CREATE_EVENTS_INTERVAL_MS`). Ctrl+C kills all child processes cleanly.
+**`request-settlements`** — requires `OWNER_PK`, `RPC_URL`. Queries subgraph for closed-but-unsettled events.
 
 ### E2E Tests
 
-All E2E scripts are TypeScript and run via `tsx` with `--env-file=.env` from the `scripts/` directory.
-
 ```bash
-pnpm e2e:secret-marketplace                      # SecretMarketplace full event lifecycle
-pnpm e2e:external-prediction-market-settler                # ExamplePredictionMarket + CRE settlement lifecycle
-pnpm e2e:secret-marketplace-auction-closer       # Auction create → bid → expire → CRE close
-pnpm e2e:external-marketplace-settlement-resolved-handler  # Settlement resolved handler — per-auction reputation after event settlement
-pnpm e2e:auction-cancelled-handler               # Auction cancelled handler — bid refund on AuctionCancelled
-pnpm e2e:user-balance-recording-fallback         # Deposit reconciler workflow
-```
-
-### Supabase
-
-```bash
-pnpm generate:supabase-types   # Regenerate types from live database (requires DATABASE_URL in root .env)
+pnpm e2e                       # Playwright E2E tests (via turbo, from root)
+cd apps/insider-streams-frontend && pnpm test:playwright   # Playwright E2E directly
 ```
 
 ## Chain & Network
 
 - **Chain**: Ethereum Sepolia (chain ID: 11155111)
 - **RPC**: `https://ethereum-sepolia-rpc.publicnode.com`
-- **Chain selector** (CRE): `ethereum-testnet-sepolia`
-- **CRE Simulation Forwarder**: `0x15fc6ae953e024d975e77382eeec56a9101f9f88`
 
 ## Wallets
 
 | Role   | Address                                      | Purpose                                                |
 | ------ | -------------------------------------------- | ------------------------------------------------------ |
-| Owner  | `0x6B789D957B87c12F30b48E9bFc58678c2f76f1c5` | Deploys contracts, creates events, requests settlement |
-| Tester | `0x55D234274608a69a3E84c8Bc5Cd07F8A5f0f69Ce` | Makes predictions, claims winnings                     |
+| Owner  | `0x6B789D957B87c12F30b48E9bFc58678c2f76f1c5` | Deploys contracts, creates events, admin proxy for all on-chain actions |
 
 Private keys are in `.env` files (never committed).
 
-## Supabase
-
-- **Database URL**: Set `DATABASE_URL` in root `.env`
-- **Tables**: `sellers`, `secrets`, `transfers`, `private_bids`
-- **Views**: `balances` (computed from transfers + private_bids)
-- **Type generation**: `pnpm generate:supabase-types` (outputs to `packages/common/src/__generated__/supabase-types.ts`)
-- **Migrations**: `scripts/migrations/` (consolidated into `001_initial_schema.sql`)
-
 ## Subgraph (The Graph)
 
-- **Subgraph name**: `insider-streams2` (Subgraph Studio)
-- **Studio URL** (codegen/testing): `https://api.studio.thegraph.com/query/1743303/insider-streams-2/version/latest`
-- **Production URL**: `https://gateway.thegraph.com/api/subgraphs/id/2vVUkMCH5m48s8Qj1ChgR2z3c98vAX3raBoJoYZ9RrBW`
-- **Deploy**: `npx graph auth --studio <KEY>` then `./scripts/deploy-subgraph.sh` (prompts for contract address, auto-fetches start block)
-- **Deploy with new address**: `./scripts/deploy-subgraph.sh --address 0x...` (non-interactive)
-- Version tracked in `subgraphs/secrets-marketplace/package.json`; bumped automatically by `deploy-subgraph.sh` after successful deploy
+- **Subgraph name**: `insider-streams-zama` (Subgraph Studio)
+- **Studio URL**: `https://api.studio.thegraph.com/query/1743303/insider-streams-zama/version/latest`
+- **Contract**: `FHESecretMarketplace` at `0xf74884348F7153c63A46a1e362ec6D90E754Cf15`
+- **Deploy**: `./scripts/deploy-subgraph.sh` or `cd subgraphs/secrets-marketplace && npx graph deploy insider-streams-zama`
+- Version tracked in `subgraphs/secrets-marketplace/package.json`
 
 ## GraphQL Codegen
 
@@ -237,7 +158,6 @@ After a new subgraph is published, regenerate typed GraphQL clients:
 | -------------------------------- | --------------------------------------------------------------------- | ---------------------- |
 | `apps/insider-streams-frontend/` | `client` preset (`gql()` tag)                                         | Frontend typed queries |
 | `scripts/`                       | `typescript` + `typescript-operations` + `typescript-graphql-request` | Backend `getSdk()`     |
-| `cre-workflows/secret-marketplace-auction-closer/`  | Same as scripts                                                       | Backend `getSdk()`     |
 
 Run codegen:
 
@@ -247,105 +167,40 @@ turbo run codegen
 
 After running codegen, always run `turbo run build` to verify all packages compile cleanly with the regenerated types.
 
-After adding or updating GraphQL queries in a specific package, run the local codegen command from that directory:
-
-```bash
-pnpm run codegen   # from frontend, scripts, or CRE workflow directory
-```
-
-For the `cre-workflows/secret-marketplace-auction-closer/` package (outside pnpm workspace):
-
-```bash
-cd cre-workflows/secret-marketplace-auction-closer && bun run codegen
-```
-
 ### Known issue: duplicate identifier in generated enums
 
-The Graph's subgraph schema generates `_orderBy` enums with entries for both direct fields (e.g., `sellerId`) and relationship traversals (e.g., `seller__id`). When an entity has both a field like `sellerId` and a relationship like `seller`, codegen produces duplicate enum keys (e.g., `SellerId` appears twice). This causes TypeScript compilation errors like `Duplicate identifier 'SellerId'`.
+The Graph's subgraph schema generates `_orderBy` enums with entries for both direct fields (e.g., `sellerId`) and relationship traversals (e.g., `seller__id`). When an entity has both a field like `sellerId` and a relationship like `seller`, codegen produces duplicate enum keys.
 
-**Fix:** All codegen configs use `enumsAsTypes: true` to generate string union types instead of TypeScript enums. This avoids the naming collision. This setting is configured in:
+**Fix:** All codegen configs use `enumsAsTypes: true` to generate string union types instead of TypeScript enums. This setting is configured in:
 - `scripts/codegen.ts`
 - `apps/insider-streams-frontend/codegen.ts` (both `graphql.ts` and `sdk.ts` outputs)
 
 ## After Major Contract Changes
 
-After making substantial contract changes — especially to public-facing functions, events, or structs — you must regenerate types:
+After making substantial contract changes — especially to public-facing functions, events, or structs — regenerate types:
 
 ```bash
-./scripts/generate-contract-types.sh
+pnpm wagmi    # regenerate ABIs/types in packages/common
 ```
-
-This script compiles contracts with Foundry, regenerates TypeScript types and ABIs via wagmi into `packages/common`, runs `pnpm install` to update workspace links, and copies extracted JSON ABIs to each frontend app's `src/abis/` directory. It does **not** deploy the subgraph — that is a separate step (see below).
-
-Or just regenerate TypeScript types without recompiling: `pnpm wagmi`
 
 ## After a Contract Deployment
 
-Use the interactive deploy script to deploy contracts and auto-replace addresses:
+Contract addresses are in `packages/common/src/consts.ts`. After deploying, update addresses there and verify no stale addresses remain:
 
 ```bash
-./scripts/deploy-contracts.sh
+grep -ri "0xOLD_ADDRESS" --include='*.ts' --include='*.json' --include='*.sh' --include='*.yaml' --include='*.md' . | grep -v node_modules
 ```
-
-This script prompts which contracts to redeploy (ConfidentialUSDC, ExamplePredictionMarket, SecretMarketplace), deploys them via Foundry, then does a best-effort case-insensitive find-and-replace of the old addresses across the entire codebase (source files, configs, scripts, .env files). It also checks .env files for any stale addresses that may remain and warns about them.
-
-After the script finishes, you must still:
-
-### 1. Regenerate contract types
-
-```bash
-./scripts/generate-contract-types.sh
-```
-
-### 2. Verify hardcoded contract addresses
-
-The deploy script replaces addresses automatically, but you should verify no stale addresses remain. Contract addresses are referenced in multiple locations.
 
 **Critical locations:**
 
-| File                           | What to update                                                                                                                                                               |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/common/src/index.ts` | `CONFIDENTIAL_USDC_ADDRESS`, `EXAMPLE_PREDICTION_MARKET_ADDRESS`, `SECRET_MARKETPLACE_ADDRESS`, `VAULT_ADDRESS` — **this is what frontends, scripts, and API client import** |
-| `README.md`                    | Contract addresses table and any script examples referencing addresses                                                                                                       |
+| File                                | What to update                                                           |
+| ----------------------------------- | ------------------------------------------------------------------------ |
+| `packages/common/src/consts.ts`     | All address constants — frontends, scripts, and daemon import from here  |
+| `subgraphs/secrets-marketplace/subgraph.yaml` | Contract address and startBlock                                |
+| `apps/daemon/src/config.ts`         | Daemon config defaults (reads from env, but verify)                      |
+| `README.md`                         | Contract addresses table                                                 |
 
-**E2E test scripts:**
-
-| File                            | Variables with hardcoded defaults                                |
-| ------------------------------- | ---------------------------------------------------------------- |
-| `scripts/e2e_tests/simple-market-e2e.ts`  | `CONFIDENTIAL_USDC_ADDRESS`, `EXAMPLE_PREDICTION_MARKET_ADDRESS` |
-| `scripts/e2e_tests/secret-marketplace-auction-closer-e2e.ts` | `CONFIDENTIAL_USDC_ADDRESS`, `SECRET_MARKETPLACE_ADDRESS`        |
-
-**CRE workflow configs:**
-
-| File                                               | Fields                               |
-| -------------------------------------------------- | ------------------------------------ |
-| `cre-workflows/secret-marketplace-auction-closer/config.json`         | `secretMarketplaceAddress`           |
-| `cre-workflows/external-marketplace-settlement-resolved-handler/config.json` | `secretMarketplaceAddress`, `examplePredictionMarketAddress` |
-| `cre-workflows/auction-cancelled-handler/config.json` | `secretMarketplaceAddress`           |
-| `cre-workflows/external-prediction-market-settler/config.json` | `simpleMarketAddress`                |
-| `cre-workflows/user-balance-recording-fallback/config.json`     | `tokenAddress`, `platformEoaAddress` |
-
-After updating CRE workflow configs, the workflow must be redeployed and tested live.
-
-**Foundry deploy scripts** (use env vars, not hardcoded — but verify `contracts/.env` is correct):
-
-| File                                                   | Env vars used                                                                             |
-| ------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
-| `contracts/script/DeployExamplePredictionMarket.s.sol` | `CONFIDENTIAL_USDC_ADDRESS`, `CRE_FORWARDER_ADDRESS`                                      |
-| `contracts/script/DeploySecretMarketplace.s.sol`       | `CONFIDENTIAL_USDC_ADDRESS`, `EXAMPLE_PREDICTION_MARKET_ADDRESS`, `CRE_FORWARDER_ADDRESS` |
-
-**Private token scripts** (only if Vault or ConfidentialUSDC changed):
-
-| File                                            | What's hardcoded                                     |
-| ----------------------------------------------- | ---------------------------------------------------- |
-| `contracts/script/private-transactions/*.s.sol` | `VAULT` constant (5 files)                           |
-| `packages/common/src/index.ts`                  | `VAULT_ADDRESS` (used by API client's EIP712_DOMAIN) |
-
-**Strategy for finding other uses:** Search the codebase for the old address with `grep -r "0xOLD_ADDRESS" --include='*.ts' --include='*.sh' --include='*.sol' --include='*.json' --include='*.yaml' --include='*.md' .` to catch any locations not listed above. Exclude `node_modules/`, `out/`, and `build/` directories. Note that `deploy-contracts.sh` handles most replacements automatically, but manual scanning is still necessary since grep may not catch everything (case sensitivity, partial matches, etc.).
-
-### 3. Deploy the subgraph (if SecretMarketplace changed)
-
-Ask the user if they want to deploy a new subgraph version. This is a separate step that should only be run **after** contract types have been regenerated (step 1).
+### Deploy the subgraph (if FHESecretMarketplace changed)
 
 ```bash
 ./scripts/deploy-subgraph.sh                       # interactive — prompts for contract address
@@ -353,18 +208,12 @@ Ask the user if they want to deploy a new subgraph version. This is a separate s
 ./scripts/deploy-subgraph.sh --skip-deploy         # codegen + build only, no deploy
 ```
 
-The deploy script copies ABIs from Foundry artifacts, runs `graph codegen` and `graph build`, and deploys to Subgraph Studio. After a successful deploy, tell the user to publish the subgraph at https://thegraph.com/studio/subgraph/insider-streams-2/ and then offer to regenerate GraphQL types once they confirm it's published.
-
-### 4. Regenerate GraphQL types (after user publishes)
-
-After you receive confirmation from the user that the subgraph is published, regenerate typed GraphQL clients:
+The deploy script copies ABIs from Hardhat artifacts, runs `graph codegen` and `graph build`, and deploys to Subgraph Studio. After a successful deploy, publish at https://thegraph.com/studio/subgraph/insider-streams-zama/ then regenerate GraphQL types:
 
 ```bash
 turbo run codegen
 turbo run build
 ```
-
-This updates the generated GraphQL types in the frontend, scripts, and CRE workflow packages against the published subgraph schema. The build step verifies all packages compile cleanly with the regenerated types.
 
 ## Services
 
@@ -378,62 +227,89 @@ This updates the generated GraphQL types in the frontend, scripts, and CRE workf
 | File                                         | Purpose                                                 |
 | -------------------------------------------- | ------------------------------------------------------- |
 | `.env` (root)                                | All PKs, RPC, contract addresses, API keys              |
-| `contracts/.env`                             | `PRIVATE_KEY`, `RPC_URL` for Foundry scripts            |
-| `cre-workflows/.env`                         | CRE private key, Gemini key, Firebase keys              |
-| `scripts/.env`                               | `OWNER_PK`, `BIDDER_PK`, `RPC_URL` for E2E test scripts |
-| `apps/event-watcher/.env`                    | `RPC_URL`, `NTFY_USER`, `NTFY_HOST` for the event watcher |
-| `apps/prediction-market-frontend/.env.local` | `NEXT_PUBLIC_FIREBASE_*` vars                           |
+| `contracts-fhe/.env`                         | `PRIVATE_KEY`, `RPC_URL` for Hardhat deploy             |
+| `scripts/.env`                               | `OWNER_PK`, `BIDDER_PK`, `RPC_URL` for scripts/E2E     |
+| `apps/daemon/.env`                           | Daemon config (RPC, PKs, contract addresses, API keys)  |
 | `apps/insider-streams-frontend/.env.local`   | `NEXT_PUBLIC_SUBGRAPH_URL`                              |
 
 ## Deployment Rules
 
 **Do NOT redeploy contracts that haven't changed.** Redeploying requires updating addresses in multiple places and re-running E2E tests. Only redeploy the specific contract that changed.
 
-Individual deploy scripts exist in `contracts/script/`:
+Deploy scripts are in `contracts-fhe/deploy/`:
 
-- `DeployConfidentialUSDC.s.sol` — rarely changes
-- `DeployExamplePredictionMarket.s.sol` — env: `CONFIDENTIAL_USDC_ADDRESS`, `CRE_FORWARDER_ADDRESS`
-- `DeploySecretMarketplace.s.sol` — env: `CONFIDENTIAL_USDC_ADDRESS`, `EXAMPLE_PREDICTION_MARKET_ADDRESS`, `CRE_FORWARDER_ADDRESS`
-- `DeployAll.s.sol` — deploys everything (only for fresh environments)
+```bash
+cd contracts-fhe && npx hardhat deploy --network sepolia
+```
 
-After deploying, follow the full procedure in **"After a Contract Deployment"** above.
+After deploying, follow the procedure in **"After a Contract Deployment"** above.
 
 ## Architecture Notes
 
-- `ExamplePredictionMarket.sol` accepts **any ERC-20** token (constructor arg) — we use ConfidentialUSDC (6 decimals, onlyOwner minting)
-- `newEvent(question, duration)` creates prediction events with a caller-specified duration (no hardcoded default)
-- `forceSettle(eventId, outcome, confidenceBps, evidenceURI)` allows settling events without waiting for closure (debug/testing only; reverts if already settled)
-- CRE workflow listens for `SettlementRequested` events, calls Gemini AI with Google Search grounding, submits signed report on-chain
-- Settlement data is also written to Firestore for the frontend
-- **Secret-marketplace-auction-closer CRE workflow** runs on a 30-second cron, reads `getOpenAuctions()` and `getAuction(id)` to find expired auctions, then submits a signed report with `ACTION_CLOSE_AUCTION` (0x00) to close them
-- `closeAuction()` keeps funds in contract; admin withdraws via `withdrawFunds()`
-- **External-marketplace-settlement-resolved-handler CRE workflow** runs on a 60-second cron (also supports REST trigger for E2E), reads `getUnresolvedEvents()` from SecretMarketplace, checks if each event is settled on ExamplePredictionMarket, fetches seller predictions from Supabase `secrets.event_data`, compares predictions to actual outcomes, and submits per-auction reputation results via `ACTION_RECORD_EVENT_OUTCOME` (0x02). Each `AuctionResult` contains a `PredictionOutcome` enum (NoPrediction=0, PredictionCorrect=1, PredictionWrong=2). Correct predictions get +1 rep, incorrect get -1, omitted get 0 (still marked resolved). Uses 1 HTTP call (Supabase GET) + EVM reads (free).
-- **Auction-cancelled-handler CRE workflow** is log-triggered on `AuctionCancelled` events. When an auction is cancelled, it finds active private bids in Supabase for that auction and refunds them (sets `status="refunded"`, `refunded_at=now`). Uses 2 HTTP calls (Supabase GET + PATCH). No on-chain writes.
-- **User-balance-recording-fallback CRE workflow** runs on a 60-second cron, polls the Private Token API for transfers to/from the platform EOA, and records them as deposits or withdrawals in the Supabase `transfers` table
-- `recordEventOutcomeAndUpdateRepScore(eventId, AuctionResult[])` accepts per-auction prediction outcomes — each `AuctionResult` has `{auctionId, predictionOutcome}` where `predictionOutcome` is a `PredictionOutcome` enum (NoPrediction=0, PredictionCorrect=1, PredictionWrong=2). Auctions not in the results array get NoPrediction (0 score change, still marked resolved).
-- **Event watcher** (`apps/event-watcher/`) is a long-running Node.js process that subscribes to `AuctionCancelled`, `SettlementRequested`, and `SettlementResponse` events via WebSocket, and polls for expired auctions every 30s via HTTP. On startup, catches up missed blocks using `getLogs`. Triggers the appropriate CRE workflows via `cre workflow simulate`. Only needed for simulation — deployed CRE workflows on the Chainlink DON handle event monitoring automatically. Deployed as a systemd service on the remote server. Persists last-processed block to `.watcher-state.json`.
-- CRE CLI installed at `~/.cre/bin/cre` (add to PATH: `export PATH="$HOME/.cre/bin:$PATH"`)
+- **Admin-proxy privacy model**: all on-chain actions submitted via owner EOA; users identified by pseudonymous string IDs; no user addresses on-chain
+- `FHESecretMarketplace` uses FHE-encrypted balances (`euint64`) and bid amounts
+- `FHEConfidentialUSDC` is an ERC-7984 token with `setOperator()` (not `approve()`) for delegated transfers
+- `ExamplePredictionMarket` accepts any ERC-20 token (constructor arg) — uses MockUSDC (6 decimals)
+- Daemon SQLite stores address-to-pseudonymousId mapping and bid tracking; **balance source of truth is on-chain** (decrypted via `publicDecrypt`)
+- Highest-bid-only model: ONE `currentBid` per auction, admin pre-validates bids are higher
+- `resolveEventPredictions(uint256 eventId, bool actualOutcomeIsYes)` resolves all auction predictions for an event against the actual outcome
+- `BidPlaced` event has no bidder address (privacy)
 
 ## Reference Docs
 
-### CRE (Chainlink Runtime Environment)
+### Zama fhEVM
 
-- [CRE Overview](https://docs.chain.link/cre)
-- [Part 1: Project Setup (TypeScript)](https://docs.chain.link/cre/getting-started/part-1-project-setup-ts)
-- [Project Configuration Reference](https://docs.chain.link/cre/reference/project-configuration-ts)
-- [Using Secrets in Simulation](https://docs.chain.link/cre/guides/workflow/secrets/using-secrets-simulation-go)
-- [Using Secrets with Deployed Workflows](https://docs.chain.link/cre/guides/workflow/secrets/using-secrets-deployed)
-- [Deploying Workflows](https://docs.chain.link/cre/guides/operations/deploying-workflows)
-- [EVM Forwarder Directory](https://docs.chain.link/cre/guides/workflow/using-evm-client/forwarder-directory-ts)
-- [CRE CLI Installation](https://docs.chain.link/cre/getting-started/cli-installation/macos-linux)
-
-### Chainlink confidential compute
-
-- [Private transfers REST API docs] (note: this project should interact with this REST API with the client in packages/chainlink-private-token-api-client, but the client is based on the external API so the docs are the ultimate source of truth)
+- [fhEVM documentation](https://docs.zama.ai/fhevm)
+- [fhEVM Hardhat plugin](https://docs.zama.ai/fhevm/getting-started/write-contract)
 
 ### Demos & Examples
 
-- [CRE Prediction Market Demo](https://github.com/smartcontractkit/cre-gcp-prediction-market-demo)
-- [CRE Bootcamp 2026](https://github.com/smartcontractkit/cre-bootcamp-2026)
 - [Compliant Private Transfer Demo](https://github.com/smartcontractkit/Compliant-Private-Transfer-Demo)
 - [Firebase Setup Guide](https://github.com/smartcontractkit/cre-gcp-prediction-market-demo/blob/main/firebase-setup.md)
+
+
+## Best practices/Standards
+
+### React standards
+
+- Avoid using `use client` when possible
+- Prefer functional components over class components
+- Any UI component should have a story, and stories should be checked for completeness after a major change
+- Use `pnpm/pnpm run lint` to check for linting errors after you're done
+
+### Backend (agent) standards
+
+- Vitest is used for testing
+
+### Typescript standards
+
+- Do not use `any` unless explicitly instructed otherwise
+- Do not type cast unless explicitly instructed otherwise. If you must typecast, any usage must have a clear and convincing comment explaining why
+- Avoid type casting as a solution to type errors unless it's absolutely necessary or explicitly instructed otherwise
+- Avoid type casting as a solution to type errors unless it's absolutely necessary or explicitly instructed otherwise
+- Avoid using @ts-expect-error, @ts-ignore, or @ts-nocheck unless absolutely necessary or explicitly instructed otherwise. Fix things instead
+- Never do hot imports in code function bodies
+- When using Zod schemas, derive TypeScript types using `z.infer<typeof schema>` rather than defining types separately - this prevents type drift where the schema and type diverge
+- Prefer vitest for testing when able
+- After making significant changes (adding functions, renaming files and functions, significant logic changes, etc), you should run `pnpm run lint`, `pnpm run build` and `pnpm run test:unit` to confirm your changes compile, or if you change multiple apps/packages, verify with `turbo run lint`, `turbo run build`, and `turbo run test:unit` (pnpm or pnpm allowed depending on the project standard, avoid yarn and npm unless standard in project)
+
+### Solidity standards
+
+- Always follow best practices for solidity development.
+- Prefer foundry to hardhat when you're able to choose (may be restricted by vendor tech in rare cases)
+- Prefer viem to ethers always when you're able to choose
+- Always verify contracts after deploying. Always set up contract deployment scripts/plugins to automatically verify contracts when they're deployed
+- Always analyze changes to the contracts for security vulnerabilities and fix them if detected
+
+
+### Other standards
+
+- CLAUDE.MD and README.MD are living docs that should be reviewed for accuracy after major changes. Do not fill these with fluff, just make sure they're current.
+- The year is 2026. If you search for "recent" information in the web and choose to include the year in your search, you should use the year 2025 or 2026. Avoid using 2024, 2023, or other years before 2025 when searching for up to date information
+- According to <https://github.com/anthropics/claude-code/issues/13137>, bash permission wildcards don't match commands with redirects or special shell characters. To avoid me having to manually approve commands excessively, structure your commands to avoid the use of special characters when possible (esp ">", "&&", "||")
+- You should always write e2e tests and unit tests for your work. When relevant, e2e tests should be configurable to run against, or should just outright run against real chains/frontends/backends/agents etc, and you should always test against real systems before claiming work is complete. Aim for high test coverage.
+- Avoid using inline environment variables in commands you run, as this requires me to manually approve the command. Everything has a .env file you can source, or use dotenv or similar to load, for secrets
+- Always opt out of optional telemetry. Don't remove code that disables it. Always ADD code that disables it when missing (such as in Claude settings in .claude/settings.json, turbo.json vars, envvars in github actions)
+- When deprecating code, you don't have to worry about backwards compatibility or leaving a comment trail unless explicitly instructed otherwise, just remove the code.
+- Always use Context7 MCP when I need library/API documentation, code generation, setup or configuration steps without me having to explicitly ask.
+- Always think and do research to make sure you're confident before taking action, it's important for you to not code reflexively
