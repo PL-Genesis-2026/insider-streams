@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { proxyToDaemon } from "@/lib/daemon-client";
-import type { PrivateSecretState } from "@/lib/private-data/types";
+import type { PrivateSecretState, PrivateFileAttachment } from "@/lib/private-data/types";
 
 type DaemonSecret = {
   auctionId: number;
@@ -9,6 +9,19 @@ type DaemonSecret = {
   secretData: string | null;
   eventData: string | null;
   hasAccess: boolean;
+  file: {
+    encryptionKey: string | null;
+    encryptionAlgorithm: string | null;
+    fileName: string;
+    encryptedFileName: string | null;
+    contentType: string | null;
+    fileMd5: string | null;
+    fileSizeBytes: string | null;
+    encryptedFileSizeBytes: string | null;
+    pieceCid: string | null;
+    retrievalUrl: string;
+    copies: PrivateFileAttachment["copies"];
+  } | null;
 };
 
 export async function POST(request: Request) {
@@ -25,10 +38,6 @@ export async function POST(request: Request) {
     timestamp?: number;
   };
 
-  // Proxy only { signature, timestamp, auctionIds } to the daemon.
-  // The client signs only { timestamp }, so extra fields in the body would
-  // cause verifySignedRequest to reconstruct a different message and recover
-  // the wrong address. We re-add auctionIds as the daemon expects it.
   const res = await proxyToDaemon("/secrets", { signature, timestamp, auctionIds: requestedIds });
   const json = await res.json();
 
@@ -36,8 +45,6 @@ export async function POST(request: Request) {
     return NextResponse.json(json, { status: res.status });
   }
 
-  // Transform daemon response into Record<auctionId, PrivateSecretState>
-  // matching the shape the frontend expects (same as original Supabase version).
   const secrets: DaemonSecret[] = json.secrets ?? [];
   const data: Record<string, PrivateSecretState> = {};
 
@@ -52,10 +59,29 @@ export async function POST(request: Request) {
           // malformed event_data — ignore
         }
       }
+
+      let file: PrivateFileAttachment | null = null;
+      if (s.file && s.file.retrievalUrl && s.file.fileName && s.file.encryptionKey) {
+        file = {
+          encryptionKey: s.file.encryptionKey,
+          encryptionAlgorithm: s.file.encryptionAlgorithm,
+          fileName: s.file.fileName,
+          encryptedFileName: s.file.encryptedFileName,
+          contentType: s.file.contentType,
+          fileMd5: s.file.fileMd5,
+          fileSizeBytes: s.file.fileSizeBytes,
+          encryptedFileSizeBytes: s.file.encryptedFileSizeBytes,
+          pieceCid: s.file.pieceCid,
+          retrievalUrl: s.file.retrievalUrl,
+          copies: s.file.copies ?? [],
+        };
+      }
+
       data[key] = {
         kind: "accessible",
         secret_data: s.secretData ?? s.secretDataKey ?? "",
         event_data: eventData,
+        file,
       };
     } else {
       data[key] = { kind: "forbidden" };

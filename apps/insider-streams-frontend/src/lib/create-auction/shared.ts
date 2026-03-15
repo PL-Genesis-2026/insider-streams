@@ -29,7 +29,7 @@ const nonNegativeIntegerString = z
 export const createAuctionInputSchema = z.object({
   eventId: nonNegativeIntegerString,
   privateLeg: z.enum(["yes", "no"], "privateLeg must be yes or no"),
-  secretPayload: z.string().trim().min(1, "secretPayload is required"),
+  secretPayload: z.string().trim().optional().default(""),
   duration: z.enum(
     CREATE_AUCTION_DURATIONS,
     "duration must be 6h, 12h, 24h, or 48h",
@@ -38,7 +38,7 @@ export const createAuctionInputSchema = z.object({
 
 export const createAuctionRequestSchema = createAuctionInputSchema.extend({
   eventTitle: z.string().min(1, "eventTitle is required"),
-  timestamp: z.number().int("timestamp must be an integer"),
+  timestamp: z.coerce.number().int("timestamp must be an integer"),
   signature: z
     .string()
     .regex(/^0x[a-fA-F0-9]+$/, "signature must be a hex string"),

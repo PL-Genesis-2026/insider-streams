@@ -74,6 +74,54 @@ export async function createTestAuction(
   });
 }
 
+/** Create an auction with a file attachment via daemon API (multipart). */
+export async function createTestAuctionWithFile(
+  account: PrivateKeyAccount,
+  opts: {
+    eventId: string;
+    eventTitle: string;
+    privateLeg: "yes" | "no";
+    fileContent: string;
+    fileName: string;
+    durationSeconds: number;
+  },
+) {
+  const timestamp = Math.floor(Date.now() / 1000);
+  const endTime = String(timestamp + opts.durationSeconds);
+
+  const payload = {
+    eventId: opts.eventId,
+    eventTitle: opts.eventTitle,
+    endTime,
+    prediction: opts.privateLeg === "yes" ? "true" : "false",
+    timestamp,
+  };
+  const message = stringify(payload);
+  const signature = await account.signMessage({ message });
+
+  const form = new FormData();
+  form.set("eventId", opts.eventId);
+  form.set("eventTitle", opts.eventTitle);
+  form.set("endTime", endTime);
+  form.set("prediction", opts.privateLeg === "yes" ? "true" : "false");
+  form.set("timestamp", String(timestamp));
+  form.set("signature", signature);
+  form.set("secretPayload", ""); // empty — file is the primary payload
+  form.set(
+    "file",
+    new Blob([opts.fileContent], { type: "text/plain" }),
+    opts.fileName,
+  );
+
+  const res = await fetch(`${DAEMON_URL}/create-auction`, {
+    method: "POST",
+    body: form,
+    signal: AbortSignal.timeout(120_000),
+  });
+  const data = await res.json();
+  return { status: res.status, data };
+}
+
 /** Read .test-state.json written by global-setup. Returns null if missing. */
 export function readTestState(): TestState | null {
   try {

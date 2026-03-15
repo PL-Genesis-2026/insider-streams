@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { PredictionMarketLink } from "@/components/prediction-market-link";
 import { Separator } from "@/components/ui/separator";
 import { SecretRevealCard } from "@/components/secret-reveal";
+import { AdminExpireAuctionButton } from "@/components/admin-expire-auction-button";
 import { AuctionDetailPrivate } from "@/components/auction-detail-private";
 import {
   AuctionLifecycleList,
@@ -27,6 +28,7 @@ import {
   type AuctionDetailData,
 } from "@/lib/auction-detail";
 import { getEffectiveStatus } from "@/lib/auction-status";
+import { getOwnerAddress } from "@/lib/admin";
 import { SECRET_MARKETPLACE_ADDRESS } from "@/lib/contract-addresses";
 
 type AuctionDetailPageProps = {
@@ -141,6 +143,7 @@ export default async function AuctionDetailPage({
         ? "outline"
         : "accent";
   const timeline = buildTimeline(auction);
+  const ownerAddress = getOwnerAddress();
 
   return (
     <main className="theme-ember-editorial min-h-screen text-foreground">
@@ -238,7 +241,15 @@ export default async function AuctionDetailPage({
           <aside className="flex flex-col gap-6 lg:sticky lg:top-8 lg:self-start">
             <Card className="border-border/90 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_96%,transparent),color-mix(in_srgb,var(--secondary)_28%,transparent))]">
               {isOpen ? (
-                <AuctionBidGate auctionId={auction.auctionId} sellerAddress={auction.sellerAddress} currentBidUsdc={auction.currentBidUsdc} />
+                <>
+                  <AuctionBidGate auctionId={auction.auctionId} sellerAddress={auction.sellerAddress} currentBidUsdc={auction.currentBidUsdc} />
+                  <div className="px-6 pb-6">
+                    <AdminExpireAuctionButton
+                      auctionId={auction.auctionId}
+                      ownerAddress={ownerAddress}
+                    />
+                  </div>
+                </>
               ) : (
                 <>
                   <CardHeader className="gap-5 pb-0">

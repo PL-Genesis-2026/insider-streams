@@ -10,6 +10,7 @@ export const requiredChain = sepolia;
 export const walletProjectId = env.NEXT_PUBLIC_PROJECT_ID;
 export const walletNetworks = [requiredChain] as const;
 const APPKIT_INSTANCE_KEY = "__insider_streams_appkit__";
+const DEFAULT_PUBLIC_RPC_URL = "https://ethereum-sepolia-rpc.publicnode.com";
 
 export const wagmiAdapter = new WagmiAdapter({
   projectId: walletProjectId,
@@ -19,7 +20,7 @@ export const wagmiAdapter = new WagmiAdapter({
     storage: cookieStorage,
   }),
   transports: {
-    [requiredChain.id]: http("https://ethereum-sepolia-rpc.publicnode.com"),
+    [requiredChain.id]: http(DEFAULT_PUBLIC_RPC_URL),
   },
 });
 
