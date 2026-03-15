@@ -5,7 +5,7 @@ Encrypted prediction marketplace built on [Zama fhEVM](https://docs.zama.ai/fhev
 ## Links
 
 - [Video](https://www.youtube.com/watch?v=sGsNvkky2xc)
-- [Insider Streams frontend](https://insider-streams-insider-streams-fro.vercel.app/)
+- [Insider Streams frontend](https://zama-insider-streams-frontend-i33d.vercel.app/)
 
 ## Architecture
 
