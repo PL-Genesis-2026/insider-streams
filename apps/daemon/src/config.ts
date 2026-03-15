@@ -31,10 +31,6 @@ export const config = {
   ntfyTopicSettler: process.env.NTFY_TOPIC_SETTLER || "zama-settler",
   ntfyTopicCloser: process.env.NTFY_TOPIC_AUCTION_CLOSER || "zama-auction-closer",
   ntfyTopicReputation: process.env.NTFY_TOPIC_REPUTATION_RESOLVER || "zama-reputation-resolver",
-  ntfyTopicCreateEvents: process.env.NTFY_TOPIC_CREATE_EVENTS || "zama-create-events",
-  ntfyTopicSpawnAuctions: process.env.NTFY_TOPIC_SPAWN_AUCTIONS || "zama-spawn-auctions",
-  ntfyTopicPlaceBids: process.env.NTFY_TOPIC_PLACE_BIDS || "zama-place-bids",
-  ntfyTopicSettlements: process.env.NTFY_TOPIC_SETTLEMENTS || "zama-settlements",
 
   // Polling intervals
   auctionCloserIntervalMs: Number(process.env.AUCTION_CLOSER_INTERVAL_MS || 30_000),
@@ -45,9 +41,6 @@ export const config = {
   // SQLite
   dbPath: process.env.DB_PATH || "",
 
-  // Demo populator (opt-in)
-  demoMode: process.env.DEMO_MODE === "true",
-  veniceApiKey: process.env.VENICE_API_KEY || "",
   // Subgraph — prod gateway URL. Set SUBGRAPH_API_KEY for Bearer auth.
   subgraphUrl: process.env.SUBGRAPH_URL ||
     "https://gateway.thegraph.com/api/subgraphs/id/BttcQ7pVTEz7L94PgnhkFJCY33K5Vwk1vhffckmjgf5f",

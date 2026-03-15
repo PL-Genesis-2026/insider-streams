@@ -99,7 +99,7 @@ async function signedPost(
   endpoint: string,
   fields: Record<string, unknown> = {},
 ): Promise<Response> {
-  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const timestamp = Math.floor(Date.now() / 1000);
   const payload = { ...fields, timestamp };
   const message = stringify(payload);
   const signature = await account.account.signMessage({ message });

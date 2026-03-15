@@ -97,15 +97,16 @@ pnpm build                # typecheck
 
 ### Demo Scripts
 
-Scripts for populating the marketplace with test data:
+Scripts for populating the marketplace with test data. Scheduled via OS cron on the VPS (deployed by `scripts/deploy.sh` Phase 6):
+
+| Script | Cron | What |
+| ------ | ---- | ---- |
+| `create-events` | `*/15 * * * *` | Generate AI events + place bets |
+| `spawn-auctions` | `*/10 * * * *` | Create auction via daemon API |
+| `place-bids` | `* * * * *` | Place bids on open auctions via daemon API |
+| `request-settlements` | `* * * * *` | Request settlement for closed events |
 
 ```bash
-# Run via daemon (recommended)
-# Set DEMO_MODE=true in apps/daemon/.env, then start the daemon normally.
-# The daemon will run create-events, spawn-auctions, place-bids, and
-# request-settlements as background loops automatically.
-
-# Or run scripts individually
 cd scripts
 pnpm create-events        # one-shot: generate AI events + place bets
 pnpm spawn-auctions       # one-shot: create auction via daemon API
@@ -115,13 +116,11 @@ pnpm request-settlements  # one-shot: request settlement for closed events
 
 **`create-events`** — requires `OWNER_PK`, `TEST_ACCOUNT_1..25`, `RPC_URL`, `VENICE_API_KEY` in `scripts/.env`.
 
-**`spawn-auctions`** — requires `TEST_ACCOUNT_1..25` and the frontend dev server running.
+**`spawn-auctions`** — requires `TEST_ACCOUNT_1..25`, `DAEMON_URL` and the daemon running.
 
-**`place-bids`** — requires `TEST_ACCOUNT_1..25` and the daemon running. Uses daemon HTTP API (`/bid`, `/faucet`, `/deposit`, `/balance`). Auto-tops up accounts when balance is low.
+**`place-bids`** — requires `TEST_ACCOUNT_1..25`, `DAEMON_URL` and the daemon running. Uses daemon HTTP API (`/bid`, `/faucet`, `/deposit`, `/balance`). Auto-tops up accounts when balance is low.
 
 **`request-settlements`** — requires `OWNER_PK`, `RPC_URL`. Queries subgraph for closed-but-unsettled events.
-
-**`DEMO_MODE`** — when enabled in daemon `.env`, the daemon runs all demo scripts as background loops: create-events (15m), spawn-auctions (5m), place-bids (1m), request-settlements (10m).
 
 ### E2E Tests
 
@@ -267,3 +266,50 @@ After deploying, follow the procedure in **"After a Contract Deployment"** above
 
 - [Compliant Private Transfer Demo](https://github.com/smartcontractkit/Compliant-Private-Transfer-Demo)
 - [Firebase Setup Guide](https://github.com/smartcontractkit/cre-gcp-prediction-market-demo/blob/main/firebase-setup.md)
+
+
+## Best practices/Standards
+
+### React standards
+
+- Avoid using `use client` when possible
+- Prefer functional components over class components
+- Any UI component should have a story, and stories should be checked for completeness after a major change
+- Use `pnpm/pnpm run lint` to check for linting errors after you're done
+
+### Backend (agent) standards
+
+- Vitest is used for testing
+
+### Typescript standards
+
+- Do not use `any` unless explicitly instructed otherwise
+- Do not type cast unless explicitly instructed otherwise. If you must typecast, any usage must have a clear and convincing comment explaining why
+- Avoid type casting as a solution to type errors unless it's absolutely necessary or explicitly instructed otherwise
+- Avoid type casting as a solution to type errors unless it's absolutely necessary or explicitly instructed otherwise
+- Avoid using @ts-expect-error, @ts-ignore, or @ts-nocheck unless absolutely necessary or explicitly instructed otherwise. Fix things instead
+- Never do hot imports in code function bodies
+- When using Zod schemas, derive TypeScript types using `z.infer<typeof schema>` rather than defining types separately - this prevents type drift where the schema and type diverge
+- Prefer vitest for testing when able
+- After making significant changes (adding functions, renaming files and functions, significant logic changes, etc), you should run `pnpm run lint`, `pnpm run build` and `pnpm run test:unit` to confirm your changes compile, or if you change multiple apps/packages, verify with `turbo run lint`, `turbo run build`, and `turbo run test:unit` (pnpm or pnpm allowed depending on the project standard, avoid yarn and npm unless standard in project)
+
+### Solidity standards
+
+- Always follow best practices for solidity development.
+- Prefer foundry to hardhat when you're able to choose (may be restricted by vendor tech in rare cases)
+- Prefer viem to ethers always when you're able to choose
+- Always verify contracts after deploying. Always set up contract deployment scripts/plugins to automatically verify contracts when they're deployed
+- Always analyze changes to the contracts for security vulnerabilities and fix them if detected
+
+
+### Other standards
+
+- CLAUDE.MD and README.MD are living docs that should be reviewed for accuracy after major changes. Do not fill these with fluff, just make sure they're current.
+- The year is 2026. If you search for "recent" information in the web and choose to include the year in your search, you should use the year 2025 or 2026. Avoid using 2024, 2023, or other years before 2025 when searching for up to date information
+- According to <https://github.com/anthropics/claude-code/issues/13137>, bash permission wildcards don't match commands with redirects or special shell characters. To avoid me having to manually approve commands excessively, structure your commands to avoid the use of special characters when possible (esp ">", "&&", "||")
+- You should always write e2e tests and unit tests for your work. When relevant, e2e tests should be configurable to run against, or should just outright run against real chains/frontends/backends/agents etc, and you should always test against real systems before claiming work is complete. Aim for high test coverage.
+- Avoid using inline environment variables in commands you run, as this requires me to manually approve the command. Everything has a .env file you can source, or use dotenv or similar to load, for secrets
+- Always opt out of optional telemetry. Don't remove code that disables it. Always ADD code that disables it when missing (such as in Claude settings in .claude/settings.json, turbo.json vars, envvars in github actions)
+- When deprecating code, you don't have to worry about backwards compatibility or leaving a comment trail unless explicitly instructed otherwise, just remove the code.
+- Always use Context7 MCP when I need library/API documentation, code generation, setup or configuration steps without me having to explicitly ask.
+- Always think and do research to make sure you're confident before taking action, it's important for you to not code reflexively

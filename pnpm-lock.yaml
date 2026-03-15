@@ -37,21 +37,9 @@ importers:
       fast-json-stable-stringify:
         specifier: ^2.1.0
         version: 2.1.0
-      graphql:
-        specifier: ^16.13.1
-        version: 16.13.1
-      graphql-request:
-        specifier: ^7.4.0
-        version: 7.4.0(graphql@16.13.1)
-      openai:
-        specifier: ^6.27.0
-        version: 6.27.0(ws@8.19.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@4.3.6)
       viem:
         specifier: ^2.47.0
         version: 2.47.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@4.3.6)
-      zod:
-        specifier: ^4.3.6
-        version: 4.3.6
     devDependencies:
       '@types/better-sqlite3':
         specifier: ^7.6.13

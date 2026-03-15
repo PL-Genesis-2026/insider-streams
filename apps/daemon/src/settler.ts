@@ -247,7 +247,7 @@ export async function startSettler(): Promise<void> {
   });
 
   // Watch for EventAdminClosed — immediately request settlement so the event
-  // enters the pipeline without waiting for the demo-populator's next cycle.
+  // enters the pipeline without waiting for the cron script's next cycle.
   publicClient.watchContractEvent({
     address: pmAddress,
     abi: examplePredictionMarketAbi,
