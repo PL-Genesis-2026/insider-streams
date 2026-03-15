@@ -16,7 +16,7 @@
 import express, { type Request, type Response } from "express";
 import multer from "multer";
 import { createHash, randomBytes } from "node:crypto";
-import { verifySignedRequest, fheConfidentialUsdcAbi } from "@private-streams/common";
+import { verifySignedRequest, fheConfidentialUsdcAbi, fheSecretMarketplaceAbi, PLATFORM_EOA_ADDRESS } from "@private-streams/common";
 import { config } from "./config.js";
 import {
   getOrCreateUser,
@@ -835,6 +835,52 @@ export function startApi(): void {
       const msg = err instanceof Error ? err.message : String(err);
       console.error("[api] POST /faucet error:", msg);
       res.status(500).json({ error: `Faucet mint failed: ${msg}` });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // POST /admin-expire — signature-authenticated, admin-only
+  //
+  // Body: { auctionId, timestamp, signature }
+  // Calls adminExpireAuction on-chain (sets endTime to now).
+  // The auction-closer will then close it on the next pass.
+  // ---------------------------------------------------------------------------
+  app.post("/admin-expire", jsonMiddleware, async (req: Request, res: Response) => {
+    try {
+      const result = await verifySignedRequest(req.body);
+      if (!result.ok) {
+        res.status(result.status).json({ error: result.error, code: result.code });
+        return;
+      }
+
+      // Admin-only gate
+      if (result.payload.userAddress.toLowerCase() !== PLATFORM_EOA_ADDRESS.toLowerCase()) {
+        res.status(403).json({ error: "Only the platform admin can expire auctions" });
+        return;
+      }
+
+      const { auctionId } = req.body as { auctionId: string };
+      if (!auctionId) {
+        res.status(400).json({ error: "Missing auctionId" });
+        return;
+      }
+
+      const txHash = await withAdminLock(() =>
+        getWalletClient().writeContract({
+          address: config.secretMarketplaceAddress as `0x${string}`,
+          abi: fheSecretMarketplaceAbi,
+          functionName: "adminExpireAuction",
+          args: [BigInt(auctionId)],
+        }),
+      );
+      const receipt = await waitForReceipt(txHash);
+
+      console.log(`[api] Admin expired auction ${auctionId}, tx: ${receipt.transactionHash}`);
+      res.json({ txHash: receipt.transactionHash, auctionId });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[api] POST /admin-expire error:", msg);
+      res.status(500).json({ error: `Admin expire failed: ${msg}` });
     }
   });
 

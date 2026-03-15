@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { useSignedWalletSession } from "@/lib/wallet/use-signed-wallet-session";
 import { useWalletSession } from "@/lib/wallet/use-wallet-session";
+import { useSignMessage } from "wagmi";
+import stringify from "fast-json-stable-stringify";
 
 type AdminExpireAuctionButtonProps = {
   auctionId: string;
@@ -19,7 +20,7 @@ export function AdminExpireAuctionButton({
 }: AdminExpireAuctionButtonProps) {
   const router = useRouter();
   const walletSession = useWalletSession();
-  const { getSignedSession } = useSignedWalletSession();
+  const { signMessageAsync } = useSignMessage();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isOwner = useMemo(() => {
@@ -40,20 +41,22 @@ export function AdminExpireAuctionButton({
 
     setIsSubmitting(true);
     try {
-      const { signature, timestamp } = await getSignedSession();
+      const timestamp = Math.floor(Date.now() / 1000);
+      const payload = { auctionId, timestamp };
+      const signature = await signMessageAsync({ message: stringify(payload) });
       const response = await fetch("/api/auction/admin-expire", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ auctionId, signature, timestamp }),
+        body: JSON.stringify({ ...payload, signature }),
       });
 
-      const payload = (await response.json().catch(() => ({}))) as {
+      const result = (await response.json().catch(() => ({}))) as {
         error?: string;
         txHash?: string;
       };
 
       if (!response.ok) {
-        throw new Error(payload.error ?? "Failed to expire auction");
+        throw new Error(result.error ?? "Failed to expire auction");
       }
 
       toast.success("Auction marked expired. Refreshing detail view.");
@@ -67,7 +70,7 @@ export function AdminExpireAuctionButton({
     }
   }, [
     auctionId,
-    getSignedSession,
+    signMessageAsync,
     router,
     walletSession.isConnected,
     walletSession.isSupportedChain,
