@@ -5,7 +5,7 @@ import {
 import { parseUnits } from "viem";
 
 export { CONFIDENTIAL_USDC_FAUCET_ACTION };
-export const CONFIDENTIAL_USDC_FAUCET_AMOUNT_DISPLAY = "25" as const;
+export const CONFIDENTIAL_USDC_FAUCET_AMOUNT_DISPLAY = "1000" as const;
 
 export const CONFIDENTIAL_USDC_FAUCET_AMOUNT_BASE_UNITS = parseUnits(
   CONFIDENTIAL_USDC_FAUCET_AMOUNT_DISPLAY,
