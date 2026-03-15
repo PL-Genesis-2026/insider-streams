@@ -174,110 +174,114 @@ async function handleSettlementResponse(
   }
   processingEvents.add(key);
 
-  console.log(`\n[resolver] Processing settlement for event ${eventId}, outcome=${outcome}`);
-
-  const publicClient = getPublicClient();
-
-  // Check if event already resolved on marketplace
-  const alreadyResolved = await publicClient.readContract({
-    address: marketplaceAddress,
-    abi: fheSecretMarketplaceAbi,
-    functionName: "eventResolved",
-    args: [eventId],
-  });
-  if (alreadyResolved) {
-    console.log(`[resolver] Event ${eventId} already resolved, skipping resolveEventPredictions`);
-    // Even if already resolved, there may be pending finalizations
-    await finalizeEventReputations(eventId);
-    return;
-  }
-
-  // Check if there are auctions for this event
-  const auctionIds = await publicClient.readContract({
-    address: marketplaceAddress,
-    abi: fheSecretMarketplaceAbi,
-    functionName: "getEventAuctions",
-    args: [eventId],
-  });
-  if (auctionIds.length === 0) {
-    console.log(`[resolver] No auctions for event ${eventId}, skipping`);
-    return;
-  }
-
-  // Determine if outcome is YES
-  let actualOutcomeIsYes: boolean;
-  if (outcome === PM_OUTCOME.Yes) {
-    actualOutcomeIsYes = true;
-  } else if (outcome === PM_OUTCOME.No) {
-    actualOutcomeIsYes = false;
-  } else {
-    console.log(`[resolver] INCONCLUSIVE outcome for event ${eventId} — treating as NO`);
-    actualOutcomeIsYes = false;
-  }
-
-  console.log(`[resolver] Resolving ${auctionIds.length} auction(s) for event ${eventId} (outcomeIsYes=${actualOutcomeIsYes})`);
-
-  // Pre-close any expired auctions with bids before resolving.
-  // Without this, resolveEventPredictions() auto-cancels open auctions
-  // (refunding the bidder) instead of closing them (paying the seller).
-  const now = BigInt(Math.floor(Date.now() / 1000));
-  for (const auctionId of auctionIds) {
-    try {
-      const auction = await publicClient.readContract({
-        address: marketplaceAddress,
-        abi: fheSecretMarketplaceAbi,
-        functionName: "getAuction",
-        args: [auctionId],
-      });
-      const endTime = auction[1]; // endTime
-      const status = auction[6]; // status (0 = Open)
-      if (Number(status) === 0 && endTime <= now) {
-        console.log(`[resolver] Pre-closing expired auction ${auctionId} before reputation resolution`);
-        const closeHash = await withAdminLock(() =>
-          getWalletClient().writeContract({
-            address: marketplaceAddress,
-            abi: fheSecretMarketplaceAbi,
-            functionName: "closeAuction",
-            args: [auctionId],
-          }),
-        );
-        await waitForReceipt(closeHash);
-        console.log(`[resolver] Pre-closed auction ${auctionId}`);
-      }
-    } catch (err) {
-      console.warn(`[resolver] Pre-close failed for auction ${auctionId}:`, err instanceof Error ? err.message : err);
-    }
-  }
-
   try {
-    const hash = await withAdminLock(() =>
-      getWalletClient().writeContract({
-        address: marketplaceAddress,
-        abi: fheSecretMarketplaceAbi,
-        functionName: "resolveEventPredictions",
-        args: [eventId, actualOutcomeIsYes],
-      }),
-    );
-    const resolveReceipt = await waitForReceipt(hash);
-    const txHash = resolveReceipt.transactionHash;
-    console.log(`[resolver] Resolved event ${eventId}: ${txHash}`);
+    console.log(`\n[resolver] Processing settlement for event ${eventId}, outcome=${outcome}`);
 
-    const outcomeLabel = actualOutcomeIsYes ? "YES" : "NO";
-    const auctionList = auctionIds.map((id) => `#${id}`).join(", ");
-    await sendNotification(
-      `Reputation Resolved: Event ${eventId}`,
-      `Event ${eventId}: outcome=${outcomeLabel}, ${auctionIds.length} auction(s) [${auctionList}] resolved.\ntx: ${ETHERSCAN_URL}/${txHash}`,
-      auctionUrl(auctionIds[0]) ?? `${ETHERSCAN_URL}/${txHash}`,
-    );
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[resolver] Failed to resolve event ${eventId}:`, msg);
-    await sendNotification("Reputation Resolution FAILED", `Event ${eventId}: ${msg}`);
-    return; // Don't attempt finalization if resolve failed
+    const publicClient = getPublicClient();
+
+    // Check if event already resolved on marketplace
+    const alreadyResolved = await publicClient.readContract({
+      address: marketplaceAddress,
+      abi: fheSecretMarketplaceAbi,
+      functionName: "eventResolved",
+      args: [eventId],
+    });
+    if (alreadyResolved) {
+      console.log(`[resolver] Event ${eventId} already resolved, skipping resolveEventPredictions`);
+      // Even if already resolved, there may be pending finalizations
+      await finalizeEventReputations(eventId);
+      return;
+    }
+
+    // Check if there are auctions for this event
+    const auctionIds = await publicClient.readContract({
+      address: marketplaceAddress,
+      abi: fheSecretMarketplaceAbi,
+      functionName: "getEventAuctions",
+      args: [eventId],
+    });
+    if (auctionIds.length === 0) {
+      console.log(`[resolver] No auctions for event ${eventId}, skipping`);
+      return;
+    }
+
+    // Determine if outcome is YES
+    let actualOutcomeIsYes: boolean;
+    if (outcome === PM_OUTCOME.Yes) {
+      actualOutcomeIsYes = true;
+    } else if (outcome === PM_OUTCOME.No) {
+      actualOutcomeIsYes = false;
+    } else {
+      console.log(`[resolver] INCONCLUSIVE outcome for event ${eventId} — treating as NO`);
+      actualOutcomeIsYes = false;
+    }
+
+    console.log(`[resolver] Resolving ${auctionIds.length} auction(s) for event ${eventId} (outcomeIsYes=${actualOutcomeIsYes})`);
+
+    // Pre-close any expired auctions with bids before resolving.
+    // Without this, resolveEventPredictions() auto-cancels open auctions
+    // (refunding the bidder) instead of closing them (paying the seller).
+    const now = BigInt(Math.floor(Date.now() / 1000));
+    for (const auctionId of auctionIds) {
+      try {
+        const auction = await publicClient.readContract({
+          address: marketplaceAddress,
+          abi: fheSecretMarketplaceAbi,
+          functionName: "getAuction",
+          args: [auctionId],
+        });
+        const endTime = auction[1]; // endTime
+        const status = auction[6]; // status (0 = Open)
+        if (Number(status) === 0 && endTime <= now) {
+          console.log(`[resolver] Pre-closing expired auction ${auctionId} before reputation resolution`);
+          const closeHash = await withAdminLock(() =>
+            getWalletClient().writeContract({
+              address: marketplaceAddress,
+              abi: fheSecretMarketplaceAbi,
+              functionName: "closeAuction",
+              args: [auctionId],
+            }),
+          );
+          await waitForReceipt(closeHash);
+          console.log(`[resolver] Pre-closed auction ${auctionId}`);
+        }
+      } catch (err) {
+        console.warn(`[resolver] Pre-close failed for auction ${auctionId}:`, err instanceof Error ? err.message : err);
+      }
+    }
+
+    try {
+      const hash = await withAdminLock(() =>
+        getWalletClient().writeContract({
+          address: marketplaceAddress,
+          abi: fheSecretMarketplaceAbi,
+          functionName: "resolveEventPredictions",
+          args: [eventId, actualOutcomeIsYes],
+        }),
+      );
+      const resolveReceipt = await waitForReceipt(hash);
+      const txHash = resolveReceipt.transactionHash;
+      console.log(`[resolver] Resolved event ${eventId}: ${txHash}`);
+
+      const outcomeLabel = actualOutcomeIsYes ? "YES" : "NO";
+      const auctionList = auctionIds.map((id) => `#${id}`).join(", ");
+      await sendNotification(
+        `Reputation Resolved: Event ${eventId}`,
+        `Event ${eventId}: outcome=${outcomeLabel}, ${auctionIds.length} auction(s) [${auctionList}] resolved.\ntx: ${ETHERSCAN_URL}/${txHash}`,
+        auctionUrl(auctionIds[0]) ?? `${ETHERSCAN_URL}/${txHash}`,
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[resolver] Failed to resolve event ${eventId}:`, msg);
+      await sendNotification("Reputation Resolution FAILED", `Event ${eventId}: ${msg}`);
+      return; // Don't attempt finalization if resolve failed
+    }
+
+    // Step 2: Finalize reputation for each auction (decrypt + submit proof)
+    await finalizeEventReputations(eventId);
+  } finally {
+    processingEvents.delete(key);
   }
-
-  // Step 2: Finalize reputation for each auction (decrypt + submit proof)
-  await finalizeEventReputations(eventId);
 }
 
 /**
