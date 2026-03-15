@@ -133,6 +133,7 @@ function RevealedContent({
         setDecryptState({ status: "done", text: null, objectUrl, contentType: ct });
       }
     } catch (err) {
+      console.error("[secret-reveal] Decrypt failed:", err);
       setDecryptState({
         status: "error",
         message: err instanceof Error ? err.message : "Decryption failed",
@@ -216,7 +217,12 @@ function RevealedContent({
                 </a>
               </Button>
 
-              {decryptState.status === "idle" ? (
+              {decryptState.status === "decrypting" ? (
+                <Button variant="outline" size="sm" disabled className="w-fit">
+                  <Loader2 className="size-3.5 animate-spin" />
+                  Decrypting...
+                </Button>
+              ) : decryptState.status !== "done" ? (
                 <Button
                   variant="outline"
                   size="sm"
@@ -224,12 +230,7 @@ function RevealedContent({
                   onClick={() => void handleDecrypt()}
                 >
                   <Unlock className="size-3.5" />
-                  Decrypt &amp; View
-                </Button>
-              ) : decryptState.status === "decrypting" ? (
-                <Button variant="outline" size="sm" disabled className="w-fit">
-                  <Loader2 className="size-3.5 animate-spin" />
-                  Decrypting...
+                  {decryptState.status === "error" ? "Retry decrypt" : "Decrypt & View"}
                 </Button>
               ) : null}
             </div>

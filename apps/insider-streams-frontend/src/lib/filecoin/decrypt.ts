@@ -17,8 +17,8 @@ const SIZE_BYTES = 8;
 const HEADER_SIZE =
   FILE_ENVELOPE_MAGIC.length + SALT_BYTES + IV_BYTES + AUTH_TAG_BYTES + SIZE_BYTES * 2;
 
-// scrypt parameters — must match server-side (Node crypto default N=2^15 for scryptSync)
-const SCRYPT_N = 2 ** 15;
+// scrypt parameters — must match server-side (Node crypto default N=2^14 for scryptSync)
+const SCRYPT_N = 2 ** 14;
 const SCRYPT_R = 8;
 const SCRYPT_P = 1;
 
