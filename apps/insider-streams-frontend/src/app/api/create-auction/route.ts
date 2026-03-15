@@ -6,6 +6,8 @@ import {
   type CreateAuctionDuration,
 } from "@/lib/create-auction/shared";
 
+export const maxDuration = 60;
+
 export async function POST(request: Request) {
   const contentType = request.headers.get("content-type") ?? "";
 
