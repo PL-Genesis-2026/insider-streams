@@ -90,7 +90,16 @@ async function runCloserCycle(): Promise<void> {
   for (const auctionId of expired) {
     const txHash = await closeAuction(auctionId);
     if (txHash) {
-      await markBids(Number(auctionId), "won");
+      try {
+        await markBids(Number(auctionId), "won");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[closer] markBids failed for auction ${auctionId}:`, msg);
+        await sendNotification(
+          `markBids FAILED: auction #${auctionId}`,
+          `Status 'won' was NOT applied — bid winners may not see secrets.\nError: ${msg}`,
+        );
+      }
 
       // Read auction metadata for richer notification
       let meta = "";
@@ -150,8 +159,13 @@ export async function startAuctionCloser(): Promise<void> {
       for (const log of logs) {
         const { auctionId } = log.args as { auctionId: bigint };
         console.log(`[closer] AuctionCancelled event: auction ${auctionId}`);
-        markBids(Number(auctionId), "cancelled").catch((err) => {
-          console.error(`[closer] Failed to mark bids as cancelled for auction ${auctionId}:`, err);
+        markBids(Number(auctionId), "cancelled").catch(async (err) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(`[closer] Failed to mark bids as cancelled for auction ${auctionId}:`, msg);
+          await sendNotification(
+            `markBids FAILED: auction #${auctionId}`,
+            `Status 'cancelled' was NOT applied.\nError: ${msg}`,
+          );
         });
       }
     },
