@@ -250,7 +250,16 @@ async function handleSettlementResponse(
             }),
           );
           await waitForReceipt(closeHash);
-          await markBids(Number(auctionId), "won");
+          try {
+            await markBids(Number(auctionId), "won");
+          } catch (markErr) {
+            const msg = markErr instanceof Error ? markErr.message : String(markErr);
+            console.error(`[resolver] markBids failed for auction ${auctionId}:`, msg);
+            await sendNotification(
+              `markBids FAILED: auction #${auctionId}`,
+              `Status 'won' was NOT applied after pre-close — bid winners may not see secrets.\nError: ${msg}`,
+            );
+          }
           console.log(`[resolver] Pre-closed auction ${auctionId} and marked bids as won`);
         }
       } catch (err) {
