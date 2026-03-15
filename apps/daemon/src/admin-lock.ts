@@ -6,7 +6,7 @@
  * transactions are submitted sequentially (each waits for the previous nonce
  * to be assigned before requesting the next one).
  *
- * Every service (auction-closer, settler, reputation-resolver, demo-populator,
+ * Every service (auction-closer, settler, reputation-resolver,
  * API faucet) must wrap write calls with withAdminLock().
  */
 
