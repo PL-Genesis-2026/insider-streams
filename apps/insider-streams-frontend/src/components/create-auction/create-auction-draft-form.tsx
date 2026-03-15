@@ -103,7 +103,7 @@ const CLOSE_DATE_FORMAT: Intl.DateTimeFormatOptions = {
 };
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
-const ALLOWED_FILE_EXTENSIONS = [".txt", ".md", ".json", ".png", ".jpg", ".jpeg", ".pdf"];
+const ALLOWED_FILE_EXTENSIONS = [".txt", ".md", ".json", ".png", ".jpg", ".jpeg", ".pdf", ".zip"];
 
 function isPredictionMarketEventsResponse(
   value: PredictionMarketEventsResponse | PredictionMarketEventError,

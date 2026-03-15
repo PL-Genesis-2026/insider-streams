@@ -63,46 +63,49 @@ function DecryptedContent({
   decryptState: Extract<DecryptState, { status: "done" }>;
   fileName: string;
 }) {
-  if (decryptState.text !== null) {
-    return (
-      <div className="mt-3 rounded-lg border border-border/50 bg-muted/20 p-4">
-        <p className="mb-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground/60">
-          Decrypted content
-        </p>
-        <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-sm text-foreground">
-          {decryptState.text}
-        </pre>
-      </div>
-    );
-  }
+  // Build an object URL for the download link if we have text but no objectUrl
+  const downloadUrl = decryptState.objectUrl
+    ?? (decryptState.text !== null
+      ? URL.createObjectURL(new Blob([decryptState.text], { type: decryptState.contentType }))
+      : null);
 
-  if (decryptState.objectUrl && decryptState.contentType.startsWith("image/")) {
-    return (
-      <div className="mt-3">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={decryptState.objectUrl}
-          alt={fileName}
-          className="max-h-64 rounded-lg border border-border/50"
-        />
-      </div>
-    );
-  }
+  return (
+    <div className="mt-3 space-y-3">
+      {/* Inline preview for text */}
+      {decryptState.text !== null ? (
+        <div className="rounded-lg border border-border/50 bg-muted/20 p-4">
+          <p className="mb-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground/60">
+            Decrypted content
+          </p>
+          <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-sm text-foreground">
+            {decryptState.text}
+          </pre>
+        </div>
+      ) : null}
 
-  if (decryptState.objectUrl) {
-    return (
-      <div className="mt-3">
-        <Button asChild variant="outline" size="sm">
-          <a href={decryptState.objectUrl} download={fileName}>
+      {/* Inline preview for images */}
+      {decryptState.objectUrl && decryptState.contentType.startsWith("image/") ? (
+        <div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={decryptState.objectUrl}
+            alt={fileName}
+            className="max-h-64 rounded-lg border border-border/50"
+          />
+        </div>
+      ) : null}
+
+      {/* Always show download link */}
+      {downloadUrl ? (
+        <Button asChild variant="outline" size="sm" className="w-fit">
+          <a href={downloadUrl} download={fileName}>
             <Download className="size-3.5" />
             Download decrypted file
           </a>
         </Button>
-      </div>
-    );
-  }
-
-  return null;
+      ) : null}
+    </div>
+  );
 }
 
 function RevealedContent({
@@ -159,11 +162,15 @@ function RevealedContent({
           </Badge>
         ) : null}
       </div>
-      {data.secret_data.trim().length > 0 ? (
+      {data.file ? (
+        <p className="text-sm text-muted-foreground">
+          This auction includes an encrypted file attachment. Decrypt it below to view the secret.
+        </p>
+      ) : data.secret_data.trim().length > 0 ? (
         <p className="text-sm leading-7 text-foreground">{data.secret_data}</p>
       ) : (
         <p className="text-sm text-muted-foreground">
-          This auction uses a file attachment as the primary secret payload.
+          No secret data available.
         </p>
       )}
       <p className="text-sm text-muted-foreground">

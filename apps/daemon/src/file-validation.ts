@@ -16,6 +16,7 @@ export const ALLOWED_EXTENSIONS: Record<string, string[]> = {
   ".jpg": ["image/jpeg"],
   ".jpeg": ["image/jpeg"],
   ".pdf": ["application/pdf"],
+  ".zip": ["application/zip", "application/x-zip-compressed"],
 };
 
 const TEXT_EXTENSIONS = new Set([".txt", ".md", ".json"]);
