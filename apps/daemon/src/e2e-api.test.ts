@@ -142,6 +142,7 @@ before(async () => {
       API_PORT: String(API_PORT),
       DB_PATH: dbPath,
       PRIVATE_KEY: DAEMON_PK,
+      INTERNAL_API_KEY: "test-secret-key-12345",
     },
     stdio: "pipe",
   });
@@ -1005,5 +1006,108 @@ describe("POST /secrets (file metadata)", () => {
     assert.equal(res.status, 200);
     // No secret exists for auction 42 yet (we can't create on-chain in test mode)
     // But the endpoint should work without error
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// Internal endpoint: POST /internal/mark-bids
+// ════════════════════════════════════════════════════════════════════════════
+
+describe("POST /internal/mark-bids", () => {
+  const INTERNAL_KEY = "test-secret-key-12345";
+
+  it("rejects request without API key", async () => {
+    const { status } = await api("POST", "/internal/mark-bids", {
+      auctionId: 1,
+      status: "won",
+    });
+    assert.equal(status, 401);
+  });
+
+  it("rejects request with wrong API key", async () => {
+    const resp = await fetch(`${BASE_URL}/internal/mark-bids`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Key": "wrong-key",
+      },
+      body: JSON.stringify({ auctionId: 1, status: "won" }),
+    });
+    assert.equal(resp.status, 401);
+  });
+
+  it("rejects invalid status", async () => {
+    const resp = await fetch(`${BASE_URL}/internal/mark-bids`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Key": INTERNAL_KEY,
+      },
+      body: JSON.stringify({ auctionId: 1, status: "invalid" }),
+    });
+    assert.equal(resp.status, 400);
+  });
+
+  it("rejects missing auctionId", async () => {
+    const resp = await fetch(`${BASE_URL}/internal/mark-bids`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Key": INTERNAL_KEY,
+      },
+      body: JSON.stringify({ status: "won" }),
+    });
+    assert.equal(resp.status, 400);
+  });
+
+  it("marks bids as won", async () => {
+    const bidPayload = await signPayload(ALICE, { auctionId: "9000", amount: "5000000" });
+    await api("POST", "/bid", bidPayload);
+
+    const resp = await fetch(`${BASE_URL}/internal/mark-bids`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Key": INTERNAL_KEY,
+      },
+      body: JSON.stringify({ auctionId: 9000, status: "won" }),
+    });
+    assert.equal(resp.status, 200);
+    const data = (await resp.json()) as { ok: boolean; updated: number };
+    assert.equal(data.ok, true);
+    assert.equal(data.updated, 1);
+  });
+
+  it("marks bids as cancelled", async () => {
+    const bidPayload = await signPayload(BOB, { auctionId: "9001", amount: "3000000" });
+    await api("POST", "/bid", bidPayload);
+
+    const resp = await fetch(`${BASE_URL}/internal/mark-bids`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Key": INTERNAL_KEY,
+      },
+      body: JSON.stringify({ auctionId: 9001, status: "cancelled" }),
+    });
+    assert.equal(resp.status, 200);
+    const data = (await resp.json()) as { ok: boolean; updated: number };
+    assert.equal(data.ok, true);
+    assert.equal(data.updated, 1);
+  });
+
+  it("returns updated=0 for auction with no active bids", async () => {
+    const resp = await fetch(`${BASE_URL}/internal/mark-bids`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Key": INTERNAL_KEY,
+      },
+      body: JSON.stringify({ auctionId: 99999, status: "won" }),
+    });
+    assert.equal(resp.status, 200);
+    const data = (await resp.json()) as { ok: boolean; updated: number };
+    assert.equal(data.ok, true);
+    assert.equal(data.updated, 0);
   });
 });

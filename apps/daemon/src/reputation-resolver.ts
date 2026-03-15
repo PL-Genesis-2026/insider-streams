@@ -24,7 +24,7 @@ function sendNotification(title: string, message: string, clickUrl?: string) {
 }
 import { withAdminLock } from "./admin-lock.js";
 import { getFhevmInstance } from "./fhe.js";
-import { markBidsForAuction } from "./db.js";
+import { markBids } from "./mark-bids.js";
 import { ProcessingTracker } from "./processing-tracker.js";
 
 const ETHERSCAN_URL = "https://sepolia.etherscan.io/tx";
@@ -252,7 +252,16 @@ async function handleSettlementResponse(
             }),
           );
           await waitForReceipt(closeHash);
-          markBidsForAuction(Number(auctionId), "won");
+          try {
+            await markBids(Number(auctionId), "won");
+          } catch (markErr) {
+            const msg = markErr instanceof Error ? markErr.message : String(markErr);
+            console.error(`[resolver] markBids failed for auction ${auctionId}:`, msg);
+            await sendNotification(
+              `markBids FAILED: auction #${auctionId}`,
+              `Status 'won' was NOT applied after pre-close — bid winners may not see secrets.\nError: ${msg}`,
+            );
+          }
           console.log(`[resolver] Pre-closed auction ${auctionId} and marked bids as won`);
         }
       } catch (err) {
