@@ -232,6 +232,10 @@ async function main() {
   }
 
   let bidsPlaced = 0;
+  let skippedLowBalance = 0;
+  let rejectedBids = 0;
+  let errors = 0;
+  const rejectReasons: string[] = [];
 
   for (const auction of auctions) {
     // Pick a random account — daemon uses pseudonymous IDs so we can't
@@ -245,6 +249,7 @@ async function main() {
         console.log(
           `  [place-bids] Skipping auction ${auction.auctionId} — insufficient balance`,
         );
+        skippedLowBalance++;
         continue;
       }
 
@@ -279,19 +284,29 @@ async function main() {
         console.warn(
           `  [place-bids] Bid rejected for auction ${auction.auctionId}: ${err.error}`,
         );
+        rejectedBids++;
+        if (err.error && rejectReasons.length < 3) {
+          rejectReasons.push(`#${auction.auctionId}: ${err.error.slice(0, 80)}`);
+        }
       }
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
       console.error(
-        `  [place-bids] Error on auction ${auction.auctionId}:`,
-        err instanceof Error ? err.message : err,
+        `  [place-bids] Error on auction ${auction.auctionId}:`, msg,
       );
+      errors++;
     }
   }
 
-  const summary = `Placed ${bidsPlaced} bid(s) across ${auctions.length} auction(s)`;
+  const lines = [`Placed ${bidsPlaced} bid(s) across ${auctions.length} auction(s)`];
+  if (skippedLowBalance > 0) lines.push(`Skipped (low balance): ${skippedLowBalance}`);
+  if (rejectedBids > 0) lines.push(`Rejected: ${rejectedBids}`);
+  if (errors > 0) lines.push(`Errors: ${errors}`);
+  if (rejectReasons.length > 0) lines.push(`Reasons:\n${rejectReasons.join("\n")}`);
+  const summary = lines.join("\n");
   console.log(`[place-bids] ${summary}`);
   await ntfy(
-    "Bids Placed",
+    bidsPlaced > 0 ? "Bids Placed" : "Bids Placed (none)",
     summary,
     bidsPlaced > 0 ? ["white_check_mark"] : ["warning"],
   );
