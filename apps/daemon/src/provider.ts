@@ -21,6 +21,11 @@ export function getPublicClient(): PublicClient {
     _publicClient = createPublicClient({
       chain: sepolia,
       transport: http(config.rpcUrl, { timeout: 30_000 }),
+      // Viem defaults to 4s polling for watchContractEvent (eth_getLogs) and
+      // waitForTransactionReceipt. With 4 event watchers running continuously,
+      // the default burns ~6.5M Alchemy CU/day. 60s reduces that by ~93%.
+      // Safe on Sepolia: 60s ≈ 5 blocks, well under eth_getLogs range limits.
+      pollingInterval: 60_000,
     });
   }
   return _publicClient;
