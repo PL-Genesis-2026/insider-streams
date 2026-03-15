@@ -26,6 +26,7 @@ import {
   getWonBid,
   updateBidTxHash,
   markBidFailed,
+  markBidsForAuction,
   getBidsByUserId,
   insertSecret,
   insertSecretWithFilecoin,
@@ -934,6 +935,56 @@ export function startApi(): void {
       const msg = err instanceof Error ? err.message : String(err);
       console.error("[api] POST /admin-expire error:", msg);
       res.status(500).json({ error: `Admin expire failed: ${msg}` });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // POST /internal/mark-bids — internal, API-key authenticated
+  //
+  // The daemon can be split across multiple VPSes (DAEMON_MODE=api on one,
+  // DAEMON_MODE=workers on another) so that each machine gets its own IP and
+  // its own Zama FHE relayer rate limit bucket. This prevents background
+  // workers (settler, auction-closer, reputation-resolver) from consuming
+  // Zama quota that the frontend-facing API needs for user operations like
+  // balance checks, bids, and deposits.
+  //
+  // When split, the workers can't write to the API's SQLite database directly.
+  // This endpoint lets them update bid status (won/cancelled) remotely after
+  // closing auctions on-chain.
+  //
+  // Auth: X-Internal-Key header must match INTERNAL_API_KEY env var.
+  // This is a simple shared secret — sufficient because:
+  //   1. This endpoint is not user-facing (only called by our own workers)
+  //   2. Both keys are managed by the same operator on machines we control
+  //   3. Traffic goes over HTTPS (HAProxy terminates TLS)
+  // ---------------------------------------------------------------------------
+  app.post("/internal/mark-bids", jsonMiddleware, async (req: Request, res: Response) => {
+    try {
+      const key = req.headers["x-internal-key"];
+      if (!config.internalApiKey || key !== config.internalApiKey) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+
+      const { auctionId, status } = req.body as { auctionId: number; status: string };
+
+      if (auctionId == null || typeof auctionId !== "number") {
+        res.status(400).json({ error: "Missing or invalid auctionId" });
+        return;
+      }
+
+      if (status !== "won" && status !== "cancelled") {
+        res.status(400).json({ error: "Invalid status — must be 'won' or 'cancelled'" });
+        return;
+      }
+
+      const updated = markBidsForAuction(auctionId, status);
+      console.log(`[api] /internal/mark-bids: auction=${auctionId} status=${status} updated=${updated}`);
+      res.json({ ok: true, updated });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[api] POST /internal/mark-bids error:", msg);
+      res.status(500).json({ error: msg });
     }
   });
 

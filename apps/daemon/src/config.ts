@@ -48,6 +48,17 @@ export const config = {
   filecoinRpcUrl: process.env.FILECOIN_RPC_URL || "",
   maxUploadBytes: Number(process.env.MAX_UPLOAD_BYTES || 10_485_760), // 10 MB
 
+  // Daemon mode: "api" (HTTP API only), "workers" (background services only), "all" (default)
+  daemonMode: (process.env.DAEMON_MODE || "all") as "api" | "workers" | "all",
+
+  // Internal API — used when the daemon is split across VPSes to isolate the
+  // frontend-facing API from background workers, giving each its own IP and
+  // Zama FHE relayer rate limit bucket. Workers call POST /internal/mark-bids
+  // on the API to update bid status in SQLite, authenticated by this shared secret.
+  // Both machines must share the same INTERNAL_API_KEY value.
+  internalApiKey: process.env.INTERNAL_API_KEY || "",
+  apiInternalUrl: process.env.API_INTERNAL_URL || "",
+
 } as const;
 
 export function requireConfig(keys: (keyof typeof config)[]): void {
