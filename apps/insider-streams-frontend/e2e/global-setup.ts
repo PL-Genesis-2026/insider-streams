@@ -81,8 +81,7 @@ async function retryRpc<T>(fn: () => Promise<T>, maxAttempts = 5, delayMs = 15_0
   throw new Error("unreachable");
 }
 
-/** waitForTransactionReceipt with retry — public RPCs sometimes return
- *  "transaction indexing is in progress" which viem doesn't handle gracefully. */
+/** waitForTransactionReceipt with retry — handles "indexing in progress" and 429 rate limits. */
 async function waitForReceipt(
   client: ReturnType<typeof createPublicClient>,
   hash: `0x${string}`,
@@ -93,9 +92,11 @@ async function waitForReceipt(
       return await client.waitForTransactionReceipt({ hash });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes("indexing is in progress") && i < maxAttempts - 1) {
-        console.log(`[global-setup] Tx receipt pending (attempt ${i + 1}/${maxAttempts}), retrying in 5s...`);
-        await new Promise((r) => setTimeout(r, 5_000));
+      const isTransient = msg.includes("indexing is in progress") || msg.includes("429") || msg.includes("Too Many Requests");
+      if (isTransient && i < maxAttempts - 1) {
+        const delay = msg.includes("429") ? 15_000 : 5_000;
+        console.log(`[global-setup] Tx receipt pending (attempt ${i + 1}/${maxAttempts}), retrying in ${delay / 1000}s...`);
+        await new Promise((r) => setTimeout(r, delay));
         continue;
       }
       throw err;
@@ -154,7 +155,9 @@ export default async function globalSetup() {
   let usableEventId: string | null = null;
   let usableEventTitle = "";
 
-  for (let i = 0; i < Number(nextEventId); i++) {
+  // Search backwards from newest event — avoids hundreds of RPC calls
+  // when there are many old events (nextEventId can be 400+).
+  for (let i = Number(nextEventId) - 1; i >= 0; i--) {
     try {
       const event = await publicClient.readContract({
         address: EXAMPLE_PREDICTION_MARKET_ADDRESS as Address,
@@ -162,10 +165,12 @@ export default async function globalSetup() {
         functionName: "getMarketEvent",
         args: [BigInt(i)],
       });
-      const endTime = Number((event as any)[1] ?? (event as any).endTime);
-      const settled = (event as any)[2] ?? (event as any).settled;
+      // Event struct: question[0], creator[1], eventOpen[2], eventClose[3], status[4], ...
+      const eventClose = Number((event as any)[3] ?? (event as any).eventClose);
+      const status = Number((event as any)[4] ?? (event as any).status);
       const question = (event as any)[0] ?? (event as any).question;
-      if (!settled && endTime > Math.floor(Date.now() / 1000) + 600) {
+      // Status.Open = 0, Status.SettlementRequested = 1, Status.Settled = 2, Status.NeedsManual = 3
+      if (status === 0 && eventClose > Math.floor(Date.now() / 1000) + 600) {
         console.log(
           `[global-setup] Found usable event #${i}, skipping creation`,
         );
@@ -173,6 +178,9 @@ export default async function globalSetup() {
         usableEventTitle = String(question);
         break;
       }
+      // If we hit a settled/expired event while going backwards, recent events
+      // are likely all expired too — stop searching after 10 misses.
+      if (Number(nextEventId) - 1 - i >= 10) break;
     } catch {
       // skip
     }
