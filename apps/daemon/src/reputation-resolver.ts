@@ -25,14 +25,15 @@ function sendNotification(title: string, message: string, clickUrl?: string) {
 import { withAdminLock } from "./admin-lock.js";
 import { getFhevmInstance } from "./fhe.js";
 import { markBidsForAuction } from "./db.js";
+import { ProcessingTracker } from "./processing-tracker.js";
 
 const ETHERSCAN_URL = "https://sepolia.etherscan.io/tx";
 const marketplaceAddress = config.secretMarketplaceAddress as `0x${string}`;
 const pmAddress = config.predictionMarketAddress as `0x${string}`;
 
-// In-memory dedup: prevents concurrent processing of the same event
-// (startup scan + event watcher can race)
-const processingEvents = new Set<string>();
+// Dedup tracker: prevents concurrent processing AND re-processing of resolved events.
+// Keys are kept permanently on success, removed on failure (allow retry).
+const tracker = new ProcessingTracker();
 
 function auctionUrl(auctionId: bigint): string | undefined {
   return config.frontendUrl ? `${config.frontendUrl}/auction/${auctionId}` : undefined;
@@ -175,11 +176,10 @@ async function handleSettlementResponse(
   outcome: number,
 ): Promise<void> {
   const key = eventId.toString();
-  if (processingEvents.has(key)) {
-    console.log(`[resolver] Event ${eventId} already being processed, skipping`);
+  if (!tracker.acquire(key)) {
+    console.log(`[resolver] Event ${eventId} already processed or in progress, skipping`);
     return;
   }
-  processingEvents.add(key);
 
   try {
     console.log(`\n[resolver] Processing settlement for event ${eventId}, outcome=${outcome}`);
@@ -197,6 +197,7 @@ async function handleSettlementResponse(
       console.log(`[resolver] Event ${eventId} already resolved, skipping resolveEventPredictions`);
       // Even if already resolved, there may be pending finalizations
       await finalizeEventReputations(eventId);
+      tracker.markDone(key);
       return;
     }
 
@@ -209,6 +210,7 @@ async function handleSettlementResponse(
     });
     if (auctionIds.length === 0) {
       console.log(`[resolver] No auctions for event ${eventId}, skipping`);
+      tracker.markDone(key);
       return;
     }
 
@@ -282,13 +284,17 @@ async function handleSettlementResponse(
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[resolver] Failed to resolve event ${eventId}:`, msg);
       await sendNotification("Reputation Resolution FAILED", `Event ${eventId}: ${msg}`);
+      tracker.markFailed(key);
       return; // Don't attempt finalization if resolve failed
     }
 
     // Step 2: Finalize reputation for each auction (decrypt + submit proof)
     await finalizeEventReputations(eventId);
-  } finally {
-    processingEvents.delete(key);
+
+    tracker.markDone(key);
+  } catch (err) {
+    tracker.markFailed(key);
+    throw err;
   }
 }
 
