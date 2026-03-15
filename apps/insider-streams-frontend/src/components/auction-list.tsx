@@ -43,11 +43,22 @@ export function AuctionList({ className }: AuctionListProps) {
 
   const orderBy = sortMode === "bid" ? "currentBid" : "blockTimestamp";
 
+  // Keep nowSeconds fresh so expired auctions get filtered out on each poll cycle
+  const [nowSeconds, setNowSeconds] = useState(() =>
+    String(Math.floor(Date.now() / 1000)),
+  );
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNowSeconds(String(Math.floor(Date.now() / 1000)));
+    }, AUCTION_POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, []);
+
   const openAuctionsQuery = useQuery(HomepageAuctionsDocument, {
     variables: {
       limit: AUCTIONS_PAGE_SIZE,
       skip: page * AUCTIONS_PAGE_SIZE,
-      where: { status_not_in: EXCLUDE_CLOSED },
+      where: { status_not_in: EXCLUDE_CLOSED, endTime_gt: nowSeconds },
       orderBy,
       orderDirection: "desc",
     },

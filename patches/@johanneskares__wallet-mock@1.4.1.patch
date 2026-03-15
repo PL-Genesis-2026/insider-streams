@@ -1,0 +1,47 @@
+diff --git a/dist/createWallet.js b/dist/createWallet.js
+index cc34e2aa23f2d31b51361bffa560291013c9ec13..d25975eaf705104f507ce356cb1e0c881bbdfd6e 100644
+--- a/dist/createWallet.js
++++ b/dist/createWallet.js
+@@ -59,10 +59,16 @@ function createWallet(account, transports, defaultChain) {
+                 throw new Error("eth_signTypedData is not yet supported");
+             }
+             if (method === "eth_signTypedData_v3") {
+-                throw new Error("eth_signTypedData_v4 is not yet supported");
++                throw new Error("eth_signTypedData_v3 is not yet supported");
+             }
+             if (method === "eth_signTypedData_v4") {
+-                throw new Error("eth_signTypedData_v4 is not yet supported");
++                const typedData = JSON.parse(params?.[1]);
++                return await client.account.signTypedData({
++                    domain: typedData.domain,
++                    types: typedData.types,
++                    primaryType: typedData.primaryType,
++                    message: typedData.message,
++                });
+             }
+             if (method === "eth_sendTransaction") {
+                 const from = (params?.[0]).from;
+diff --git a/src/createWallet.ts b/src/createWallet.ts
+index 2c8b5cb9b8b4e585cf8a1467cf2bf17a43d2b777..7e1ea777522eb420abeaa5ff7f60f6457c298432 100644
+--- a/src/createWallet.ts
++++ b/src/createWallet.ts
+@@ -64,11 +64,17 @@ export function createWallet(
+       }
+ 
+       if (method === "eth_signTypedData_v3") {
+-        throw new Error("eth_signTypedData_v4 is not yet supported");
++        throw new Error("eth_signTypedData_v3 is not yet supported");
+       }
+ 
+       if (method === "eth_signTypedData_v4") {
+-        throw new Error("eth_signTypedData_v4 is not yet supported");
++        const typedData = JSON.parse(params?.[1] as string);
++        return await client.account.signTypedData({
++          domain: typedData.domain,
++          types: typedData.types,
++          primaryType: typedData.primaryType,
++          message: typedData.message,
++        });
+       }
+ 
+       if (method === "eth_sendTransaction") {

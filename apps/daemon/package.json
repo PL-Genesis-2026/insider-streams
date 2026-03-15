@@ -1,0 +1,42 @@
+{
+  "name": "@private-streams/daemon",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "start": "tsx watch src/index.ts",
+    "settler": "tsx src/settler.ts",
+    "closer": "tsx src/auction-closer.ts",
+    "resolver": "tsx src/reputation-resolver.ts",
+    "api": "tsx src/api.ts",
+    "test:db": "node --import tsx --test src/db.test.ts",
+    "test:e2e": "node --import tsx --test src/e2e-api.test.ts",
+    "test:sepolia": "node --import tsx --test src/e2e-sepolia.test.ts",
+    "test:lifecycle": "node --import tsx --test src/e2e-lifecycle.test.ts",
+    "test:crypto": "node --import tsx --test src/crypto.test.ts"
+  },
+  "dependencies": {
+    "@filoz/synapse-core": "^0.3.0",
+    "@filoz/synapse-sdk": "^0.39.0",
+    "@private-streams/common": "workspace:*",
+    "@zama-fhe/relayer-sdk": "^0.4.2",
+    "better-sqlite3": "^12.6.2",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "fast-json-stable-stringify": "^2.1.0",
+    "multer": "^1.4.5-lts.2",
+    "graphql": "^16.13.1",
+    "graphql-request": "^7.4.0",
+    "openai": "^6.27.0",
+    "viem": "^2.47.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/express": "^5.0.6",
+    "@types/multer": "^1.4.12",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

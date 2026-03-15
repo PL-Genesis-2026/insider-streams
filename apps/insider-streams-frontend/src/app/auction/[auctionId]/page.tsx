@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { PredictionMarketLink } from "@/components/prediction-market-link";
 import { Separator } from "@/components/ui/separator";
 import { SecretRevealCard } from "@/components/secret-reveal";
+import { AdminExpireAuctionButton } from "@/components/admin-expire-auction-button";
 import { AuctionDetailPrivate } from "@/components/auction-detail-private";
 import {
   AuctionLifecycleList,
@@ -26,6 +27,8 @@ import {
   getAuctionDetail,
   type AuctionDetailData,
 } from "@/lib/auction-detail";
+import { getEffectiveStatus } from "@/lib/auction-status";
+import { getOwnerAddress } from "@/lib/admin";
 import { SECRET_MARKETPLACE_ADDRESS } from "@/lib/contract-addresses";
 
 type AuctionDetailPageProps = {
@@ -131,14 +134,16 @@ export default async function AuctionDetailPage({
     notFound();
   }
 
-  const isOpen = auction.status === "Open";
+  const effectiveStatus = getEffectiveStatus(auction.status, auction.endTime);
+  const isOpen = effectiveStatus === "Open";
   const statusVariant =
-    auction.status === "Closed"
+    effectiveStatus === "Closed" || effectiveStatus === "Ended"
       ? "secondary"
-      : auction.status === "Cancelled"
+      : effectiveStatus === "Cancelled"
         ? "outline"
         : "accent";
   const timeline = buildTimeline(auction);
+  const ownerAddress = getOwnerAddress();
 
   return (
     <main className="theme-ember-editorial min-h-screen text-foreground">
@@ -168,7 +173,7 @@ export default async function AuctionDetailPage({
                 className="text-xs font-medium font-sans leading-none tracking-[0.24em] text-accent"
               />
             </div>
-            <Badge variant={statusVariant}>{auction.status}</Badge>
+            <Badge variant={statusVariant}>{effectiveStatus}</Badge>
             {auction.endTime ? (
               <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
                 <Clock className="size-3.5" />
@@ -236,7 +241,15 @@ export default async function AuctionDetailPage({
           <aside className="flex flex-col gap-6 lg:sticky lg:top-8 lg:self-start">
             <Card className="border-border/90 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_96%,transparent),color-mix(in_srgb,var(--secondary)_28%,transparent))]">
               {isOpen ? (
-                <AuctionBidGate auctionId={auction.auctionId} sellerAddress={auction.sellerAddress} currentBidUsdc={auction.currentBidUsdc} />
+                <>
+                  <AuctionBidGate auctionId={auction.auctionId} sellerAddress={auction.sellerAddress} currentBidUsdc={auction.currentBidUsdc} />
+                  <div className="px-6 pb-6">
+                    <AdminExpireAuctionButton
+                      auctionId={auction.auctionId}
+                      ownerAddress={ownerAddress}
+                    />
+                  </div>
+                </>
               ) : (
                 <>
                   <CardHeader className="gap-5 pb-0">
@@ -254,7 +267,7 @@ export default async function AuctionDetailPage({
                     <Separator className="mb-5" />
                     <div className="flex items-center justify-center gap-2 rounded-lg border border-border/50 bg-muted/30 px-4 py-3 text-sm font-medium text-muted-foreground">
                       <ShieldCheck className="size-4 text-accent/70" />
-                      Auction {auction.status.toLowerCase()}
+                      Auction {effectiveStatus.toLowerCase()}
                     </div>
                   </CardContent>
                 </>

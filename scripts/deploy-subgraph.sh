@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# deploy-subgraph.sh — Build and deploy the insider-streams-2 subgraph
+# deploy-subgraph.sh — Build and deploy the insider-streams-zama subgraph
 #
 # Supports multiple data sources in subgraph.yaml. Each data source has a
 # contract name, address, and startBlock. By default the script only prompts
@@ -14,7 +14,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SUBGRAPH_DIR="$ROOT_DIR/subgraphs/secrets-marketplace"
-ARTIFACTS_DIR="$ROOT_DIR/contracts/out"
+ARTIFACTS_DIR="$ROOT_DIR/contracts-fhe/artifacts/contracts"
 
 SKIP_DEPLOY=false
 ADDRESS_ARG=""
@@ -181,21 +181,26 @@ echo "  Updated config:"
 echo "    Address:    $CONTRACT_ADDRESS"
 echo "    StartBlock: $START_BLOCK"
 
-# ─── Copy ABIs from Foundry artifacts (only when address changed) ─────────
+# ─── Copy ABIs from Hardhat artifacts (only when address changed) ─────────
 echo ""
 if [ "$CONTRACT_ADDRESS" != "$SM_CURRENT_ADDRESS" ]; then
   echo "▶ Copying ABIs (address changed)..."
-  for contract in SecretMarketplace ExamplePredictionMarket; do
+  for contract in FHESecretMarketplace ExamplePredictionMarket; do
+    # Map FHE contract name to subgraph ABI name
+    case "$contract" in
+      FHESecretMarketplace) abi_name="SecretMarketplace" ;;
+      *) abi_name="$contract" ;;
+    esac
     artifact="$ARTIFACTS_DIR/$contract.sol/$contract.json"
     if [ -f "$artifact" ]; then
       python3 -c "
 import json, sys
 artifact = json.load(open(sys.argv[1]))
 json.dump(artifact['abi'], open(sys.argv[2], 'w'), indent=2)
-" "$artifact" "$SUBGRAPH_DIR/abis/$contract.json"
-      echo "  Copied $contract ABI → subgraphs/secrets-marketplace/abis/"
+" "$artifact" "$SUBGRAPH_DIR/abis/$abi_name.json"
+      echo "  Copied $contract ABI -> subgraphs/secrets-marketplace/abis/$abi_name.json"
     else
-      echo "  Skipping $contract ABI (Foundry artifact not found)"
+      echo "  Skipping $contract ABI (Hardhat artifact not found at $artifact)"
     fi
   done
 else

@@ -42,6 +42,7 @@ export function AuctionBidGate({
   currentBidUsdc,
 }: AuctionBidGateProps) {
   const [modalOpen, setModalOpen] = useState(false);
+  const [bidSuccessAmount, setBidSuccessAmount] = useState<string | null>(null);
   const {
     seller,
     isRevealed,
@@ -49,13 +50,15 @@ export function AuctionBidGate({
     revealForAuctions,
   } = usePrivateData();
   const fundingSnapshot = useFundingSnapshot({ enabled: isRevealed });
+  const isFundingLoading = fundingSnapshot.isFetching || fundingSnapshot.isLoading;
 
   const isOwnAuction =
     !!seller?.id &&
     seller.id.toLowerCase() === sellerAddress.toLowerCase();
 
-  const handleBidSuccess = useCallback(() => {
+  const handleBidSuccess = useCallback((amountUsdc?: string) => {
     void fundingSnapshot.refresh();
+    if (amountUsdc) setBidSuccessAmount(amountUsdc);
   }, [fundingSnapshot]);
 
   const statusCopy = getFundingStatusCopy(fundingSnapshot.status);
@@ -83,8 +86,8 @@ export function AuctionBidGate({
             {statusCopy.description}
           </p>
         </div>
-        {fundingSnapshot.balance?.available_balance &&
-          BigInt(fundingSnapshot.balance.available_balance) > BigInt(0) && (
+        {fundingSnapshot.balance &&
+          BigInt(fundingSnapshot.balance) > BigInt(0) && (
             <div className="flex items-center justify-between rounded-lg border border-border/50 bg-muted/30 px-4 py-2.5">
               <span className="text-xs text-muted-foreground">
                 Available balance
@@ -92,7 +95,7 @@ export function AuctionBidGate({
               <span className="text-sm font-medium text-foreground">
                 {Number(
                   formatUnits(
-                    BigInt(fundingSnapshot.balance.available_balance),
+                    BigInt(fundingSnapshot.balance),
                     CONFIDENTIAL_USDC_DECIMALS,
                   ),
                 ).toLocaleString("en-US", {
@@ -135,12 +138,17 @@ export function AuctionBidGate({
               onClick={() => {
                 void revealForAuctions([auctionId]);
               }}
-              disabled={isRevealingPrivateData}
+              disabled={isRevealingPrivateData || (isRevealed && isFundingLoading)}
             >
               {isRevealingPrivateData ? (
                 <>
                   <RefreshCw className="size-4 animate-spin" />
                   Unlocking...
+                </>
+              ) : isRevealed && isFundingLoading ? (
+                <>
+                  <RefreshCw className="size-4 animate-spin" />
+                  Loading balance...
                 </>
               ) : (
                 <>
@@ -150,7 +158,9 @@ export function AuctionBidGate({
               )}
             </Button>
             <p className="text-xs leading-6 text-muted-foreground/70">
-              Reveal private wallet access right here to check available bidding balance and any pending withdrawal before placing a bid.
+              {isRevealed && isFundingLoading
+                ? "Fetching your on-chain balance. This may take a moment as it involves FHE decryption."
+                : "Reveal private wallet access right here to check available bidding balance and any pending withdrawal before placing a bid."}
             </p>
           </div>
         ) : null}
@@ -246,12 +256,19 @@ export function AuctionBidGate({
               auctionId={auctionId}
               currentBidUsdc={currentBidUsdc}
               availableBalance={
-                fundingSnapshot.balance?.available_balance ?? null
+                fundingSnapshot.balance && BigInt(fundingSnapshot.balance) > 0n
+                  ? fundingSnapshot.balance
+                  : null
               }
               onBidSuccess={handleBidSuccess}
             />
           </>
         ) : null}
+        {bidSuccessAmount && (
+          <div className="rounded-md border border-accent/30 bg-accent/8 px-3 py-2 text-sm text-accent">
+            Your bid of ${bidSuccessAmount} USDC has been placed. The auction will update shortly.
+          </div>
+        )}
         {reconcileErrorMessage ? (
           <p className="text-xs leading-6 text-destructive">
             {reconcileErrorMessage}

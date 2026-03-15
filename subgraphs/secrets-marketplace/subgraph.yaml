@@ -5,66 +5,60 @@ schema:
   file: ./schema.graphql
 dataSources:
   - kind: ethereum
-    name: SecretMarketplace
+    name: FHESecretMarketplace
     network: sepolia
     source:
-      address: "0x1f903548234b15C4d955Cce79beaaC853A98C514"
-      abi: SecretMarketplace
-      startBlock: 10405764
+      address: "0xf74884348F7153c63A46a1e362ec6D90E754Cf15"
+      abi: FHESecretMarketplace
+      startBlock: 10428300
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
       language: wasm/assemblyscript
       entities:
         - AuctionClosed
+        - AuctionClosePending
         - AuctionCreated
         - AuctionCancelled
         - AuctionAdminExpired
         - BidPlaced
-        - ExpectedAuthorUpdated
-        - ExpectedWorkflowIdUpdated
-        - ExpectedWorkflowNameUpdated
+        - DepositedFor
+        - WithdrawnFor
         - ExternalEventResolved
-        - ForwarderAddressUpdated
         - OwnershipTransferred
         - SellerReputationScoreUpdated
-        - SecurityWarning
         - SellerRegistered
-        - MarketplaceUpdated
+        - SettlerUpdated
         - Auction
         - Seller
       abis:
-        - name: SecretMarketplace
-          file: ./abis/SecretMarketplace.json
+        - name: FHESecretMarketplace
+          file: ./abis/FHESecretMarketplace.json
       eventHandlers:
-        - event: AuctionClosed(indexed uint256,uint256,string,uint256)
+        - event: AuctionClosed(indexed uint256,uint64,string,uint256)
           handler: handleAuctionClosed
-        - event: AuctionCreated(indexed uint256,indexed uint256,string,string,uint256)
+        - event: AuctionCreated(indexed uint256,indexed uint256,string,string,uint256,bytes32)
           handler: handleAuctionCreated
-        - event: AuctionCancelled(indexed uint256,uint256,string,uint256)
+        - event: AuctionCancelled(indexed uint256,string,uint256)
           handler: handleAuctionCancelled
-        - event: BidPlaced(indexed uint256,uint256,uint256)
+        - event: AuctionClosePending(indexed uint256,string,uint256)
+          handler: handleAuctionClosePending
+        - event: BidPlaced(indexed uint256,uint64,uint64)
           handler: handleBidPlaced
-        - event: ExpectedAuthorUpdated(indexed address,indexed address)
-          handler: handleExpectedAuthorUpdated
-        - event: ExpectedWorkflowIdUpdated(indexed bytes32,indexed bytes32)
-          handler: handleExpectedWorkflowIdUpdated
-        - event: ExpectedWorkflowNameUpdated(indexed bytes10,indexed bytes10)
-          handler: handleExpectedWorkflowNameUpdated
-        - event: ExternalEventResolved(indexed uint256,uint256,uint256)
+        - event: DepositedFor(string)
+          handler: handleDepositedFor
+        - event: WithdrawnFor(string)
+          handler: handleWithdrawnFor
+        - event: ExternalEventResolved(indexed uint256,uint256)
           handler: handleExternalEventResolved
-        - event: ForwarderAddressUpdated(indexed address,indexed address)
-          handler: handleForwarderAddressUpdated
         - event: OwnershipTransferred(indexed address,indexed address)
           handler: handleOwnershipTransferred
         - event: SellerReputationScoreUpdated(string,indexed uint256,uint8,int8,int256)
           handler: handleSellerReputationScoreUpdated
-        - event: SecurityWarning(string)
-          handler: handleSecurityWarning
         - event: SellerRegistered(string)
           handler: handleSellerRegistered
-        - event: MarketplaceUpdated(indexed address,indexed address)
-          handler: handleMarketplaceUpdated
+        - event: SettlerUpdated(indexed address,indexed address)
+          handler: handleSettlerUpdated
         - event: AuctionAdminExpired(indexed uint256)
           handler: handleAuctionAdminExpired
       file: ./src/secret-marketplace.ts
@@ -72,9 +66,9 @@ dataSources:
     name: ExamplePredictionMarket
     network: sepolia
     source:
-      address: "0xc0800a96EbfEEd4F7C9113C6D9D960d2D912004f"
+      address: "0x7C22C1b9B2a4575089a996E98c877b996eBbBAA2"
       abi: ExamplePredictionMarket
-      startBlock: 10409348
+      startBlock: 10428299
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9

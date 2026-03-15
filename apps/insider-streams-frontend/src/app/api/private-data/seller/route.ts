@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { verifyPrivateDataRequest } from "@/lib/signed-request";
-import { getSupabaseServiceClient } from "@/lib/supabase/server";
+import { proxyToDaemon } from "@/lib/daemon-client";
+import type { PrivateSellerRecord } from "@/lib/private-data/types";
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -10,25 +10,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const verified = await verifyPrivateDataRequest(body);
-  if (!verified.ok) return verified.response;
+  const res = await proxyToDaemon("/seller", body);
+  const json = await res.json();
 
-  const { userAddress } = verified.payload;
-
-  const supabase = getSupabaseServiceClient();
-  const { data, error } = await supabase
-    .from("sellers")
-    .select("id, address")
-    .eq("address", userAddress)
-    .maybeSingle();
-
-  if (error) {
-    console.error("[private-data/seller] Supabase error:", error);
-    return NextResponse.json(
-      { error: "Internal server error", code: "DB_ERROR" },
-      { status: 500 },
-    );
+  if (!res.ok) {
+    return NextResponse.json(json, { status: res.status });
   }
 
-  return NextResponse.json({ data });
+  // Transform daemon's { isSeller, userId } into { data: PrivateSellerRecord | null }
+  const data: PrivateSellerRecord | null = json.isSeller
+    ? { id: json.userId, address: json.userId }
+    : null;
+
+  return NextResponse.json({ data }, { status: 200 });
 }

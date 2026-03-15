@@ -2,344 +2,128 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
-  VAULT_ADDRESS,
+  CONFIDENTIAL_USDC_ADDRESS,
+  CONFIDENTIAL_USDC_DECIMALS,
+  PLATFORM_EOA_ADDRESS,
+  fheConfidentialUsdcAbi,
 } from "@private-streams/common";
-import { erc20Abi, type Address, type Hex, zeroAddress } from "viem";
-import {
-  usePublicClient,
-  useReadContract,
-  useSignTypedData,
-  useWriteContract,
-} from "wagmi";
-import { reconcileFunding } from "@/lib/funding/api";
+import { parseUnits, toHex } from "viem";
+import { useAccount, usePublicClient, useSignMessage, useWalletClient } from "wagmi";
+import stringify from "fast-json-stable-stringify";
+import { requestFundingDeposit } from "@/lib/funding/api";
+import { requestFundingWithdrawal } from "@/lib/funding/api";
 import { getFundingSnapshotQueryKey } from "@/lib/funding/queries";
-import { useSignedWalletSession } from "@/lib/wallet/use-signed-wallet-session";
-import {
-  getBalances,
-  isPrivateAccountNotFoundError,
-  privateTransfer,
-  withdraw,
-  type PrivateTokenSigner,
-} from "./browser-client";
+import { useWalletSession } from "@/lib/wallet/use-wallet-session";
+import { useFhevm } from "@/lib/fhevm/use-fhevm";
 
-type PrivateTransferFundingVariables = {
-  recipient: Address;
-  amount: string;
-  flags?: string[];
-};
-
-type PrivateTransferFundingResult = {
-  transactionId: string;
-  reconcileErrorMessage?: string;
-};
-
-type PrivateWithdrawFundingVariables = {
-  amount: string;
-};
-
-type RedeemWithdrawalTicketVariables = {
-  amount: string;
-  ticket: Hex;
-};
-
-const vaultAbi = [
-  {
-    type: "function",
-    name: "deposit",
-    stateMutability: "nonpayable",
-    inputs: [
-      { name: "token", type: "address" },
-      { name: "amount", type: "uint256" },
-    ],
-    outputs: [],
-  },
-  {
-    type: "function",
-    name: "withdrawWithTicket",
-    stateMutability: "nonpayable",
-    inputs: [
-      { name: "token", type: "address" },
-      { name: "amount", type: "uint256" },
-      { name: "ticket", type: "bytes" },
-    ],
-    outputs: [],
-  },
-] as const;
-
-export type PrivateBalancesResult =
-  | {
-      status: "ready";
-      balances: Awaited<ReturnType<typeof getBalances>>["balances"];
-    }
-  | {
-      status: "not_funded_yet";
-      balances: [];
-    };
-
-const PRIVATE_BALANCE_CACHE_TTL_SECONDS = 25;
-const privateBalanceResultCache = new Map<
-  string,
-  { result: PrivateBalancesResult; timestamp: number }
->();
-
-type ReadPrivateBalancesOptions = {
-  forceFresh?: boolean;
-};
-
-async function readPrivateBalances(
-  address: Address,
-  signTypedData: PrivateTokenSigner,
-  options?: ReadPrivateBalancesOptions,
-): Promise<PrivateBalancesResult> {
-  const cacheKey = address.toLowerCase();
-  const cached = privateBalanceResultCache.get(cacheKey);
-  const now = Math.floor(Date.now() / 1000);
-
-  if (
-    !options?.forceFresh &&
-    cached &&
-    now - cached.timestamp < PRIVATE_BALANCE_CACHE_TTL_SECONDS
-  ) {
-    return cached.result;
-  }
-
-  let result: PrivateBalancesResult;
-
-  try {
-    const response = await getBalances(address, signTypedData);
-
-    result = {
-      status: "ready",
-      balances: response.balances,
-    };
-  } catch (error) {
-    if (!isPrivateAccountNotFoundError(error)) {
-      throw error;
-    }
-
-    result = {
-      status: "not_funded_yet",
-      balances: [],
-    };
-  }
-
-  privateBalanceResultCache.set(cacheKey, { result, timestamp: now });
-  return result;
-}
-
-function usePrivateTokenSigner(): PrivateTokenSigner {
-  const { signTypedDataAsync } = useSignTypedData();
-
-  return (payload) => {
-    if (payload.primaryType === "Retrieve Balances") {
-      return signTypedDataAsync(payload);
-    }
-
-    return signTypedDataAsync(
-      payload as Parameters<typeof signTypedDataAsync>[0],
-    );
-  };
-}
-
-export function usePrivateBalancesMutation(address?: Address) {
-  const signTypedData = usePrivateTokenSigner();
-
-  return useMutation({
-    mutationFn: async (options?: ReadPrivateBalancesOptions) => {
-      if (!address) {
-        throw new Error("Fetching private balances requires a connected wallet.");
-      }
-
-      return readPrivateBalances(address, signTypedData, options);
-    },
-  });
-}
-
-export function usePrivateTransferFundingMutation(address?: Address) {
+export function useDeposit() {
   const queryClient = useQueryClient();
-  const signTypedData = usePrivateTokenSigner();
-  const { getSignedSession } = useSignedWalletSession();
-
-  return useMutation({
-    mutationFn: async (
-      variables: PrivateTransferFundingVariables,
-    ): Promise<PrivateTransferFundingResult> => {
-      if (!address) {
-        throw new Error("Submitting a private transfer requires a connected wallet.");
-      }
-
-      let transferResponse: Awaited<ReturnType<typeof privateTransfer>>;
-
-      try {
-        transferResponse = await privateTransfer(address, signTypedData, {
-          recipient: variables.recipient,
-          token: PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
-          amount: variables.amount,
-          flags: variables.flags,
-        });
-      } catch (error) {
-        if (isPrivateAccountNotFoundError(error)) {
-          throw new Error(
-            "This wallet does not have private USDC yet. Approve USDC and deposit into the private vault first, then check balance again before using this step.",
-          );
-        }
-
-        throw error;
-      }
-
-      try {
-        const signedSession = await getSignedSession();
-        const reconcileResponse = await reconcileFunding(signedSession);
-
-        queryClient.setQueryData(
-          getFundingSnapshotQueryKey(address),
-          reconcileResponse.data,
-        );
-      } catch (error) {
-        return {
-          transactionId: transferResponse.transaction_id,
-          reconcileErrorMessage:
-            error instanceof Error
-              ? error.message
-              : "Private transfer submitted, but funding reconciliation failed.",
-        };
-      }
-
-      await queryClient.invalidateQueries({
-        queryKey: getFundingSnapshotQueryKey(address),
-      });
-
-      return {
-        transactionId: transferResponse.transaction_id,
-      };
-    },
-  });
-}
-
-export function usePrivateWithdrawMutation(address?: Address) {
-  const signTypedData = usePrivateTokenSigner();
-
-  return useMutation({
-    mutationFn: async (variables: PrivateWithdrawFundingVariables) => {
-      if (!address) {
-        throw new Error("Withdrawing private funds requires a connected wallet.");
-      }
-
-      try {
-        return await withdraw(address, signTypedData, {
-          token: PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
-          amount: variables.amount,
-        });
-      } catch (error) {
-        if (isPrivateAccountNotFoundError(error)) {
-          throw new Error(
-            "The private withdrawal could not find a funded account for this wallet yet. Try again in a moment.",
-          );
-        }
-
-        throw error;
-      }
-    },
-  });
-}
-
-export function useRedeemWithdrawalTicketMutation() {
+  const walletSession = useWalletSession();
+  const { signMessageAsync } = useSignMessage();
+  const { address } = useAccount();
+  const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
-  const { writeContractAsync } = useWriteContract();
+  const { instance: fhevmInstance } = useFhevm();
 
   return useMutation({
-    mutationFn: async (variables: RedeemWithdrawalTicketVariables) => {
+    mutationFn: async (amountHuman: string) => {
+      if (!walletSession.address || !address) {
+        throw new Error("Connect your wallet to deposit.");
+      }
+      if (!walletClient) {
+        throw new Error("Wallet client not available.");
+      }
       if (!publicClient) {
-        throw new Error("Wallet client unavailable. Try reconnecting your wallet.");
+        throw new Error("Public client not available.");
+      }
+      if (!fhevmInstance) {
+        throw new Error("FHE SDK not ready. Please wait a moment and try again.");
       }
 
-      const hash = await writeContractAsync({
-        address: VAULT_ADDRESS,
-        abi: vaultAbi,
-        functionName: "withdrawWithTicket",
+      const parsed = parseUnits(amountHuman, CONFIDENTIAL_USDC_DECIMALS);
+      if (parsed <= 0n) {
+        throw new Error("Enter an amount greater than zero.");
+      }
+
+      // Step 1: Encrypt the amount using the Zama relayer SDK
+      const contractAddress = CONFIDENTIAL_USDC_ADDRESS as `0x${string}`;
+      const input = (fhevmInstance as any).createEncryptedInput(
+        contractAddress,
+        address,
+      );
+      input.add64(parsed);
+      const encrypted = await input.encrypt();
+
+      // Step 2: Transfer cUSDC from user's wallet to admin EOA (on-chain tx)
+      const handle = toHex(encrypted.handles[0] as Uint8Array);
+      const proof = toHex(encrypted.inputProof as Uint8Array);
+      const txHash = await walletClient.writeContract({
+        address: contractAddress,
+        abi: fheConfidentialUsdcAbi,
+        functionName: "confidentialTransfer",
         args: [
-          PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
-          BigInt(variables.amount),
-          variables.ticket,
+          PLATFORM_EOA_ADDRESS as `0x${string}`,
+          handle,
+          proof,
         ],
       });
 
-      await publicClient.waitForTransactionReceipt({ hash });
-      return { hash };
+      // Wait for confirmation
+      await publicClient.waitForTransactionReceipt({ hash: txHash });
+
+      // Step 3: Notify daemon to deposit from admin → marketplace
+      const timestamp = Math.floor(Date.now() / 1000);
+      const payload = { amount: parsed.toString(), timestamp };
+      const signature = await signMessageAsync({
+        message: stringify(payload),
+      });
+
+      const result = await requestFundingDeposit({
+        ...payload,
+        signature,
+      });
+
+      await queryClient.invalidateQueries({
+        queryKey: getFundingSnapshotQueryKey(walletSession.address),
+      });
+
+      return result;
     },
   });
 }
 
-export function useVaultFunding(address?: Address, amount?: bigint | null) {
-  const publicClient = usePublicClient();
-  const { writeContractAsync } = useWriteContract();
-  const allowanceQuery = useReadContract({
-    address: PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
-    abi: erc20Abi,
-    functionName: "allowance",
-    args: [address ?? zeroAddress, VAULT_ADDRESS],
-    query: {
-      enabled: Boolean(address) && amount !== null && amount !== undefined,
-    },
-  });
+export function useWithdraw() {
+  const queryClient = useQueryClient();
+  const walletSession = useWalletSession();
+  const { signMessageAsync } = useSignMessage();
 
-  const approveMutation = useMutation({
-    mutationFn: async () => {
-      if (!address || amount === null || amount === undefined) {
-        throw new Error("Enter a USDC amount before approving the vault.");
+  return useMutation({
+    mutationFn: async (amountHuman: string) => {
+      if (!walletSession.address) {
+        throw new Error("Connect your wallet to withdraw.");
       }
 
-      if (!publicClient) {
-        throw new Error("Wallet client unavailable. Try reconnecting your wallet.");
+      const parsed = parseUnits(amountHuman, CONFIDENTIAL_USDC_DECIMALS);
+      if (parsed <= 0n) {
+        throw new Error("Enter an amount greater than zero.");
       }
 
-      const hash = await writeContractAsync({
-        address: PRIVATE_CONFIDENTIAL_USDC_ADDRESS,
-        abi: erc20Abi,
-        functionName: "approve",
-        args: [VAULT_ADDRESS, amount],
+      const timestamp = Math.floor(Date.now() / 1000);
+      const payload = { amount: parsed.toString(), timestamp };
+      const signature = await signMessageAsync({
+        message: stringify(payload),
       });
 
-      await publicClient.waitForTransactionReceipt({ hash });
-      await allowanceQuery.refetch();
-
-      return { hash };
-    },
-  });
-
-  const depositMutation = useMutation({
-    mutationFn: async () => {
-      if (!address || amount === null || amount === undefined) {
-        throw new Error("Enter a USDC amount before depositing into the vault.");
-      }
-
-      if (!publicClient) {
-        throw new Error("Wallet client unavailable. Try reconnecting your wallet.");
-      }
-
-      const hash = await writeContractAsync({
-        address: VAULT_ADDRESS,
-        abi: vaultAbi,
-        functionName: "deposit",
-        args: [PRIVATE_CONFIDENTIAL_USDC_ADDRESS, amount],
+      const result = await requestFundingWithdrawal({
+        ...payload,
+        signature,
       });
 
-      await publicClient.waitForTransactionReceipt({ hash });
+      await queryClient.invalidateQueries({
+        queryKey: getFundingSnapshotQueryKey(walletSession.address),
+      });
 
-      return { hash };
+      return result;
     },
   });
-
-  const hasVaultApproval =
-    amount !== null &&
-    amount !== undefined &&
-    allowanceQuery.data !== undefined &&
-    allowanceQuery.data >= amount;
-
-  return {
-    hasVaultApproval,
-    approveMutation,
-    depositMutation,
-  };
 }

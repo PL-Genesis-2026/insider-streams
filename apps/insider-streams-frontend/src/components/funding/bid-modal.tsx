@@ -16,7 +16,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-type Phase = "idle" | "signing" | "submitting" | "success" | "error";
+type Phase =
+  | "idle"
+  | "signing"
+  | "submitting"
+  | "success"
+  | "error";
 
 type BidModalProps = {
   open: boolean;
@@ -24,7 +29,7 @@ type BidModalProps = {
   auctionId: string;
   currentBidUsdc?: number;
   availableBalance: string | null;
-  onBidSuccess?: () => void;
+  onBidSuccess?: (amountUsdc?: string) => void;
 };
 
 function formatUsd(usdc: number) {
@@ -70,6 +75,10 @@ export function BidModal({
     return null;
   }
 
+  async function signPayload(payload: Record<string, string | number>) {
+    return signMessageAsync({ message: stringify(payload) });
+  }
+
   async function handleSubmit() {
     const validationError = validate();
     if (validationError) {
@@ -84,10 +93,10 @@ export function BidModal({
     const payload = { auctionId, amount: rawAmount.toString(), timestamp };
 
     try {
-      setPhase("signing");
       setErrorMessage(null);
-      const signature = await signMessageAsync({ message: stringify(payload) });
 
+      setPhase("signing");
+      const signature = await signPayload(payload);
       setPhase("submitting");
       const res = await fetch("/api/bid", {
         method: "POST",
@@ -104,11 +113,11 @@ export function BidModal({
       }
 
       setPhase("success");
-      onBidSuccess?.();
+      onBidSuccess?.(amountUsdc);
       setTimeout(() => {
         onOpenChange(false);
         // Delay page refresh to give subgraph time to index the new bid
-        setTimeout(() => router.refresh(), 1500);
+        setTimeout(() => router.refresh(), 3000);
       }, 1500);
     } catch (err) {
       setPhase("error");

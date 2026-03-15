@@ -57,30 +57,38 @@ export function getFundingStatusCopy(status: FundingStatus): FundingStatusCopy {
   return fundingStatusCopy.private_data_hidden;
 }
 
+function friendlyRelayerError(raw?: string): string {
+  if (!raw) return "Balance could not be decrypted. You can still place bids.";
+  const lower = raw.toLowerCase();
+  if (lower.includes("rate limit") || lower.includes("429"))
+    return "Encryption service is busy. Try again in a few minutes.";
+  if (lower.includes("timed out"))
+    return "Balance decryption timed out. Try refreshing.";
+  if (lower.includes("bad json") || lower.includes("econnrefused"))
+    return "Encryption service temporarily unavailable.";
+  return "Balance could not be decrypted. You can still place bids.";
+}
+
 type FundingSnapshotOptions = {
-  isReconcilePending?: boolean;
   errorMessage?: string;
-  /** When true, server has not been queried yet (e.g. private data not revealed) */
   fundingNotYetChecked?: boolean;
 };
-
-function hasPositiveValue(value?: string | null) {
-  return value !== undefined && value !== null && BigInt(value) > BigInt(0);
-}
 
 export function getFundingSnapshot(
   session: WalletSession,
   serverSnapshot?: FundingServerSnapshot,
   options?: FundingSnapshotOptions,
 ): FundingSnapshot {
+  const balance = serverSnapshot?.balance ?? "0";
+  const balanceUnavailable = serverSnapshot?.balanceUnavailable ?? false;
+
   if (!session.isConnected || !session.address) {
     return {
       status: "wallet_required",
       requiredChainName: session.requiredChainName,
-      platformRecipientAddress: serverSnapshot?.platformRecipientAddress,
       canPlaceBid: false,
       isReconciling: false,
-      transfers: [],
+      balance: "0",
     };
   }
 
@@ -90,10 +98,9 @@ export function getFundingSnapshot(
       address: session.address,
       currentChainName: session.currentChainName,
       requiredChainName: session.requiredChainName,
-      platformRecipientAddress: serverSnapshot?.platformRecipientAddress,
       canPlaceBid: false,
       isReconciling: false,
-      transfers: [],
+      balance: "0",
     };
   }
 
@@ -103,11 +110,9 @@ export function getFundingSnapshot(
       address: session.address,
       currentChainName: session.currentChainName,
       requiredChainName: session.requiredChainName,
-      platformRecipientAddress: serverSnapshot?.platformRecipientAddress,
       canPlaceBid: false,
       isReconciling: false,
-      transfers: serverSnapshot?.transfers ?? [],
-      balance: serverSnapshot?.balance,
+      balance,
     };
   }
 
@@ -117,58 +122,38 @@ export function getFundingSnapshot(
       address: session.address,
       currentChainName: session.currentChainName,
       requiredChainName: session.requiredChainName,
-      platformRecipientAddress: serverSnapshot?.platformRecipientAddress,
       canPlaceBid: false,
       isReconciling: false,
-      transfers: [],
+      balance: "0",
     };
   }
 
-  const transfers = serverSnapshot?.transfers ?? [];
-  const balance = serverSnapshot?.balance ?? null;
-  const hasAvailableBalance = hasPositiveValue(balance?.available_balance);
-  const hasLockedBalance = hasPositiveValue(balance?.locked_balance);
-  const hasPendingWithdrawal = hasPositiveValue(balance?.pending_withdrawal);
-
-  if (options?.isReconcilePending) {
-    return {
-      status: "reconciling_transfer",
-      address: session.address,
-      currentChainName: session.currentChainName,
-      requiredChainName: session.requiredChainName,
-      platformRecipientAddress: serverSnapshot?.platformRecipientAddress,
-      canPlaceBid: false,
-      isReconciling: true,
-      balance,
-      transfers,
-    };
-  }
-
-  if (hasAvailableBalance) {
-    return {
-      status: "withdrawal_available",
-      address: session.address,
-      currentChainName: session.currentChainName,
-      requiredChainName: session.requiredChainName,
-      platformRecipientAddress: serverSnapshot?.platformRecipientAddress,
-      canPlaceBid: true,
-      isReconciling: false,
-      balance,
-      transfers,
-    };
-  }
-
-  if (hasLockedBalance || hasPendingWithdrawal) {
+  // If user exists but balance decryption failed, still allow bidding.
+  // The contract validates on-chain — the balance display is just for UX.
+  if (balanceUnavailable && serverSnapshot?.userId) {
     return {
       status: "funded",
       address: session.address,
       currentChainName: session.currentChainName,
       requiredChainName: session.requiredChainName,
-      platformRecipientAddress: serverSnapshot?.platformRecipientAddress,
-      canPlaceBid: hasLockedBalance,
+      canPlaceBid: true,
       isReconciling: false,
       balance,
-      transfers,
+      balanceError: friendlyRelayerError(serverSnapshot.error),
+    };
+  }
+
+  const hasBalance = BigInt(balance) > BigInt(0);
+
+  if (hasBalance) {
+    return {
+      status: "withdrawal_available",
+      address: session.address,
+      currentChainName: session.currentChainName,
+      requiredChainName: session.requiredChainName,
+      canPlaceBid: true,
+      isReconciling: false,
+      balance,
     };
   }
 
@@ -177,10 +162,8 @@ export function getFundingSnapshot(
     address: session.address,
     currentChainName: session.currentChainName,
     requiredChainName: session.requiredChainName,
-    platformRecipientAddress: serverSnapshot?.platformRecipientAddress,
     canPlaceBid: false,
     isReconciling: false,
     balance,
-    transfers,
   };
 }

@@ -1,7 +1,7 @@
 import type { CodegenConfig } from "@graphql-codegen/cli";
 
 const STUDIO_URL =
-  "https://api.studio.thegraph.com/query/1743303/insider-streams-2/version/latest";
+  "https://api.studio.thegraph.com/query/1743303/insider-streams-zama/version/latest";
 
 const schema = [STUDIO_URL];
 

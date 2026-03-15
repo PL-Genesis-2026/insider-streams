@@ -1,29 +1,38 @@
 #!/usr/bin/env bash
-# deploy.sh — Deploy private-streams to remote server
+# deploy.sh — Deploy private-streams (Zama FHE version) to remote VPS
 #
-# Checks out a branch on the remote, installs deps, runs E2E tests.
-# Handles uncommitted local changes, offers rollback on failure.
+# Deploys to /home/bawler/private-streams-zama (separate from the original
+# /home/bawler/insider-streams deployment — DO NOT interfere with that).
 #
-# Usage: ./scripts/deploy.sh [--branch <name>] [--repo-path <path>] [--e2e] [--yes]
-# Requires: ssh access to remote
+# What it does:
+#   1. Clones/updates the repo on the VPS
+#   2. Installs pnpm dependencies
+#   3. Sets up the daemon as a systemd service (port 3001)
+#   4. Adds HAProxy route for the daemon API
+#   5. Installs cron jobs for demo data generation
+#   6. Verifies everything is running
+#
+# Usage: ./scripts/deploy.sh [--branch <name>] [--yes]
+# Requires: ssh access to bawler@195.201.8.147
 
 set -euo pipefail
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 REMOTE_HOST="bawler@195.201.8.147"
-DEFAULT_REPO_PATH="/home/bawler/insider-streams"
+REPO_PATH="/home/bawler/private-streams-zama"
+REMOTE_URL="git@github-plgenesis:PL-Genesis-2026/insider-streams.git"
+DAEMON_PORT=3001
+SERVICE_NAME="ps-zama-daemon"
 
 # ANSI colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 # ─── Parse CLI arguments ─────────────────────────────────────────────────────
 BRANCH=""
-REPO_PATH=""
-RUN_E2E=false
 AUTO_YES=false
 
 while [[ $# -gt 0 ]]; do
@@ -32,42 +41,19 @@ while [[ $# -gt 0 ]]; do
       BRANCH="$2"
       shift 2
       ;;
-    --repo-path)
-      REPO_PATH="$2"
-      shift 2
-      ;;
-    --e2e)
-      RUN_E2E=true
-      shift
-      ;;
     --yes)
       AUTO_YES=true
       shift
       ;;
     *)
       echo -e "${RED}Unknown argument: $1${NC}"
-      echo "Usage: ./scripts/deploy.sh [--branch <name>] [--repo-path <path>] [--e2e] [--yes]"
+      echo "Usage: ./scripts/deploy.sh [--branch <name>] [--yes]"
       exit 1
       ;;
   esac
 done
 
-# Defaults
 BRANCH="${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}"
-REPO_PATH="${REPO_PATH:-$DEFAULT_REPO_PATH}"
-
-# Track deployment state for rollback
-DEPLOY_STARTED=false
-PREV_BRANCH=""
-PREV_COMMIT=""
-
-# E2E result tracking
-SECRET_MARKETPLACE_RESULT="skipped"
-SECRET_MARKETPLACE_AUCTION_CLOSER_RESULT="skipped"
-SIMPLE_MARKET_RESULT="skipped"
-USER_BALANCE_RECORDING_FALLBACK_RESULT="skipped"
-SETTLEMENT_RESOLVED_HANDLER_RESULT="skipped"
-AUCTION_CANCELLED_HANDLER_RESULT="skipped"
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 info()    { echo -e "${CYAN}$*${NC}"; }
@@ -76,9 +62,7 @@ warn()    { echo -e "${YELLOW}  ⚠ $*${NC}"; }
 fail()    { echo -e "${RED}  ✗ $*${NC}"; }
 
 ask_yn() {
-  if [ "$AUTO_YES" = true ]; then
-    return 0
-  fi
+  if [ "$AUTO_YES" = true ]; then return 0; fi
   local prompt="$1"
   read -r -p "$prompt [y/N] " answer
   [[ "$answer" =~ ^[Yy]$ ]]
@@ -89,63 +73,26 @@ remote_exec() {
 set -euo pipefail
 export NVM_DIR="\$HOME/.nvm"
 [ -s "\$NVM_DIR/nvm.sh" ] && . "\$NVM_DIR/nvm.sh"
-export PATH="\$HOME/.cre/bin:\$HOME/.foundry/bin:\$HOME/.bun/bin:\$HOME/.local/bin:\$PATH"
+export PATH="\$HOME/.local/bin:\$PATH"
 cd "$REPO_PATH"
 $1
 REMOTE_EOF
 }
 
-do_rollback() {
-  info "Rolling back remote to $PREV_BRANCH@${PREV_COMMIT:0:7}..."
-  remote_exec "
-    git checkout '$PREV_BRANCH'
-    git reset --hard '$PREV_COMMIT'
-    git submodule update --init --recursive 2>/dev/null || true
-    pnpm install --frozen-lockfile 2>/dev/null || pnpm install
-  " >/dev/null 2>&1
-
-  for workflow in external-prediction-market-settler secret-marketplace-auction-closer user-balance-recording-fallback external-marketplace-settlement-resolved-handler auction-cancelled-handler; do
-    if ssh "$REMOTE_HOST" "[ -d '$REPO_PATH/cre-workflows/$workflow' ]"; then
-      remote_exec "cd cre-workflows/$workflow && bun install" >/dev/null 2>&1
-    fi
-  done
-
-  success "Rolled back to $PREV_BRANCH@${PREV_COMMIT:0:7}"
-}
-
-# ─── Trap: offer rollback on unexpected exit ──────────────────────────────────
-cleanup() {
-  local exit_code=$?
-  # Restart event watcher if we stopped it
-  if [ "${WATCHER_WAS_ACTIVE:-false}" = true ]; then
-    ssh "$REMOTE_HOST" "sudo systemctl start event-watcher.service" 2>/dev/null || true
-  fi
-  if [ "$DEPLOY_STARTED" = true ] && [ $exit_code -ne 0 ]; then
-    echo ""
-    fail "Deploy interrupted (exit code $exit_code)"
-    if [ -n "$PREV_BRANCH" ] && [ -n "$PREV_COMMIT" ]; then
-      if ask_yn "  Rollback remote to $PREV_BRANCH@${PREV_COMMIT:0:7}?"; then
-        do_rollback
-      fi
-    fi
-  fi
-}
-trap cleanup EXIT
-
 # ═══════════════════════════════════════════════════════════════════════════════
-# Phase 0: Local Checks & User Input
+# Phase 0: Pre-flight checks
 # ═══════════════════════════════════════════════════════════════════════════════
 
 echo "═══════════════════════════════════════════════════════"
-echo "  Deploy — private-streams"
+echo "  Deploy — private-streams (Zama FHE version)"
 echo "═══════════════════════════════════════════════════════"
 echo "  Remote:  $REMOTE_HOST"
 echo "  Branch:  $BRANCH"
 echo "  Repo:    $REPO_PATH"
-echo "  E2E:     $([ "$RUN_E2E" = true ] && echo "run" || echo "skip")"
+echo "  Daemon:  port $DAEMON_PORT"
 echo "═══════════════════════════════════════════════════════"
 
-# ─── Check for uncommitted changes ───────────────────────────────────────────
+# Check for uncommitted changes
 echo ""
 echo "▶ Phase 0: Local checks"
 
@@ -163,371 +110,374 @@ if [ -n "$LOCAL_CHANGES" ]; then
     else
       warn "Continuing with uncommitted changes (remote won't have them)"
     fi
-  else
-    warn "Continuing with uncommitted changes (use interactive mode to commit)"
   fi
 fi
 
-# ─── Check for unpushed commits ──────────────────────────────────────────────
+# Push unpushed commits
 UNPUSHED=$(git log @{u}..HEAD --oneline 2>/dev/null || true)
 if [ -n "$UNPUSHED" ]; then
   UNPUSHED_COUNT=$(echo "$UNPUSHED" | wc -l | tr -d ' ')
-  warn "$UNPUSHED_COUNT unpushed commit(s):"
-  echo "$UNPUSHED"
-  if [ "$AUTO_YES" = false ]; then
-    if ask_yn "  Push $UNPUSHED_COUNT commit(s) to origin/$BRANCH?"; then
-      git push origin "$BRANCH"
-      success "Pushed to origin/$BRANCH"
-    else
-      warn "Continuing without pushing (remote may be behind)"
-    fi
-  else
-    warn "Continuing without pushing (use interactive mode to push)"
+  warn "$UNPUSHED_COUNT unpushed commit(s)"
+  if ask_yn "  Push to origin/$BRANCH?"; then
+    git push origin "$BRANCH"
+    success "Pushed to origin/$BRANCH"
   fi
 fi
 
-# ─── Confirm deployment ──────────────────────────────────────────────────────
 if [ "$AUTO_YES" = false ]; then
   echo ""
-  if ! ask_yn "Deploy $BRANCH to $REMOTE_HOST?"; then
+  if ! ask_yn "Deploy $BRANCH to $REMOTE_HOST:$REPO_PATH?"; then
     echo "Aborted."
     exit 0
   fi
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Phase 1: Remote Prerequisites Check
+# Phase 1: Check remote can access our repo
 # ═══════════════════════════════════════════════════════════════════════════════
 
 echo ""
-echo "▶ Phase 1: Checking remote prerequisites..."
+echo "▶ Phase 1: Checking remote access..."
 
-PREREQ_OUTPUT=$(ssh "$REMOTE_HOST" bash -s <<'REMOTE_EOF'
-set -euo pipefail
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-export PATH="$HOME/.cre/bin:$HOME/.foundry/bin:$HOME/.bun/bin:$HOME/.local/bin:$PATH"
-
-ERRORS=0
-
-check_cmd() {
-  if command -v "$1" &>/dev/null; then
-    echo "  OK: $1 ($(command -v "$1"))"
-  else
-    echo "  MISSING: $1"
-    ERRORS=$((ERRORS + 1))
-  fi
-}
-
-check_version() {
-  local cmd="$1" min="$2" actual
-  actual=$($cmd --version 2>/dev/null | grep -oP '\d+' | head -1)
-  if [ -n "$actual" ] && [ "$actual" -ge "$min" ]; then
-    echo "  OK: $cmd v$actual (>= $min)"
-  else
-    echo "  WARN: $cmd version $actual (need >= $min)"
-  fi
-}
-
-check_cmd git
-check_cmd node
-check_cmd pnpm
-check_cmd bun
-check_cmd cre
-check_cmd cast
-check_cmd jq
-
-check_version node 20
-check_version pnpm 10
-
-echo "---ERRORS:$ERRORS"
-REMOTE_EOF
-)
-
-echo "$PREREQ_OUTPUT" | grep -v "^---"
-
-PREREQ_ERRORS=$(echo "$PREREQ_OUTPUT" | grep "^---ERRORS:" | cut -d: -f2)
-if [ "$PREREQ_ERRORS" -gt 0 ]; then
-  fail "$PREREQ_ERRORS required tool(s) missing on remote"
+CAN_ACCESS=$(ssh "$REMOTE_HOST" "git ls-remote $REMOTE_URL HEAD 2>/dev/null && echo 'OK' || echo 'FAIL'" | tail -1)
+if [ "$CAN_ACCESS" = "FAIL" ]; then
+  fail "VPS SSH key cannot access $REMOTE_URL"
+  echo ""
+  echo "  Add this deploy key to the GitHub repo:"
+  ssh "$REMOTE_HOST" "cat ~/.ssh/id_ed25519.pub"
+  echo ""
+  echo "  Go to: https://github.com/PL-Genesis-2026/insider-streams/settings/keys"
+  echo "  Click 'Add deploy key', paste the key above, and re-run this script."
   exit 1
 fi
-success "All prerequisites found"
-
-# ─── Check repo exists ───────────────────────────────────────────────────────
-REPO_EXISTS=$(ssh "$REMOTE_HOST" "[ -d '$REPO_PATH/.git' ] && echo yes || echo no")
-if [ "$REPO_EXISTS" = "no" ]; then
-  warn "Repo not found at $REPO_PATH"
-  REMOTE_URL=$(git remote get-url origin)
-  if ask_yn "  Clone $REMOTE_URL to $REPO_PATH?"; then
-    ssh "$REMOTE_HOST" "git clone '$REMOTE_URL' '$REPO_PATH'"
-    success "Repo cloned"
-  else
-    fail "No repo at $REPO_PATH — cannot continue"
-    exit 1
-  fi
-fi
-
-# ─── Check .env files ────────────────────────────────────────────────────────
-ENV_CHECK=$(ssh "$REMOTE_HOST" bash -s <<REMOTE_EOF
-[ -f "$REPO_PATH/.env" ] && echo "root-env:ok" || echo "root-env:missing"
-[ -f "$REPO_PATH/cre-workflows/.env" ] && echo "cre-env:ok" || echo "cre-env:missing"
-REMOTE_EOF
-)
-
-if echo "$ENV_CHECK" | grep -q "root-env:missing"; then
-  warn ".env not found at $REPO_PATH/.env — E2E tests will fail"
-fi
-if echo "$ENV_CHECK" | grep -q "cre-env:missing"; then
-  warn "cre-workflows/.env not found — CRE workflows will fail"
-fi
+success "Remote can access $REMOTE_URL"
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Phase 2: Remote Deployment
+# Phase 2: Clone or update repo
 # ═══════════════════════════════════════════════════════════════════════════════
 
 echo ""
-echo "▶ Phase 2: Deploying to remote..."
+echo "▶ Phase 2: Setting up repo..."
 
-# Record rollback state
-ROLLBACK_STATE=$(remote_exec '
-  echo "$(git rev-parse --abbrev-ref HEAD)"
-  echo "$(git rev-parse HEAD)"
-')
-PREV_BRANCH=$(echo "$ROLLBACK_STATE" | head -1)
-PREV_COMMIT=$(echo "$ROLLBACK_STATE" | tail -1)
-DEPLOY_STARTED=true
+REPO_EXISTS=$(ssh "$REMOTE_HOST" "[ -d '$REPO_PATH/.git' ] && echo yes || echo no")
+if [ "$REPO_EXISTS" = "no" ]; then
+  info "  Cloning $REMOTE_URL → $REPO_PATH..."
+  ssh "$REMOTE_HOST" "git clone '$REMOTE_URL' '$REPO_PATH'"
+  success "Repo cloned"
+fi
 
-info "  Rollback point: $PREV_BRANCH@${PREV_COMMIT:0:7}"
-
-# Fetch and checkout
 remote_exec "
   git fetch origin
   git checkout '$BRANCH' 2>/dev/null || git checkout -b '$BRANCH' 'origin/$BRANCH'
   git pull origin '$BRANCH'
-  git submodule update --init --recursive 2>/dev/null || true
 "
 success "Checked out $BRANCH"
 
-# Show deployed commit
 DEPLOYED_COMMIT=$(remote_exec 'git log --oneline -1')
 info "  Deployed: $DEPLOYED_COMMIT"
 
-# Install pnpm dependencies
+# Install dependencies
 info "  Installing pnpm dependencies..."
-remote_exec '
-  pnpm install --frozen-lockfile 2>/dev/null || pnpm install
-' >/dev/null 2>&1
-success "pnpm dependencies installed"
+remote_exec 'pnpm install --frozen-lockfile 2>/dev/null || pnpm install' >/dev/null 2>&1
+success "Dependencies installed"
 
-# Install CRE workflow dependencies (bun)
-info "  Installing CRE workflow dependencies..."
-for workflow in external-prediction-market-settler secret-marketplace-auction-closer user-balance-recording-fallback external-marketplace-settlement-resolved-handler auction-cancelled-handler; do
-  if ssh "$REMOTE_HOST" "[ -d '$REPO_PATH/cre-workflows/$workflow' ]"; then
-    remote_exec "cd cre-workflows/$workflow && bun install" >/dev/null 2>&1
-    success "$workflow — bun install"
-  else
-    warn "$workflow — directory not found, skipping"
-  fi
-done
+# Rebuild native modules (better-sqlite3 must match runtime Node version)
+info "  Rebuilding native modules..."
+remote_exec 'pnpm --filter @private-streams/daemon rebuild better-sqlite3' >/dev/null 2>&1
+success "Native modules rebuilt"
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Phase 2b: Restart Services
+# Phase 3: Set up env files
 # ═══════════════════════════════════════════════════════════════════════════════
 
 echo ""
-echo "▶ Phase 2b: Restarting services..."
+echo "▶ Phase 3: Environment files..."
 
-WATCHER_STATUS=$(ssh "$REMOTE_HOST" "systemctl is-active event-watcher.service 2>/dev/null || echo inactive")
-if [ "$WATCHER_STATUS" = "active" ]; then
-  ssh "$REMOTE_HOST" "sudo systemctl restart event-watcher.service"
-  success "event-watcher restarted"
+DAEMON_ENV_EXISTS=$(ssh "$REMOTE_HOST" "[ -f '$REPO_PATH/apps/daemon/.env' ] && echo yes || echo no")
+if [ "$DAEMON_ENV_EXISTS" = "no" ]; then
+  warn "apps/daemon/.env is missing — you need to create it manually"
+  echo "  scp apps/daemon/.env $REMOTE_HOST:$REPO_PATH/apps/daemon/.env"
+  echo ""
+  echo "  Required keys: PRIVATE_KEY, RPC_URL, GEMINI_API_KEY"
+  echo "  Set NTFY_TOPIC_SETTLER=zama-settler (and other NTFY_TOPIC_* vars)"
+  echo "  Set API_PORT=$DAEMON_PORT"
 else
-  warn "event-watcher was not running — skipping restart"
+  success "apps/daemon/.env exists"
+  # Verify ntfy topics use zama- prefix
+  NTFY_CHECK=$(ssh "$REMOTE_HOST" "grep '^NTFY_TOPIC_' '$REPO_PATH/apps/daemon/.env' | head -1" 2>/dev/null || echo "")
+  if [ -z "$NTFY_CHECK" ]; then
+    warn "No NTFY_TOPIC_* vars found — per-service ntfy topics not configured"
+  fi
+fi
+
+SCRIPTS_ENV_EXISTS=$(ssh "$REMOTE_HOST" "[ -f '$REPO_PATH/scripts/.env' ] && echo yes || echo no")
+if [ "$SCRIPTS_ENV_EXISTS" = "no" ]; then
+  warn "scripts/.env is missing — cron jobs need it"
+  echo "  scp scripts/.env $REMOTE_HOST:$REPO_PATH/scripts/.env"
+  echo "  Required: OWNER_PK, RPC_URL, VENICE_API_KEY, DAEMON_URL, TEST_ACCOUNT_1..25"
+else
+  success "scripts/.env exists"
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Phase 3: E2E Verification
+# Phase 4: Set up daemon systemd service
 # ═══════════════════════════════════════════════════════════════════════════════
 
-if [ "$RUN_E2E" = false ]; then
-  echo ""
-  warn "Skipping E2E verification (pass --e2e to run)"
+echo ""
+echo "▶ Phase 4: Setting up daemon service ($SERVICE_NAME)..."
+
+# Create the systemd service unit file
+ssh "$REMOTE_HOST" "cat > /tmp/$SERVICE_NAME.service" <<EOF
+[Unit]
+Description=Private Streams Zama Daemon (settler, auction-closer, reputation-resolver, API)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bawler
+WorkingDirectory=$REPO_PATH/apps/daemon
+ExecStart=/bin/bash -c 'source ~/.nvm/nvm.sh && npx tsx src/index.ts'
+Restart=always
+RestartSec=30
+StartLimitIntervalSec=300
+StartLimitBurst=10
+EnvironmentFile=$REPO_PATH/apps/daemon/.env
+Environment=PATH=/home/bawler/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
+StandardOutput=append:$REPO_PATH/logs/daemon.log
+StandardError=append:$REPO_PATH/logs/daemon.log
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+ssh "$REMOTE_HOST" "
+  sudo cp /tmp/$SERVICE_NAME.service /etc/systemd/system/$SERVICE_NAME.service
+  sudo systemctl daemon-reload
+  mkdir -p $REPO_PATH/logs
+"
+
+# Only restart if env file exists
+if [ "$DAEMON_ENV_EXISTS" = "yes" ]; then
+  ssh "$REMOTE_HOST" "sudo systemctl enable $SERVICE_NAME && sudo systemctl restart $SERVICE_NAME"
+  sleep 3
+  SERVICE_STATUS=$(ssh "$REMOTE_HOST" "systemctl is-active $SERVICE_NAME 2>/dev/null || echo 'inactive'")
+  if [ "$SERVICE_STATUS" = "active" ]; then
+    success "Daemon service running"
+  else
+    fail "Daemon service failed to start"
+    ssh "$REMOTE_HOST" "sudo journalctl -u $SERVICE_NAME --no-pager -n 20"
+  fi
 else
-  echo ""
-  echo "▶ Phase 3: Running E2E verification..."
-  E2E_FAILURES=0
+  warn "Skipping daemon start — .env missing"
+fi
 
-  # Stop event watcher to prevent interference with E2E tests
-  # (it closes expired auctions and triggers CRE workflows concurrently)
-  WATCHER_WAS_ACTIVE=false
-  WATCHER_STATUS=$(ssh "$REMOTE_HOST" "systemctl is-active event-watcher.service 2>/dev/null || echo inactive")
-  if [ "$WATCHER_STATUS" = "active" ]; then
-    WATCHER_WAS_ACTIVE=true
-    info "  Stopping event-watcher service for E2E tests..."
-    ssh "$REMOTE_HOST" "sudo systemctl stop event-watcher.service"
-    success "event-watcher stopped"
-  fi
+# ═══════════════════════════════════════════════════════════════════════════════
+# Phase 5: HAProxy configuration
+# ═══════════════════════════════════════════════════════════════════════════════
 
-  # 3a: secret-marketplace E2E (on-chain lifecycle)
-  echo ""
-  info "  Running secret-marketplace E2E..."
-  MARKETPLACE_OUTPUT=$(ssh -t "$REMOTE_HOST" bash -c "'
-    set -euo pipefail
-    export NVM_DIR=\"\$HOME/.nvm\" && [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\"; export PATH=\"\$HOME/.cre/bin:\$HOME/.foundry/bin:\$HOME/.bun/bin:\$HOME/.local/bin:\$PATH\"
-    cd \"$REPO_PATH/scripts\"
-    pnpm e2e:secret-marketplace 2>&1
-  '" 2>&1) || true
+echo ""
+echo "▶ Phase 5: HAProxy configuration..."
 
-  if echo "$MARKETPLACE_OUTPUT" | grep -q "PASS"; then
-    SECRET_MARKETPLACE_RESULT="pass"
-    success "secret-marketplace E2E passed"
+# Check if our backend is already configured
+HAS_ZAMA_BACKEND=$(ssh "$REMOTE_HOST" "sudo grep -c 'ps-zama-daemon' /etc/haproxy/haproxy.cfg 2>/dev/null || echo 0")
+if [ "$HAS_ZAMA_BACKEND" -gt 0 ]; then
+  success "HAProxy already configured for ps-zama-daemon"
+else
+  info "  Adding HAProxy route for /api/zama → localhost:$DAEMON_PORT..."
+
+  # Back up current config
+  ssh "$REMOTE_HOST" "sudo cp /etc/haproxy/haproxy.cfg /etc/haproxy/haproxy.cfg.bak-\$(date +%Y%m%d%H%M%S)"
+
+  # Add our backend and ACL to haproxy config
+  ssh "$REMOTE_HOST" "sudo tee /etc/haproxy/haproxy.cfg > /dev/null" <<'HAPROXY_EOF'
+global
+	log /dev/log	local0
+	log /dev/log	local1 notice
+	chroot /var/lib/haproxy
+	stats socket /run/haproxy/admin.sock mode 660 level admin
+	stats timeout 30s
+	user haproxy
+	group haproxy
+	daemon
+
+	ca-base /etc/ssl/certs
+	crt-base /etc/ssl/private
+
+	ssl-default-bind-ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384
+	ssl-default-bind-ciphersuites TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256
+	ssl-default-bind-options ssl-min-ver TLSv1.2 no-tls-tickets
+
+defaults
+	log	global
+	mode	http
+	option	httplog
+	option	dontlognull
+	timeout connect 5000
+	timeout client  120000
+	timeout server  300000
+	errorfile 400 /etc/haproxy/errors/400.http
+	errorfile 403 /etc/haproxy/errors/403.http
+	errorfile 408 /etc/haproxy/errors/408.http
+	errorfile 500 /etc/haproxy/errors/500.http
+	errorfile 502 /etc/haproxy/errors/502.http
+	errorfile 503 /etc/haproxy/errors/503.http
+	errorfile 504 /etc/haproxy/errors/504.http
+
+frontend http-in
+	bind *:80
+	http-request redirect scheme https unless { ssl_fc }
+
+frontend https-in
+	bind *:443 ssl crt /etc/haproxy/certs/api.insider-streams.com.pem
+
+	# Route /api/zama/* to the Zama daemon (strip /api/zama prefix)
+	acl is_zama_api path_beg /api/zama
+	use_backend ps-zama-daemon if is_zama_api
+
+	default_backend ntfy
+
+backend ntfy
+	server ntfy 127.0.0.1:8090 check
+
+backend ps-zama-daemon
+	http-request set-path %[path,regsub(^/api/zama,,)]
+	server daemon 127.0.0.1:3001 check
+HAPROXY_EOF
+
+  # Validate and reload
+  HAPROXY_CHECK=$(ssh "$REMOTE_HOST" "sudo haproxy -c -f /etc/haproxy/haproxy.cfg 2>&1")
+  if echo "$HAPROXY_CHECK" | grep -q "Configuration file is valid"; then
+    ssh "$REMOTE_HOST" "sudo systemctl reload haproxy"
+    success "HAProxy reloaded with /api/zama route"
   else
-    SECRET_MARKETPLACE_RESULT="fail"
-    fail "secret-marketplace E2E failed"
-    echo "$MARKETPLACE_OUTPUT" | tail -20
-    E2E_FAILURES=$((E2E_FAILURES + 1))
-  fi
-
-  # 3b: secret-marketplace-auction-closer E2E
-  echo ""
-  info "  Running secret-marketplace-auction-closer E2E..."
-  AUCTION_OUTPUT=$(ssh -t "$REMOTE_HOST" bash -c "'
-    set -euo pipefail
-    export NVM_DIR=\"\$HOME/.nvm\" && [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\"; export PATH=\"\$HOME/.cre/bin:\$HOME/.foundry/bin:\$HOME/.bun/bin:\$HOME/.local/bin:\$PATH\"
-    cd \"$REPO_PATH/scripts\"
-    pnpm e2e:secret-marketplace-auction-closer 2>&1
-  '" 2>&1) || true
-
-  if echo "$AUCTION_OUTPUT" | grep -q "PASS"; then
-    SECRET_MARKETPLACE_AUCTION_CLOSER_RESULT="pass"
-    success "secret-marketplace-auction-closer E2E passed"
-  else
-    SECRET_MARKETPLACE_AUCTION_CLOSER_RESULT="fail"
-    fail "secret-marketplace-auction-closer E2E failed"
-    echo "$AUCTION_OUTPUT" | tail -20
-    E2E_FAILURES=$((E2E_FAILURES + 1))
-  fi
-
-  # 3c: simple-market E2E
-  echo ""
-  info "  Running simple-market E2E..."
-  MARKET_OUTPUT=$(ssh -t "$REMOTE_HOST" bash -c "'
-    set -euo pipefail
-    export NVM_DIR=\"\$HOME/.nvm\" && [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\"; export PATH=\"\$HOME/.cre/bin:\$HOME/.foundry/bin:\$HOME/.bun/bin:\$HOME/.local/bin:\$PATH\"
-    cd \"$REPO_PATH/scripts\"
-    pnpm e2e:external-prediction-market-settler 2>&1
-  '" 2>&1) || true
-
-  if echo "$MARKET_OUTPUT" | grep -q "PASS"; then
-    SIMPLE_MARKET_RESULT="pass"
-    success "simple-market E2E passed"
-  else
-    SIMPLE_MARKET_RESULT="fail"
-    fail "simple-market E2E failed"
-    echo "$MARKET_OUTPUT" | tail -20
-    E2E_FAILURES=$((E2E_FAILURES + 1))
-  fi
-
-  # 3d: user-balance-recording-fallback E2E
-  echo ""
-  info "  Running user-balance-recording-fallback E2E..."
-  DEPOSIT_EXIT=0
-  DEPOSIT_OUTPUT=$(ssh -t "$REMOTE_HOST" bash -c "'
-    set -euo pipefail
-    export NVM_DIR=\"\$HOME/.nvm\" && [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\"; export PATH=\"\$HOME/.cre/bin:\$HOME/.foundry/bin:\$HOME/.bun/bin:\$HOME/.local/bin:\$PATH\"
-    cd \"$REPO_PATH/scripts\"
-    pnpm e2e:user-balance-recording-fallback 2>&1
-  '" 2>&1) || DEPOSIT_EXIT=$?
-
-  if [ "$DEPOSIT_EXIT" -eq 0 ] && echo "$DEPOSIT_OUTPUT" | grep -qi "PASSED\|PASS"; then
-    USER_BALANCE_RECORDING_FALLBACK_RESULT="pass"
-    success "user-balance-recording-fallback E2E passed"
-  else
-    USER_BALANCE_RECORDING_FALLBACK_RESULT="fail"
-    fail "user-balance-recording-fallback E2E failed"
-    echo "$DEPOSIT_OUTPUT" | tail -20
-    E2E_FAILURES=$((E2E_FAILURES + 1))
-  fi
-
-  # 3e: external-marketplace-settlement-resolved-handler E2E
-  echo ""
-  info "  Running settlement-resolved-handler E2E..."
-  SETTLEMENT_RESOLVED_EXIT=0
-  SETTLEMENT_RESOLVED_OUTPUT=$(ssh -t "$REMOTE_HOST" bash -c "'
-    set -euo pipefail
-    export NVM_DIR=\"\$HOME/.nvm\" && [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\"; export PATH=\"\$HOME/.cre/bin:\$HOME/.foundry/bin:\$HOME/.bun/bin:\$HOME/.local/bin:\$PATH\"
-    cd \"$REPO_PATH/scripts\"
-    pnpm e2e:external-marketplace-settlement-resolved-handler 2>&1
-  '" 2>&1) || SETTLEMENT_RESOLVED_EXIT=$?
-
-  if [ "$SETTLEMENT_RESOLVED_EXIT" -eq 0 ] && echo "$SETTLEMENT_RESOLVED_OUTPUT" | grep -qi "PASS"; then
-    SETTLEMENT_RESOLVED_HANDLER_RESULT="pass"
-    success "settlement-resolved-handler E2E passed"
-  else
-    SETTLEMENT_RESOLVED_HANDLER_RESULT="fail"
-    fail "settlement-resolved-handler E2E failed"
-    echo "$SETTLEMENT_RESOLVED_OUTPUT" | tail -20
-    E2E_FAILURES=$((E2E_FAILURES + 1))
-  fi
-
-  # 3f: auction-cancelled-handler E2E
-  echo ""
-  info "  Running auction-cancelled-handler E2E..."
-  AUCTION_CANCELLED_EXIT=0
-  AUCTION_CANCELLED_OUTPUT=$(ssh -t "$REMOTE_HOST" bash -c "'
-    set -euo pipefail
-    export NVM_DIR=\"\$HOME/.nvm\" && [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\"; export PATH=\"\$HOME/.cre/bin:\$HOME/.foundry/bin:\$HOME/.bun/bin:\$HOME/.local/bin:\$PATH\"
-    cd \"$REPO_PATH/scripts\"
-    pnpm e2e:auction-cancelled-handler 2>&1
-  '" 2>&1) || AUCTION_CANCELLED_EXIT=$?
-
-  if [ "$AUCTION_CANCELLED_EXIT" -eq 0 ] && echo "$AUCTION_CANCELLED_OUTPUT" | grep -qi "PASS"; then
-    AUCTION_CANCELLED_HANDLER_RESULT="pass"
-    success "auction-cancelled-handler E2E passed"
-  else
-    AUCTION_CANCELLED_HANDLER_RESULT="fail"
-    fail "auction-cancelled-handler E2E failed"
-    echo "$AUCTION_CANCELLED_OUTPUT" | tail -20
-    E2E_FAILURES=$((E2E_FAILURES + 1))
-  fi
-
-  # Restart event watcher if it was running before
-  if [ "$WATCHER_WAS_ACTIVE" = true ]; then
-    info "  Restarting event-watcher service..."
-    ssh "$REMOTE_HOST" "sudo systemctl start event-watcher.service"
-    success "event-watcher restarted"
-  fi
-
-  # ─── E2E Results Summary ──────────────────────────────────────────────────
-  echo ""
-  echo "  ┌──────────────────────────────────────────┬──────────┐"
-  echo "  │ Workflow                                 │ Result   │"
-  echo "  ├──────────────────────────────────────────┼──────────┤"
-  printf "  │ %-40s │ %-8s │\n" "secret-marketplace" "$SECRET_MARKETPLACE_RESULT"
-  printf "  │ %-40s │ %-8s │\n" "secret-marketplace-auction-closer" "$SECRET_MARKETPLACE_AUCTION_CLOSER_RESULT"
-  printf "  │ %-40s │ %-8s │\n" "simple-market" "$SIMPLE_MARKET_RESULT"
-  printf "  │ %-40s │ %-8s │\n" "user-balance-recording-fallback" "$USER_BALANCE_RECORDING_FALLBACK_RESULT"
-  printf "  │ %-40s │ %-8s │\n" "settlement-resolved-handler" "$SETTLEMENT_RESOLVED_HANDLER_RESULT"
-  printf "  │ %-40s │ %-8s │\n" "auction-cancelled-handler" "$AUCTION_CANCELLED_HANDLER_RESULT"
-  echo "  └──────────────────────────────────────────┴──────────┘"
-
-  if [ $E2E_FAILURES -gt 0 ]; then
-    echo ""
-    fail "$E2E_FAILURES E2E test(s) failed"
-    if ask_yn "  Rollback to $PREV_BRANCH@${PREV_COMMIT:0:7}?"; then
-      do_rollback
-      exit 1
-    fi
-    warn "Continuing despite failures"
+    fail "HAProxy config invalid — restoring backup"
+    ssh "$REMOTE_HOST" "sudo cp /etc/haproxy/haproxy.cfg.bak-* /etc/haproxy/haproxy.cfg 2>/dev/null"
+    echo "$HAPROXY_CHECK"
   fi
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Phase 5: Success Banner
+# Phase 6: Cron jobs for demo data generation
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# Clear the trap (successful deploy, no rollback needed)
-DEPLOY_STARTED=false
+echo ""
+echo "▶ Phase 6: Setting up cron jobs..."
+
+# Create wrapper scripts for each cron job
+ssh "$REMOTE_HOST" "mkdir -p $REPO_PATH/scripts"
+
+# create-events wrapper
+ssh "$REMOTE_HOST" "cat > $REPO_PATH/scripts/run-create-events-zama.sh && chmod +x $REPO_PATH/scripts/run-create-events-zama.sh" <<CRON_EOF
+#!/bin/bash
+# Cron wrapper: create events for Zama deployment
+# Crontab: */15 * * * *
+LOCKFILE="/tmp/zama-create-events.lock"
+exec 200>"\$LOCKFILE"
+flock -n 200 || exit 0
+export NVM_DIR="/home/bawler/.nvm"
+[ -s "\$NVM_DIR/nvm.sh" ] && . "\$NVM_DIR/nvm.sh"
+cd $REPO_PATH/scripts
+exec npx tsx --env-file=.env create-events.ts >> $REPO_PATH/logs/create-events.log 2>&1
+CRON_EOF
+
+# spawn-auctions wrapper
+ssh "$REMOTE_HOST" "cat > $REPO_PATH/scripts/run-spawn-auctions-zama.sh && chmod +x $REPO_PATH/scripts/run-spawn-auctions-zama.sh" <<CRON_EOF
+#!/bin/bash
+# Cron wrapper: spawn auctions for Zama deployment
+# Crontab: */10 * * * *
+LOCKFILE="/tmp/zama-spawn-auctions.lock"
+exec 200>"\$LOCKFILE"
+flock -n 200 || exit 0
+export NVM_DIR="/home/bawler/.nvm"
+[ -s "\$NVM_DIR/nvm.sh" ] && . "\$NVM_DIR/nvm.sh"
+cd $REPO_PATH/scripts
+exec npx tsx --env-file=.env spawn-auctions.ts >> $REPO_PATH/logs/spawn-auctions.log 2>&1
+CRON_EOF
+
+# place-bids wrapper
+ssh "$REMOTE_HOST" "cat > $REPO_PATH/scripts/run-place-bids-zama.sh && chmod +x $REPO_PATH/scripts/run-place-bids-zama.sh" <<CRON_EOF
+#!/bin/bash
+# Cron wrapper: place bids for Zama deployment
+# Crontab: * * * * *
+LOCKFILE="/tmp/zama-place-bids.lock"
+exec 200>"\$LOCKFILE"
+flock -n 200 || exit 0
+export NVM_DIR="/home/bawler/.nvm"
+[ -s "\$NVM_DIR/nvm.sh" ] && . "\$NVM_DIR/nvm.sh"
+cd $REPO_PATH/scripts
+exec npx tsx --env-file=.env place-bids.ts >> $REPO_PATH/logs/place-bids.log 2>&1
+CRON_EOF
+
+# request-settlements wrapper
+ssh "$REMOTE_HOST" "cat > $REPO_PATH/scripts/run-request-settlements-zama.sh && chmod +x $REPO_PATH/scripts/run-request-settlements-zama.sh" <<CRON_EOF
+#!/bin/bash
+# Cron wrapper: request settlements for Zama deployment
+# Crontab: * * * * *
+LOCKFILE="/tmp/zama-request-settlements.lock"
+exec 200>"\$LOCKFILE"
+flock -n 200 || exit 0
+export NVM_DIR="/home/bawler/.nvm"
+[ -s "\$NVM_DIR/nvm.sh" ] && . "\$NVM_DIR/nvm.sh"
+cd $REPO_PATH/scripts
+exec npx tsx --env-file=.env request-settlements.ts >> $REPO_PATH/logs/request-settlements.log 2>&1
+CRON_EOF
+
+# Add cron entries (only if not already present)
+ZAMA_CRON_EXISTS=$(ssh "$REMOTE_HOST" "crontab -l 2>/dev/null | grep -c 'zama' || echo 0")
+if [ "$ZAMA_CRON_EXISTS" -gt 0 ]; then
+  success "Cron jobs already installed (found $ZAMA_CRON_EXISTS entries)"
+else
+  info "  Installing cron jobs..."
+  ssh "$REMOTE_HOST" bash -s <<'CRON_INSTALL_EOF'
+EXISTING=$(crontab -l 2>/dev/null || true)
+NEW_CRON="$EXISTING
+# ── Private Streams Zama deployment cron jobs ──
+*/15 * * * * /home/bawler/private-streams-zama/scripts/run-create-events-zama.sh
+*/10 * * * * /home/bawler/private-streams-zama/scripts/run-spawn-auctions-zama.sh
+* * * * * /home/bawler/private-streams-zama/scripts/run-place-bids-zama.sh
+* * * * * /home/bawler/private-streams-zama/scripts/run-request-settlements-zama.sh"
+echo "$NEW_CRON" | crontab -
+CRON_INSTALL_EOF
+  success "Cron jobs installed"
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Phase 7: Verify everything
+# ═══════════════════════════════════════════════════════════════════════════════
+
+echo ""
+echo "▶ Phase 7: Verification..."
+
+# Check daemon health
+if [ "$DAEMON_ENV_EXISTS" = "yes" ]; then
+  HEALTH=$(ssh "$REMOTE_HOST" "curl -sf http://localhost:$DAEMON_PORT/health 2>/dev/null || echo 'FAIL'")
+  if echo "$HEALTH" | grep -q '"status":"ok"'; then
+    success "Daemon health check passed: $HEALTH"
+  else
+    fail "Daemon health check failed: $HEALTH"
+  fi
+
+  # Check HAProxy route
+  HAPROXY_HEALTH=$(ssh "$REMOTE_HOST" "curl -sf https://api.insider-streams.com/api/zama/health 2>/dev/null || echo 'FAIL'")
+  if echo "$HAPROXY_HEALTH" | grep -q '"status":"ok"'; then
+    success "HAProxy /api/zama/health route works: $HAPROXY_HEALTH"
+  else
+    warn "HAProxy route check: $HAPROXY_HEALTH (may need SSL cert)"
+  fi
+fi
+
+# Check systemd
+SERVICE_STATUS=$(ssh "$REMOTE_HOST" "systemctl is-active $SERVICE_NAME 2>/dev/null || echo 'inactive'")
+info "  Daemon service: $SERVICE_STATUS"
+
+# Check cron
+CRON_COUNT=$(ssh "$REMOTE_HOST" "crontab -l 2>/dev/null | grep -c 'zama' || echo 0")
+info "  Cron jobs: $CRON_COUNT entries"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Done
+# ═══════════════════════════════════════════════════════════════════════════════
 
 echo ""
 echo "═══════════════════════════════════════════════════════"
@@ -537,7 +487,15 @@ echo "  Remote:    $REMOTE_HOST"
 echo "  Branch:    $BRANCH"
 echo "  Commit:    $DEPLOYED_COMMIT"
 echo "  Repo:      $REPO_PATH"
-if [ "$RUN_E2E" = true ]; then
-  echo "  Workflows: secret-marketplace=$SECRET_MARKETPLACE_RESULT auction-closer=$SECRET_MARKETPLACE_AUCTION_CLOSER_RESULT simple-market=$SIMPLE_MARKET_RESULT deposit-reconciler=$USER_BALANCE_RECORDING_FALLBACK_RESULT settlement-resolved=$SETTLEMENT_RESOLVED_HANDLER_RESULT auction-cancelled=$AUCTION_CANCELLED_HANDLER_RESULT"
-fi
+echo "  Daemon:    http://localhost:$DAEMON_PORT/health"
+echo "  HAProxy:   https://api.insider-streams.com/api/zama/health"
+echo "  Service:   $SERVICE_NAME ($SERVICE_STATUS)"
+echo "  Cron jobs: $CRON_COUNT"
+echo "═══════════════════════════════════════════════════════"
+echo ""
+echo "  Manual steps remaining:"
+echo "  1. Set NEXT_PUBLIC_DAEMON_URL=https://api.insider-streams.com/api/zama"
+echo "     in insider-streams-frontend Vercel env vars"
+echo "  2. Set NEXT_PUBLIC_SUBGRAPH_URL to the zama subgraph in Vercel"
+echo "  3. Update prediction-market-frontend .env.local if needed"
 echo "═══════════════════════════════════════════════════════"
