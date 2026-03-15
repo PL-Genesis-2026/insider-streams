@@ -29,6 +29,10 @@ const ETHERSCAN_URL = "https://sepolia.etherscan.io/tx";
 const marketplaceAddress = config.secretMarketplaceAddress as `0x${string}`;
 const pmAddress = config.predictionMarketAddress as `0x${string}`;
 
+// In-memory dedup: prevents concurrent processing of the same event
+// (startup scan + event watcher can race)
+const processingEvents = new Set<string>();
+
 function auctionUrl(auctionId: bigint): string | undefined {
   return config.frontendUrl ? `${config.frontendUrl}/auction/${auctionId}` : undefined;
 }
@@ -163,6 +167,13 @@ async function handleSettlementResponse(
   eventId: bigint,
   outcome: number,
 ): Promise<void> {
+  const key = eventId.toString();
+  if (processingEvents.has(key)) {
+    console.log(`[resolver] Event ${eventId} already being processed, skipping`);
+    return;
+  }
+  processingEvents.add(key);
+
   console.log(`\n[resolver] Processing settlement for event ${eventId}, outcome=${outcome}`);
 
   const publicClient = getPublicClient();
