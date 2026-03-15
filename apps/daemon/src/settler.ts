@@ -18,12 +18,13 @@ function sendNotification(title: string, message: string, clickUrl?: string) {
   return _sendNotification(title, message, clickUrl, config.ntfyTopicSettler);
 }
 import { withAdminLock } from "./admin-lock.js";
+import { ProcessingTracker } from "./processing-tracker.js";
 
 const ETHERSCAN_URL = "https://sepolia.etherscan.io/tx";
 
-// In-memory dedup: prevents concurrent processing of the same event
-// (startup scan + event watcher can race after daemon restart)
-const processingEvents = new Set<string>();
+// Dedup tracker: prevents concurrent processing AND re-processing of settled events.
+// Keys are kept permanently on success (never re-settle), removed on failure (allow retry).
+const tracker = new ProcessingTracker();
 
 // Gemini prompt (extracted from CRE workflow)
 const systemPrompt = `
@@ -181,14 +182,28 @@ function isSyntheticEvent(question: string): boolean {
 
 async function handleSettlementRequest(eventId: bigint, question: string): Promise<void> {
   const key = eventId.toString();
-  if (processingEvents.has(key)) {
-    console.log(`[settler] Event ${eventId} already being processed, skipping`);
+  if (!tracker.acquire(key)) {
+    console.log(`[settler] Event ${eventId} already processed or in progress, skipping`);
     return;
   }
-  processingEvents.add(key);
 
   try {
     console.log(`\n[settler] Processing event ${eventId}: "${question}"`);
+
+    // Defense-in-depth: check on-chain status before doing any work.
+    const publicClient = getPublicClient();
+    const pmAddress = config.predictionMarketAddress as `0x${string}`;
+    const marketEvent = await publicClient.readContract({
+      address: pmAddress,
+      abi: examplePredictionMarketAbi,
+      functionName: "getMarketEvent",
+      args: [eventId],
+    });
+    if (marketEvent.status !== 1) {
+      console.log(`[settler] Event ${eventId} status is ${marketEvent.status} (not SettlementRequested), skipping`);
+      tracker.markDone(key);
+      return;
+    }
 
     // For E2E test events, skip Gemini and resolve with a random YES/NO.
     // These are synthetic events (e.g. "[E2E Test] Playwright event ...") that
@@ -210,7 +225,6 @@ async function handleSettlementRequest(eventId: bigint, question: string): Promi
     console.log(`[settler] Result: ${geminiResult.result} (confidence: ${geminiResult.confidence})`);
 
     // Step 2: Settle on-chain
-    const pmAddress = config.predictionMarketAddress as `0x${string}`;
     const outcome = OutcomeMap[geminiResult.result];
     const hash = await withAdminLock(() =>
       getWalletClient().writeContract({
@@ -230,8 +244,18 @@ async function handleSettlementRequest(eventId: bigint, question: string): Promi
     // Step 4: Notify
     const msg = `Event ${eventId}: "${question}"\nOutcome: ${geminiResult.result}\ntx: ${ETHERSCAN_URL}/${txHash}`;
     await sendNotification(`Market Settled: Event ${eventId}`, msg, `${ETHERSCAN_URL}/${txHash}`);
-  } finally {
-    processingEvents.delete(key);
+
+    tracker.markDone(key);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // If another trigger already settled this event, treat as success
+    if (msg.includes("SettlementNotRequested")) {
+      console.log(`[settler] Event ${eventId} was already settled (race), skipping`);
+      tracker.markDone(key);
+      return;
+    }
+    tracker.markFailed(key);
+    throw err;
   }
 }
 
@@ -254,6 +278,7 @@ export async function startSettler(): Promise<void> {
         const { eventId, question } = log.args as { eventId: bigint; question: string };
         handleSettlementRequest(eventId, question).catch((err) => {
           const msg = err instanceof Error ? err.message : String(err);
+          if (msg.includes("SettlementNotRequested")) return;
           console.error(`[settler] Error processing event ${eventId}:`, msg);
           sendNotification("Settlement FAILED", `Event ${eventId}: ${msg}`);
         });
@@ -320,6 +345,7 @@ export async function startSettler(): Promise<void> {
           console.log(`[settler] Found pending settlement: event ${i}`);
           handleSettlementRequest(i, ev.question).catch((err) => {
             const msg = err instanceof Error ? err.message : String(err);
+            if (msg.includes("SettlementNotRequested")) return;
             console.error(`[settler] Error processing event ${i}:`, msg);
             sendNotification("Settlement FAILED", `Event ${i}: ${msg}`);
           });
