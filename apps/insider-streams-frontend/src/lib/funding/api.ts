@@ -83,6 +83,7 @@ export async function requestFundingWithdrawal(payload: {
 }
 
 export async function requestFundingDeposit(payload: {
+  txHash: string;
   amount: string;
   timestamp: number;
   signature: string;

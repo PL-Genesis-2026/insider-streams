@@ -73,7 +73,7 @@ export function useDeposit() {
 
       // Step 3: Notify daemon to deposit from admin → marketplace
       const timestamp = Math.floor(Date.now() / 1000);
-      const payload = { amount: parsed.toString(), timestamp };
+      const payload = { txHash, amount: parsed.toString(), timestamp };
       const signature = await signMessageAsync({
         message: stringify(payload),
       });

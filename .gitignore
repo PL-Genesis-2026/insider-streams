@@ -20,3 +20,4 @@ contracts/lib/
 .playwright-cli/
 .watcher-state.json
 Untitled
+.vercel
