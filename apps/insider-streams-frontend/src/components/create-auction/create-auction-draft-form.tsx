@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSignMessage } from "wagmi";
 import stringify from "fast-json-stable-stringify";
 import {
@@ -25,7 +25,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -164,6 +163,7 @@ export function CreateAuctionDraftForm({
   const [eventCatalog, setEventCatalog] = useState<EventCatalogState>({
     status: "idle",
   });
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [attachment, setAttachment] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [submitState, setSubmitState] = useState<SubmitState>({
@@ -629,23 +629,29 @@ export function CreateAuctionDraftForm({
               <Label htmlFor="secret-payload">Signal</Label>
               <Textarea
                 id="secret-payload"
-                rows={6}
+                rows={4}
                 disabled={isSubmitting}
-                placeholder="Optional if you attach a file. Use this for the thesis, context, or instructions..."
+                placeholder="Your thesis, reasoning, or insider context..."
                 value={draft.secretPayload}
                 onChange={(event) =>
                   setDraftField("secretPayload", event.target.value)
                 }
               />
+              <p className="text-xs text-muted-foreground">
+                {attachment
+                  ? "Optional context to accompany your file attachment."
+                  : "Enter your secret signal, or attach a file below."}
+              </p>
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="secret-file">Attachment</Label>
-              <Input
-                id="secret-file"
+              <Label>File attachment</Label>
+              <input
+                ref={fileInputRef}
                 type="file"
                 accept={ALLOWED_FILE_EXTENSIONS.join(",")}
                 disabled={isSubmitting}
+                className="hidden"
                 onChange={(event) => {
                   const nextFile = event.target.files?.[0] ?? null;
                   if (nextFile) {
@@ -661,25 +667,46 @@ export function CreateAuctionDraftForm({
                   );
                 }}
               />
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                Files are encrypted server-side before upload to Filecoin.
-                Buyers and sellers will see the download link and
-                the decryption key after reveal.
+              {attachment ? (
+                <div className="flex h-11 items-center gap-3 rounded-[calc(var(--radius)-4px)] border border-input bg-background/80 px-4">
+                  <FileUp className="size-4 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 flex-1 truncate text-sm">{attachment.name}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {(attachment.size / 1024).toFixed(1)} KB
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 shrink-0 text-xs text-muted-foreground"
+                    onClick={() => {
+                      setAttachment(null);
+                      setFileError(null);
+                      if (fileInputRef.current) fileInputRef.current.value = "";
+                    }}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex h-11 w-full items-center gap-3 rounded-[calc(var(--radius)-4px)] border border-dashed border-input bg-background/80 px-4 text-sm text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground/70 disabled:opacity-50"
+                >
+                  <FileUp className="size-4" />
+                  Choose file...
+                </button>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Encrypted and stored on Filecoin. Supports {ALLOWED_FILE_EXTENSIONS.join(", ")} up to 10 MB.
               </p>
               {fileError ? (
                 <Alert variant="destructive" className="py-2">
                   <AlertCircle className="size-3.5" />
                   <AlertDescription className="text-xs">{fileError}</AlertDescription>
                 </Alert>
-              ) : null}
-              {attachment ? (
-                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <Badge variant="outline" className="gap-1.5">
-                    <FileUp className="size-3" />
-                    {attachment.name}
-                  </Badge>
-                  <span>{(attachment.size / 1024).toFixed(1)} KB</span>
-                </div>
               ) : null}
             </div>
 
