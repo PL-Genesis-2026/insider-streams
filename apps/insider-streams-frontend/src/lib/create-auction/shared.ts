@@ -1,8 +1,6 @@
 import {
   CREATE_AUCTION_DURATIONS,
   CREATE_AUCTION_DURATION_SECONDS,
-  CREATE_AUCTION_EIP712_DOMAIN,
-  CREATE_AUCTION_EIP712_TYPES,
   type CreateAuctionDuration,
 } from "@private-streams/common";
 import { z } from "zod";
@@ -10,8 +8,6 @@ import { z } from "zod";
 export {
   CREATE_AUCTION_DURATIONS,
   CREATE_AUCTION_DURATION_SECONDS,
-  CREATE_AUCTION_EIP712_DOMAIN,
-  CREATE_AUCTION_EIP712_TYPES,
 };
 export type { CreateAuctionDuration };
 
