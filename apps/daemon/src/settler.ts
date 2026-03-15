@@ -21,6 +21,10 @@ import { withAdminLock } from "./admin-lock.js";
 
 const ETHERSCAN_URL = "https://sepolia.etherscan.io/tx";
 
+// In-memory dedup: prevents concurrent processing of the same event
+// (startup scan + event watcher can race after daemon restart)
+const processingEvents = new Set<string>();
+
 // Gemini prompt (extracted from CRE workflow)
 const systemPrompt = `
 You are a fact-checking and event resolution system that determines the real-world outcome of prediction markets.
@@ -176,6 +180,13 @@ function isSyntheticEvent(question: string): boolean {
 }
 
 async function handleSettlementRequest(eventId: bigint, question: string): Promise<void> {
+  const key = eventId.toString();
+  if (processingEvents.has(key)) {
+    console.log(`[settler] Event ${eventId} already being processed, skipping`);
+    return;
+  }
+  processingEvents.add(key);
+
   console.log(`\n[settler] Processing event ${eventId}: "${question}"`);
 
   // For E2E test events, skip Gemini and resolve with a random YES/NO.

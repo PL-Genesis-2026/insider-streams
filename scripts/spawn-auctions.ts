@@ -11,18 +11,25 @@
  *   1. Load test accounts from env (TEST_ACCOUNT_1..25)
  *   2. Query subgraph for open events (exclude settled)
  *   3. Pick a random account and event
- *   4. Sign and POST to daemon /create-auction
+ *   4. If VENICE_API_KEY is set, research the event via AI and generate a
+ *      structured secret (text/txt/md/json). File formats (txt/md/json) are
+ *      uploaded as multipart attachments — the daemon handles Filecoin upload
+ *      when configured.
+ *   5. Sign and POST to daemon /create-auction
  *
  * Env vars (scripts/.env):
  *   TEST_ACCOUNT_1..25      — private keys for auction creators
  *   DAEMON_URL / BASE_URL   — daemon origin (default: http://localhost:3001)
  *   SUBGRAPH_URL            — subgraph endpoint (default: insider-streams-zama)
+ *   VENICE_API_KEY          — (optional) Venice AI key for researched secrets
  */
 
 import stringify from "fast-json-stable-stringify";
 import { GraphQLClient, gql } from "graphql-request";
+import OpenAI from "openai";
 import { privateKeyToAccount } from "viem/accounts";
 import { type Hex } from "viem";
+import { z } from "zod";
 import {
   CREATE_AUCTION_DURATION_SECONDS,
   type CreateAuctionDuration,
@@ -39,6 +46,8 @@ const SUBGRAPH_API_KEY = process.env.SUBGRAPH_API_KEY ?? "a075bc6e2e48577d2588bb
 const DAEMON_URL =
   process.env.DAEMON_URL ?? process.env.BASE_URL ?? "http://localhost:3001";
 
+const VENICE_API_KEY = process.env.VENICE_API_KEY ?? "";
+
 const DURATIONS: CreateAuctionDuration[] = ["5m", "15m", "30m", "1h"];
 
 const SECRET_POOL = [
@@ -49,6 +58,91 @@ const SECRET_POOL = [
   "Prediction: YES",
   "Prediction: NO",
 ];
+
+// ─── AI-researched secret generation ────────────────────────────────────────
+
+type SecretFormat = "text" | "txt" | "md" | "json";
+const SECRET_FORMATS: { format: SecretFormat; weight: number }[] = [
+  { format: "text", weight: 30 },
+  { format: "txt", weight: 30 },
+  { format: "md", weight: 20 },
+  { format: "json", weight: 20 },
+];
+
+function pickWeightedFormat(): SecretFormat {
+  const total = SECRET_FORMATS.reduce((sum, f) => sum + f.weight, 0);
+  let r = Math.random() * total;
+  for (const { format, weight } of SECRET_FORMATS) {
+    r -= weight;
+    if (r <= 0) return format;
+  }
+  return "text";
+}
+
+const ResearchAnswerSchema = z.object({
+  prediction: z.enum(["yes", "no"]),
+  confidence: z.number().min(0).max(100),
+  reasoning: z.string(),
+  sources: z.array(z.string()).optional(),
+});
+
+async function researchEventAnswer(
+  venice: OpenAI,
+  question: string,
+): Promise<{ prediction: boolean; content: string; format: SecretFormat }> {
+  const format = pickWeightedFormat();
+
+  const systemPrompt = `You are a research assistant that determines the actual outcome of past events phrased as prediction market questions. Search the web for the answer.
+
+Respond with a JSON object containing:
+- "prediction": "yes" or "no" — the actual outcome
+- "confidence": 0-100 — your confidence level
+- "reasoning": a detailed explanation with citations and source URLs
+- "sources": array of source URLs
+
+The events are phrased in future tense but they already happened. Determine what actually occurred.`;
+
+  try {
+    const response = await venice.chat.completions.create({
+      model: "openai-gpt-54",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: `What is the actual outcome of: "${question}"` },
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.3,
+    });
+
+    const raw = response.choices[0]?.message?.content;
+    if (!raw) throw new Error("Empty AI response");
+
+    const parsed = ResearchAnswerSchema.parse(JSON.parse(raw));
+    const prediction = parsed.prediction === "yes";
+
+    let content: string;
+    switch (format) {
+      case "json":
+        content = JSON.stringify(parsed, null, 2);
+        break;
+      case "md":
+        content = `# Research: ${question}\n\n## Prediction: ${parsed.prediction.toUpperCase()}\n\n**Confidence:** ${parsed.confidence}%\n\n## Reasoning\n\n${parsed.reasoning}\n\n## Sources\n\n${(parsed.sources ?? []).map((s) => `- ${s}`).join("\n") || "No sources cited."}`;
+        break;
+      default:
+        content = `Prediction: ${parsed.prediction.toUpperCase()}\nConfidence: ${parsed.confidence}%\n\n${parsed.reasoning}${parsed.sources?.length ? "\n\nSources:\n" + parsed.sources.join("\n") : ""}`;
+        break;
+    }
+
+    return { prediction, content, format };
+  } catch (err) {
+    console.warn(`[spawn-auctions] AI research failed: ${err instanceof Error ? err.message : err}`);
+    const prediction = Math.random() > 0.5;
+    return {
+      prediction,
+      content: prediction ? "The answer is YES." : "The answer is NO.",
+      format: "text",
+    };
+  }
+}
 
 // ---------------------------------------------------------------------------
 // ntfy (optional)
@@ -152,6 +246,46 @@ async function signedPost(
   return { ok: response.ok, status: response.status, body };
 }
 
+/** Send a multipart FormData request with a file attachment + signed form fields. */
+async function signedFilePost(
+  account: TestAccount,
+  endpoint: string,
+  fields: Record<string, string>,
+  fileContent: Buffer,
+  fileName: string,
+  mimeType: string,
+): Promise<{ ok: boolean; status: number; body: unknown }> {
+  const ts = timestamp();
+  // Signature covers all form fields (as strings) + timestamp, but NOT the file
+  const payload: Record<string, unknown> = { ...fields, timestamp: ts };
+  const message = stringify(payload);
+  const signature = await account.account.signMessage({ message });
+
+  const formData = new FormData();
+  for (const [key, value] of Object.entries(fields)) {
+    formData.append(key, value);
+  }
+  formData.append("timestamp", String(ts));
+  formData.append("signature", signature);
+  formData.append("file", new Blob([new Uint8Array(fileContent)], { type: mimeType }), fileName);
+
+  const response = await fetch(`${DAEMON_URL}${endpoint}`, {
+    method: "POST",
+    body: formData,
+    signal: AbortSignal.timeout(120_000),
+  });
+
+  const text = await response.text();
+  let body: unknown = text;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    // keep raw text
+  }
+
+  return { ok: response.ok, status: response.status, body };
+}
+
 // ---------------------------------------------------------------------------
 // GraphQL
 // ---------------------------------------------------------------------------
@@ -200,6 +334,103 @@ function shuffle<T>(arr: T[]): T[] {
   return out;
 }
 
+async function submitAuction(
+  ta: TestAccount,
+  event: { eventId: string; question: string },
+  duration: CreateAuctionDuration,
+  durationSeconds: number,
+  secretPayload: string,
+  prediction: string,
+  format: SecretFormat,
+): Promise<{ ok: boolean; done: boolean }> {
+  const isFileFormat = format === "txt" || format === "md" || format === "json";
+  const MAX_RETRIES = 2;
+  let lastErr = "";
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      const delay = attempt * 15_000;
+      console.log(`[spawn-auctions] retry ${attempt}/${MAX_RETRIES} in ${delay / 1000}s...`);
+      await new Promise((r) => setTimeout(r, delay));
+    }
+
+    const endTime = timestamp() + durationSeconds;
+
+    try {
+      let result: { ok: boolean; status: number; body: unknown };
+
+      if (isFileFormat) {
+        const ext = format === "txt" ? ".txt" : format === "md" ? ".md" : ".json";
+        const mimeType = format === "json" ? "application/json" : "text/plain";
+        const fileName = `research${ext}`;
+        const fileBuffer = Buffer.from(secretPayload, "utf8");
+
+        console.log(`[spawn-auctions] uploading file: ${fileName} (${fileBuffer.byteLength} bytes)`);
+
+        result = await signedFilePost(
+          ta,
+          "/create-auction",
+          {
+            eventId: event.eventId,
+            eventTitle: event.question,
+            endTime: String(endTime),
+            prediction,
+          },
+          fileBuffer,
+          fileName,
+          mimeType,
+        );
+      } else {
+        result = await signedPost(ta, "/create-auction", {
+          eventId: event.eventId,
+          eventTitle: event.question,
+          endTime: String(endTime),
+          prediction,
+          secretPayload,
+        });
+      }
+
+      if (result.ok) {
+        const auctionId =
+          result.body != null &&
+          typeof result.body === "object" &&
+          "auctionId" in result.body
+            ? String((result.body as Record<string, unknown>).auctionId)
+            : "?";
+        const fileSuffix = isFileFormat ? ` [file: research.${format}]` : "";
+        const msg = `Auction ${auctionId} (${duration}) for event ${event.eventId}${fileSuffix}\n"${event.question}"`;
+        console.log(`[spawn-auctions] ${msg}`);
+        await ntfy("Auction Created", msg, ["tada"]);
+        return { ok: true, done: true };
+      }
+
+      const code =
+        result.body != null &&
+        typeof result.body === "object" &&
+        "code" in result.body
+          ? String((result.body as Record<string, unknown>).code)
+          : undefined;
+
+      if (result.status === 400 && code && SKIPPABLE_CODES.has(code)) {
+        console.log(
+          `[spawn-auctions] event ${event.eventId} not eligible (${code}), trying next`,
+        );
+        return { ok: false, done: false }; // try next event
+      }
+
+      lastErr = `HTTP ${result.status}: ${JSON.stringify(result.body).slice(0, 200)}`;
+      console.warn(`[spawn-auctions] attempt ${attempt}: ${lastErr}`);
+    } catch (err) {
+      lastErr = err instanceof Error ? err.message : String(err);
+      console.warn(`[spawn-auctions] attempt ${attempt}: ${lastErr}`);
+    }
+  }
+
+  console.error(`[spawn-auctions] giving up on event ${event.eventId} after ${MAX_RETRIES + 1} attempts`);
+  await ntfy("Auction Spawn FAILED", `event ${event.eventId}: ${lastErr}`, ["x"]);
+  return { ok: false, done: true };
+}
+
 async function runCycle(client: GraphQLClient, accounts: TestAccount[]): Promise<void> {
   const label = new Date().toISOString();
   console.log(`[spawn-auctions] ${label} — starting cycle`);
@@ -217,85 +448,45 @@ async function runCycle(client: GraphQLClient, accounts: TestAccount[]): Promise
     return;
   }
 
+  const venice = VENICE_API_KEY
+    ? new OpenAI({ apiKey: VENICE_API_KEY, baseURL: "https://api.venice.ai/api/v1" })
+    : null;
+
   const candidates = shuffle(openEvents);
   const ta = pickRandom(accounts);
 
   for (const event of candidates) {
-    const secretPayload = pickRandom(SECRET_POOL);
-    const duration = pickRandom(DURATIONS);
-    const durationSeconds = CREATE_AUCTION_DURATION_SECONDS[duration];
-    const prediction = secretPayload.includes("YES") ? "true" : "false";
-
     console.log(
       `[spawn-auctions] trying event ${event.eventId} — "${event.question}"`,
     );
     console.log(`[spawn-auctions] signer: ${ta.address}`);
-    console.log(`[spawn-auctions] secret: "${secretPayload}", duration: ${duration}`);
 
-    const MAX_RETRIES = 2;
-    let lastErr = "";
+    let secretPayload: string;
+    let prediction: string;
+    let format: SecretFormat;
 
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      if (attempt > 0) {
-        const delay = attempt * 15_000;
-        console.log(`[spawn-auctions] retry ${attempt}/${MAX_RETRIES} in ${delay / 1000}s...`);
-        await new Promise((r) => setTimeout(r, delay));
-      }
-
-      // Recompute endTime each attempt so the auction doesn't expire during retries
-      const endTime = timestamp() + durationSeconds;
-
-      try {
-        const result = await signedPost(ta, "/create-auction", {
-          eventId: event.eventId,
-          eventTitle: event.question,
-          endTime: String(endTime),
-          prediction,
-          secretPayload,
-        });
-
-        if (result.ok) {
-          const auctionId =
-            result.body != null &&
-            typeof result.body === "object" &&
-            "auctionId" in result.body
-              ? String((result.body as Record<string, unknown>).auctionId)
-              : "?";
-          const msg = `Auction ${auctionId} (${duration}) for event ${event.eventId}\n"${event.question}"`;
-          console.log(`[spawn-auctions] ${msg}`);
-          await ntfy("Auction Created", msg, ["tada"]);
-          return;
-        }
-
-        const code =
-          result.body != null &&
-          typeof result.body === "object" &&
-          "code" in result.body
-            ? String((result.body as Record<string, unknown>).code)
-            : undefined;
-
-        if (result.status === 400 && code && SKIPPABLE_CODES.has(code)) {
-          console.log(
-            `[spawn-auctions] event ${event.eventId} not eligible (${code}), trying next`,
-          );
-          break; // try next event
-        }
-
-        // 5xx or other non-skippable errors — retry
-        lastErr = `HTTP ${result.status}: ${JSON.stringify(result.body).slice(0, 200)}`;
-        console.warn(`[spawn-auctions] attempt ${attempt}: ${lastErr}`);
-      } catch (err) {
-        lastErr = err instanceof Error ? err.message : String(err);
-        console.warn(`[spawn-auctions] attempt ${attempt}: ${lastErr}`);
-      }
+    if (venice) {
+      console.log(`[spawn-auctions] researching event via Venice AI...`);
+      const research = await researchEventAnswer(venice, event.question);
+      secretPayload = research.content;
+      prediction = research.prediction ? "true" : "false";
+      format = research.format;
+      console.log(`[spawn-auctions] format: ${format}, prediction: ${prediction}, content: ${secretPayload.length} chars`);
+    } else {
+      secretPayload = pickRandom(SECRET_POOL);
+      prediction = secretPayload.includes("YES") ? "true" : "false";
+      format = "text";
+      console.log(`[spawn-auctions] secret: "${secretPayload}" (no Venice AI)`);
     }
 
-    // All retries exhausted for this event
-    if (lastErr) {
-      console.error(`[spawn-auctions] giving up on event ${event.eventId} after ${MAX_RETRIES + 1} attempts`);
-      await ntfy("Auction Spawn FAILED", `event ${event.eventId}: ${lastErr}`, ["x"]);
-      return;
-    }
+    const duration = pickRandom(DURATIONS);
+    const durationSeconds = CREATE_AUCTION_DURATION_SECONDS[duration];
+    console.log(`[spawn-auctions] duration: ${duration}`);
+
+    const { done } = await submitAuction(
+      ta, event, duration, durationSeconds, secretPayload, prediction, format,
+    );
+    if (done) return;
   }
 
   console.log("[spawn-auctions] all candidate events were skipped, nothing created this cycle");
@@ -316,6 +507,7 @@ if (accounts.length === 0) {
 console.log(`[spawn-auctions] loaded ${accounts.length} test account(s)`);
 console.log(`[spawn-auctions] daemon: ${DAEMON_URL}`);
 console.log(`[spawn-auctions] subgraph: ${SUBGRAPH_URL}`);
+console.log(`[spawn-auctions] venice AI: ${VENICE_API_KEY ? "enabled (researched secrets + file uploads)" : "disabled (simple secrets)"}`);
 
 const client = new GraphQLClient(SUBGRAPH_URL, {
   headers: { Authorization: `Bearer ${SUBGRAPH_API_KEY}` },

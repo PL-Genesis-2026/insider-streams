@@ -1,7 +1,16 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { Eye, EyeOff, Loader2, Lock } from "lucide-react";
+import {
+  Download,
+  Eye,
+  EyeOff,
+  FileText,
+  KeyRound,
+  Loader2,
+  Lock,
+  Unlock,
+} from "lucide-react";
 import { useAccount } from "wagmi";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,6 +22,12 @@ import { openAppKitConnectModal } from "@/lib/wallet/config";
 type SecretRevealCardProps = {
   auctionId: string;
 };
+
+type DecryptState =
+  | { status: "idle" }
+  | { status: "decrypting" }
+  | { status: "done"; text: string | null; objectUrl: string | null; contentType: string }
+  | { status: "error"; message: string };
 
 function BlurredSkeleton() {
   return (
@@ -32,12 +47,99 @@ function BlurredSkeleton() {
   );
 }
 
+function isTextContentType(ct: string | null): boolean {
+  if (!ct) return false;
+  return (
+    ct.startsWith("text/") ||
+    ct === "application/json" ||
+    ct === "application/xml"
+  );
+}
+
+function DecryptedContent({
+  decryptState,
+  fileName,
+}: {
+  decryptState: Extract<DecryptState, { status: "done" }>;
+  fileName: string;
+}) {
+  if (decryptState.text !== null) {
+    return (
+      <div className="mt-3 rounded-lg border border-border/50 bg-muted/20 p-4">
+        <p className="mb-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground/60">
+          Decrypted content
+        </p>
+        <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words text-sm text-foreground">
+          {decryptState.text}
+        </pre>
+      </div>
+    );
+  }
+
+  if (decryptState.objectUrl && decryptState.contentType.startsWith("image/")) {
+    return (
+      <div className="mt-3">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={decryptState.objectUrl}
+          alt={fileName}
+          className="max-h-64 rounded-lg border border-border/50"
+        />
+      </div>
+    );
+  }
+
+  if (decryptState.objectUrl) {
+    return (
+      <div className="mt-3">
+        <Button asChild variant="outline" size="sm">
+          <a href={decryptState.objectUrl} download={fileName}>
+            <Download className="size-3.5" />
+            Download decrypted file
+          </a>
+        </Button>
+      </div>
+    );
+  }
+
+  return null;
+}
+
 function RevealedContent({
   data,
 }: {
   data: Extract<PrivateSecretState, { kind: "accessible" }>;
 }) {
   const outcome = data.event_data?.outcome;
+  const [decryptState, setDecryptState] = useState<DecryptState>({ status: "idle" });
+
+  const handleDecrypt = useCallback(async () => {
+    if (!data.file?.retrievalUrl || !data.file?.encryptionKey) return;
+    setDecryptState({ status: "decrypting" });
+    try {
+      const { fetchAndDecrypt } = await import("@/lib/filecoin/decrypt");
+      const { data: decryptedBuffer } = await fetchAndDecrypt(
+        data.file.retrievalUrl,
+        data.file.encryptionKey,
+      );
+
+      const ct = data.file.contentType ?? "application/octet-stream";
+      if (isTextContentType(ct)) {
+        const text = new TextDecoder().decode(decryptedBuffer);
+        setDecryptState({ status: "done", text, objectUrl: null, contentType: ct });
+      } else {
+        const blob = new Blob([decryptedBuffer], { type: ct });
+        const objectUrl = URL.createObjectURL(blob);
+        setDecryptState({ status: "done", text: null, objectUrl, contentType: ct });
+      }
+    } catch (err) {
+      console.error("[secret-reveal] Decrypt failed:", err);
+      setDecryptState({
+        status: "error",
+        message: err instanceof Error ? err.message : "Decryption failed",
+      });
+    }
+  }, [data.file]);
 
   return (
     <div className="space-y-3">
@@ -57,12 +159,95 @@ function RevealedContent({
           </Badge>
         ) : null}
       </div>
-      <p className="text-sm leading-7 text-foreground">{data.secret_data}</p>
+      {data.secret_data.trim().length > 0 ? (
+        <p className="text-sm leading-7 text-foreground">{data.secret_data}</p>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          This auction uses a file attachment as the primary secret payload.
+        </p>
+      )}
       <p className="text-sm text-muted-foreground">
         {outcome
           ? `Use this signal to bet ${outcome.toUpperCase()} on the linked prediction market.`
           : "This secret was revealed, but the market side was not attached to the record."}
       </p>
+      {data.file ? (
+        <div className="rounded-xl border border-border/60 bg-background/70 p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground/60">
+              File attachment
+            </span>
+            <Badge variant="outline" className="gap-1.5">
+              <FileText className="size-3" />
+              {data.file.fileName}
+            </Badge>
+          </div>
+
+          <div className="mt-4 grid gap-3 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/50 px-3 py-2">
+              <span className="inline-flex items-center gap-2 text-muted-foreground">
+                <KeyRound className="size-3.5" />
+                Decryption key
+              </span>
+              <code className="break-all rounded bg-muted px-2 py-1 text-xs text-foreground">
+                {data.file.encryptionKey}
+              </code>
+            </div>
+
+            <div className="grid gap-2 text-xs text-muted-foreground">
+              {data.file.encryptionAlgorithm ? (
+                <p>Encryption: {data.file.encryptionAlgorithm}</p>
+              ) : null}
+              {data.file.pieceCid ? <p>Piece CID: {data.file.pieceCid}</p> : null}
+              {data.file.fileMd5 ? <p>MD5: {data.file.fileMd5}</p> : null}
+              {data.file.fileSizeBytes ? (
+                <p>Original size: {Number(data.file.fileSizeBytes).toLocaleString()} bytes</p>
+              ) : null}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button asChild variant="outline" size="sm" className="w-fit">
+                <a
+                  href={data.file.retrievalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Download className="size-3.5" />
+                  Download encrypted file
+                </a>
+              </Button>
+
+              {decryptState.status === "decrypting" ? (
+                <Button variant="outline" size="sm" disabled className="w-fit">
+                  <Loader2 className="size-3.5 animate-spin" />
+                  Decrypting...
+                </Button>
+              ) : decryptState.status !== "done" ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-fit"
+                  onClick={() => void handleDecrypt()}
+                >
+                  <Unlock className="size-3.5" />
+                  {decryptState.status === "error" ? "Retry decrypt" : "Decrypt & View"}
+                </Button>
+              ) : null}
+            </div>
+
+            {decryptState.status === "error" ? (
+              <p className="text-xs text-destructive">{decryptState.message}</p>
+            ) : null}
+
+            {decryptState.status === "done" ? (
+              <DecryptedContent
+                decryptState={decryptState}
+                fileName={data.file.fileName}
+              />
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
