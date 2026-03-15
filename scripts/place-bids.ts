@@ -21,7 +21,12 @@
 import stringify from "fast-json-stable-stringify";
 import { GraphQLClient, gql } from "graphql-request";
 import { privateKeyToAccount } from "viem/accounts";
-import { type Hex } from "viem";
+import { createPublicClient, createWalletClient, http, type Hex } from "viem";
+import { sepolia } from "viem/chains";
+import {
+  CONFIDENTIAL_USDC_ADDRESS,
+  fheConfidentialUsdcAbi,
+} from "@private-streams/common";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -35,9 +40,16 @@ const SUBGRAPH_API_KEY = process.env.SUBGRAPH_API_KEY ?? "a075bc6e2e48577d2588bb
 const DAEMON_URL =
   process.env.DAEMON_URL ?? process.env.BASE_URL ?? "http://localhost:3001";
 
+const RPC_URL =
+  process.env.RPC_URL ??
+  "https://eth-sepolia.g.alchemy.com/v2/59LCREaM5uGpTVXZgR8A7z6IiULWjwG6";
+
+const OWNER_PK = process.env.OWNER_PK;
+
 const MIN_BID_INCREMENT = 10_000_000n; // 10 USDC (6 decimals)
 const MAX_BID_INCREMENT = 50_000_000n; // 50 USDC
 const LOW_BALANCE_THRESHOLD = 100_000_000n; // 100 USDC
+const TOPUP_AMOUNT = 1_000_000_000n; // 1000 USDC — large topup to reduce frequency
 
 // ---------------------------------------------------------------------------
 // ntfy (optional)
@@ -108,52 +120,71 @@ async function signedPost(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ...payload, signature }),
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(120_000),
   });
 }
+
+// Owner wallet for direct minting (avoids daemon faucet round-trip)
+function getOwnerClients() {
+  if (!OWNER_PK) return null;
+  const account = privateKeyToAccount(OWNER_PK as Hex);
+  const publicClient = createPublicClient({ chain: sepolia, transport: http(RPC_URL) });
+  const walletClient = createWalletClient({ account, chain: sepolia, transport: http(RPC_URL) });
+  return { walletClient, publicClient, address: account.address };
+}
+const ownerClients = getOwnerClients();
 
 async function ensureBalance(account: TestAccount): Promise<bigint> {
   // Register user first (idempotent)
   await signedPost(account, "/user");
 
-  // Check balance
+  // Check marketplace balance via daemon
   const balResp = await signedPost(account, "/balance");
   const balData = (await balResp.json()) as { balance?: string };
   const balance = BigInt(balData.balance ?? "0");
 
-  if (balance < LOW_BALANCE_THRESHOLD) {
-    console.log(
-      `  [place-bids] ${account.address.slice(0, 10)}... balance ${balance} < threshold, topping up via faucet + deposit`,
-    );
-
-    // Mint MockUSDC via faucet
-    const faucetResp = await signedPost(account, "/faucet");
-    if (!faucetResp.ok) {
-      console.warn(
-        `  [place-bids] faucet failed for ${account.address.slice(0, 10)}...`,
-      );
-      return balance;
-    }
-    const faucetData = (await faucetResp.json()) as {
-      amount?: string;
-      txHash?: string;
-    };
-    const mintAmount = faucetData.amount ?? "1000000000";
-
-    // Deposit into marketplace
-    const depositResp = await signedPost(account, "/deposit", {
-      amount: mintAmount,
-    });
-    if (!depositResp.ok) {
-      console.warn(
-        `  [place-bids] deposit failed for ${account.address.slice(0, 10)}...`,
-      );
-    }
-
-    return BigInt(mintAmount) + balance;
+  if (balance >= LOW_BALANCE_THRESHOLD) {
+    return balance;
   }
 
-  return balance;
+  console.log(
+    `  [place-bids] ${account.address.slice(0, 10)}... balance ${balance} < threshold, topping up`,
+  );
+
+  // Mint cUSDC directly to admin via OWNER_PK, then deposit via daemon
+  if (!ownerClients) {
+    console.warn(`  [place-bids] OWNER_PK not set, cannot mint — skipping topup`);
+    return balance;
+  }
+
+  try {
+    // Step 1: Mint cUSDC to admin address
+    const mintHash = await ownerClients.walletClient.writeContract({
+      address: CONFIDENTIAL_USDC_ADDRESS as `0x${string}`,
+      abi: fheConfidentialUsdcAbi,
+      functionName: "mintPlaintext",
+      args: [ownerClients.address, TOPUP_AMOUNT],
+    });
+    await ownerClients.publicClient.waitForTransactionReceipt({ hash: mintHash });
+    console.log(`  [place-bids] minted ${TOPUP_AMOUNT} cUSDC to admin (tx: ${mintHash.slice(0, 10)}...)`);
+
+    // Step 2: Deposit into marketplace for the user via daemon API
+    const depositResp = await signedPost(account, "/deposit", {
+      amount: TOPUP_AMOUNT.toString(),
+    });
+    if (!depositResp.ok) {
+      const err = (await depositResp.json().catch(() => ({ error: depositResp.statusText }))) as { error?: string };
+      console.warn(`  [place-bids] deposit failed: ${err.error}`);
+    } else {
+      console.log(`  [place-bids] deposited ${TOPUP_AMOUNT} for ${account.address.slice(0, 10)}...`);
+    }
+
+    return TOPUP_AMOUNT + balance;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`  [place-bids] topup failed for ${account.address.slice(0, 10)}...: ${msg.slice(0, 100)}`);
+    return balance;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -236,6 +267,7 @@ async function main() {
   let rejectedBids = 0;
   let errors = 0;
   const rejectReasons: string[] = [];
+  const errorMessages: string[] = [];
 
   for (const auction of auctions) {
     // Pick a random account — daemon uses pseudonymous IDs so we can't
@@ -295,6 +327,9 @@ async function main() {
         `  [place-bids] Error on auction ${auction.auctionId}:`, msg,
       );
       errors++;
+      if (errorMessages.length < 3) {
+        errorMessages.push(`#${auction.auctionId}: ${msg.slice(0, 80)}`);
+      }
     }
   }
 
@@ -302,7 +337,8 @@ async function main() {
   if (skippedLowBalance > 0) lines.push(`Skipped (low balance): ${skippedLowBalance}`);
   if (rejectedBids > 0) lines.push(`Rejected: ${rejectedBids}`);
   if (errors > 0) lines.push(`Errors: ${errors}`);
-  if (rejectReasons.length > 0) lines.push(`Reasons:\n${rejectReasons.join("\n")}`);
+  if (rejectReasons.length > 0) lines.push(`Rejects:\n${rejectReasons.join("\n")}`);
+  if (errorMessages.length > 0) lines.push(`Errors:\n${errorMessages.join("\n")}`);
   const summary = lines.join("\n");
   console.log(`[place-bids] ${summary}`);
   await ntfy(

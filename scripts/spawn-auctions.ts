@@ -224,7 +224,6 @@ async function runCycle(client: GraphQLClient, accounts: TestAccount[]): Promise
     const secretPayload = pickRandom(SECRET_POOL);
     const duration = pickRandom(DURATIONS);
     const durationSeconds = CREATE_AUCTION_DURATION_SECONDS[duration];
-    const endTime = timestamp() + durationSeconds;
     const prediction = secretPayload.includes("YES") ? "true" : "false";
 
     console.log(
@@ -233,50 +232,68 @@ async function runCycle(client: GraphQLClient, accounts: TestAccount[]): Promise
     console.log(`[spawn-auctions] signer: ${ta.address}`);
     console.log(`[spawn-auctions] secret: "${secretPayload}", duration: ${duration}`);
 
-    try {
-      const result = await signedPost(ta, "/create-auction", {
-        eventId: event.eventId,
-        eventTitle: event.question,
-        endTime: String(endTime),
-        prediction,
-        secretPayload,
-      });
+    const MAX_RETRIES = 2;
+    let lastErr = "";
 
-      if (result.ok) {
-        const auctionId =
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      if (attempt > 0) {
+        const delay = attempt * 15_000;
+        console.log(`[spawn-auctions] retry ${attempt}/${MAX_RETRIES} in ${delay / 1000}s...`);
+        await new Promise((r) => setTimeout(r, delay));
+      }
+
+      // Recompute endTime each attempt so the auction doesn't expire during retries
+      const endTime = timestamp() + durationSeconds;
+
+      try {
+        const result = await signedPost(ta, "/create-auction", {
+          eventId: event.eventId,
+          eventTitle: event.question,
+          endTime: String(endTime),
+          prediction,
+          secretPayload,
+        });
+
+        if (result.ok) {
+          const auctionId =
+            result.body != null &&
+            typeof result.body === "object" &&
+            "auctionId" in result.body
+              ? String((result.body as Record<string, unknown>).auctionId)
+              : "?";
+          const msg = `Auction ${auctionId} (${duration}) for event ${event.eventId}\n"${event.question}"`;
+          console.log(`[spawn-auctions] ${msg}`);
+          await ntfy("Auction Created", msg, ["tada"]);
+          return;
+        }
+
+        const code =
           result.body != null &&
           typeof result.body === "object" &&
-          "auctionId" in result.body
-            ? String((result.body as Record<string, unknown>).auctionId)
-            : "?";
-        const msg = `Auction ${auctionId} (${duration}) for event ${event.eventId}\n"${event.question}"`;
-        console.log(`[spawn-auctions] ${msg}`);
-        await ntfy("Auction Created", msg, ["tada"]);
-        return;
+          "code" in result.body
+            ? String((result.body as Record<string, unknown>).code)
+            : undefined;
+
+        if (result.status === 400 && code && SKIPPABLE_CODES.has(code)) {
+          console.log(
+            `[spawn-auctions] event ${event.eventId} not eligible (${code}), trying next`,
+          );
+          break; // try next event
+        }
+
+        // 5xx or other non-skippable errors — retry
+        lastErr = `HTTP ${result.status}: ${JSON.stringify(result.body).slice(0, 200)}`;
+        console.warn(`[spawn-auctions] attempt ${attempt}: ${lastErr}`);
+      } catch (err) {
+        lastErr = err instanceof Error ? err.message : String(err);
+        console.warn(`[spawn-auctions] attempt ${attempt}: ${lastErr}`);
       }
+    }
 
-      const code =
-        result.body != null &&
-        typeof result.body === "object" &&
-        "code" in result.body
-          ? String((result.body as Record<string, unknown>).code)
-          : undefined;
-
-      if (result.status === 400 && code && SKIPPABLE_CODES.has(code)) {
-        console.log(
-          `[spawn-auctions] event ${event.eventId} not eligible (${code}), trying next`,
-        );
-        continue;
-      }
-
-      const errMsg = `create-auction failed (HTTP ${result.status}): ${JSON.stringify(result.body)}`;
-      console.error(`[spawn-auctions] ${errMsg}`);
-      await ntfy("Auction Spawn FAILED", errMsg, ["x"]);
-      return;
-    } catch (err) {
-      const errMsg = `create-auction threw: ${err}`;
-      console.error(`[spawn-auctions] ${errMsg}`);
-      await ntfy("Auction Spawn FAILED", errMsg, ["x"]);
+    // All retries exhausted for this event
+    if (lastErr) {
+      console.error(`[spawn-auctions] giving up on event ${event.eventId} after ${MAX_RETRIES + 1} attempts`);
+      await ntfy("Auction Spawn FAILED", `event ${event.eventId}: ${lastErr}`, ["x"]);
       return;
     }
   }
