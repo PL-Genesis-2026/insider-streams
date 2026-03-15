@@ -11,7 +11,7 @@
  *   pnpm settler / pnpm closer / pnpm resolver / pnpm api
  */
 
-import { config } from "./config.js";
+import { config, requireConfig } from "./config.js";
 import { startSettler } from "./settler.js";
 import { startAuctionCloser } from "./auction-closer.js";
 import { startReputationResolver } from "./reputation-resolver.js";
@@ -32,6 +32,9 @@ async function main() {
   const services: Promise<void>[] = [];
 
   // Start background workers (settler, closer, resolver) in "workers" or "all" mode
+  if (mode === "workers") {
+    requireConfig(["apiInternalUrl", "internalApiKey"]);
+  }
   if (mode === "workers" || mode === "all") {
     if (config.geminiApiKey) {
       services.push(startSettler());
