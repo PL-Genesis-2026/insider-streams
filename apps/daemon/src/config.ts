@@ -49,10 +49,6 @@ export const config = {
   filecoinRpcUrl: process.env.FILECOIN_RPC_URL || "",
   maxUploadBytes: Number(process.env.MAX_UPLOAD_BYTES || 10_485_760), // 10 MB
 
-  // Demo populator (opt-in)
-  demoMode: process.env.DEMO_MODE === "true",
-  veniceApiKey: process.env.VENICE_API_KEY || "",
-
   // Subgraph — prod gateway URL. Set SUBGRAPH_API_KEY for Bearer auth.
   subgraphUrl: process.env.SUBGRAPH_URL ||
     "https://gateway.thegraph.com/api/subgraphs/id/BttcQ7pVTEz7L94PgnhkFJCY33K5Vwk1vhffckmjgf5f",

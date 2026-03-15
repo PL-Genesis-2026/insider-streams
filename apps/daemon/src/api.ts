@@ -361,11 +361,7 @@ export function startApi(): void {
             return;
           }
         }
-        // Filecoin not configured — fall through to text path with file content as secretPayload
-        // Use the file content as the secret text
-        if (!secretPayload) {
-          (result.payload as { secretPayload?: string }).secretPayload = file.buffer.toString("utf8");
-        }
+        // Filecoin not configured — fall through to text path using file content
       }
 
       // ── Text payload path (or file without Filecoin) ──

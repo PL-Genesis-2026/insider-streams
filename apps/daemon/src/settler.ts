@@ -187,48 +187,52 @@ async function handleSettlementRequest(eventId: bigint, question: string): Promi
   }
   processingEvents.add(key);
 
-  console.log(`\n[settler] Processing event ${eventId}: "${question}"`);
+  try {
+    console.log(`\n[settler] Processing event ${eventId}: "${question}"`);
 
-  // For E2E test events, skip Gemini and resolve with a random YES/NO.
-  // These are synthetic events (e.g. "[E2E Test] Playwright event ...") that
-  // Gemini can't fact-check — they'd always return INCONCLUSIVE.
-  let geminiResult: GeminiResult;
-  if (isSyntheticEvent(question)) {
-    const outcome = Math.random() < 0.5 ? "YES" : "NO";
-    geminiResult = {
-      result: outcome as "YES" | "NO",
-      confidence: 8000 + Math.floor(Math.random() * 2000),
-      responseId: `synthetic_${Date.now()}`,
-      rawJson: JSON.stringify({ synthetic: true, question }),
-    };
-    console.log(`[settler] Synthetic event detected — auto-resolving as ${outcome}`);
-  } else {
-    // Step 1: Ask Gemini
-    geminiResult = await askGemini(question);
+    // For E2E test events, skip Gemini and resolve with a random YES/NO.
+    // These are synthetic events (e.g. "[E2E Test] Playwright event ...") that
+    // Gemini can't fact-check — they'd always return INCONCLUSIVE.
+    let geminiResult: GeminiResult;
+    if (isSyntheticEvent(question)) {
+      const outcome = Math.random() < 0.5 ? "YES" : "NO";
+      geminiResult = {
+        result: outcome as "YES" | "NO",
+        confidence: 8000 + Math.floor(Math.random() * 2000),
+        responseId: `synthetic_${Date.now()}`,
+        rawJson: JSON.stringify({ synthetic: true, question }),
+      };
+      console.log(`[settler] Synthetic event detected — auto-resolving as ${outcome}`);
+    } else {
+      // Step 1: Ask Gemini
+      geminiResult = await askGemini(question);
+    }
+    console.log(`[settler] Result: ${geminiResult.result} (confidence: ${geminiResult.confidence})`);
+
+    // Step 2: Settle on-chain
+    const pmAddress = config.predictionMarketAddress as `0x${string}`;
+    const outcome = OutcomeMap[geminiResult.result];
+    const hash = await withAdminLock(() =>
+      getWalletClient().writeContract({
+        address: pmAddress,
+        abi: examplePredictionMarketAbi,
+        functionName: "settleEvent",
+        args: [eventId, outcome, geminiResult.confidence, geminiResult.responseId],
+      }),
+    );
+    const settleReceipt = await waitForReceipt(hash);
+    const txHash = settleReceipt.transactionHash;
+    console.log(`[settler] Settlement tx: ${txHash}`);
+
+    // Step 3: Write Firestore audit
+    await writeFirestoreAudit(question, geminiResult, txHash);
+
+    // Step 4: Notify
+    const msg = `Event ${eventId}: "${question}"\nOutcome: ${geminiResult.result}\ntx: ${ETHERSCAN_URL}/${txHash}`;
+    await sendNotification(`Market Settled: Event ${eventId}`, msg, `${ETHERSCAN_URL}/${txHash}`);
+  } finally {
+    processingEvents.delete(key);
   }
-  console.log(`[settler] Result: ${geminiResult.result} (confidence: ${geminiResult.confidence})`);
-
-  // Step 2: Settle on-chain
-  const pmAddress = config.predictionMarketAddress as `0x${string}`;
-  const outcome = OutcomeMap[geminiResult.result];
-  const hash = await withAdminLock(() =>
-    getWalletClient().writeContract({
-      address: pmAddress,
-      abi: examplePredictionMarketAbi,
-      functionName: "settleEvent",
-      args: [eventId, outcome, geminiResult.confidence, geminiResult.responseId],
-    }),
-  );
-  const settleReceipt = await waitForReceipt(hash);
-  const txHash = settleReceipt.transactionHash;
-  console.log(`[settler] Settlement tx: ${txHash}`);
-
-  // Step 3: Write Firestore audit
-  await writeFirestoreAudit(question, geminiResult, txHash);
-
-  // Step 4: Notify
-  const msg = `Event ${eventId}: "${question}"\nOutcome: ${geminiResult.result}\ntx: ${ETHERSCAN_URL}/${txHash}`;
-  await sendNotification(`Market Settled: Event ${eventId}`, msg, `${ETHERSCAN_URL}/${txHash}`);
 }
 
 export async function startSettler(): Promise<void> {

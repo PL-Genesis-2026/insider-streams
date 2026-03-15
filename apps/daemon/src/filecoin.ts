@@ -44,7 +44,9 @@ export type FilecoinAttachmentMetadata = {
 };
 
 export function isFilecoinConfigured(): boolean {
-  return Boolean(config.filecoinWalletPrivateKey);
+  // Check the dedicated env var only — config.filecoinWalletPrivateKey falls
+  // back to PRIVATE_KEY (the admin wallet), which is always set in production.
+  return Boolean(process.env.FILECOIN_WALLET_PRIVATE_KEY);
 }
 
 function toBigEndianSize(size: number): Buffer {
