@@ -253,9 +253,10 @@ export function markBidFailed(bidId: number): void {
   })();
 }
 
-export function markBidsForAuction(auctionId: number, status: "won" | "refunded" | "cancelled"): void {
+export function markBidsForAuction(auctionId: number, status: "won" | "refunded" | "cancelled"): number {
   const db = getDb();
-  db.prepare("UPDATE bids SET status = ? WHERE auction_id = ? AND status = 'active'").run(status, auctionId);
+  const result = db.prepare("UPDATE bids SET status = ? WHERE auction_id = ? AND status = 'active'").run(status, auctionId);
+  return result.changes;
 }
 
 // ── Withdrawal helpers ──

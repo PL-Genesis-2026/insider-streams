@@ -18,44 +18,51 @@ import { startReputationResolver } from "./reputation-resolver.js";
 import { startApi } from "./api.js";
 
 async function main() {
+  const mode = config.daemonMode;
   console.log("=== Private Streams Daemon ===");
+  console.log(`Mode: ${mode}`);
   console.log(`RPC: ${config.rpcUrl}`);
   console.log(`Prediction Market: ${config.predictionMarketAddress}`);
   console.log(`Secret Marketplace: ${config.secretMarketplaceAddress}`);
-  console.log(`API Port: ${config.apiPort}`);
+  if (mode !== "workers") {
+    console.log(`API Port: ${config.apiPort}`);
+  }
   console.log("");
 
   const services: Promise<void>[] = [];
 
-  // Start settler if Gemini API key is configured
-  if (config.geminiApiKey) {
-    services.push(startSettler());
-  } else {
-    console.log("[daemon] Settler disabled — missing GEMINI_API_KEY");
+  // Start background workers (settler, closer, resolver) in "workers" or "all" mode
+  if (mode === "workers" || mode === "all") {
+    if (config.geminiApiKey) {
+      services.push(startSettler());
+    } else {
+      console.log("[daemon] Settler disabled — missing GEMINI_API_KEY");
+    }
+
+    services.push(startAuctionCloser());
+    services.push(startReputationResolver());
   }
 
-  // Start auction closer
-  services.push(startAuctionCloser());
-
-  // Start reputation resolver
-  services.push(startReputationResolver());
-
-  // Always start HTTP API
-  startApi();
-
-  if (services.length === 0) {
-    console.warn("[daemon] No background services configured. Only HTTP API is running.");
+  // Start HTTP API in "api" or "all" mode
+  if (mode === "api" || mode === "all") {
+    startApi();
   }
 
-  const results = await Promise.allSettled(services);
-  const failed = results.filter((r) => r.status === "rejected");
-  if (failed.length > 0) {
-    for (const f of failed) {
-      console.error("[daemon] Service startup failed:", (f as PromiseRejectedResult).reason);
+  if (services.length === 0 && mode !== "api") {
+    console.warn("[daemon] No background services configured.");
+  }
+
+  if (services.length > 0) {
+    const results = await Promise.allSettled(services);
+    const failed = results.filter((r) => r.status === "rejected");
+    if (failed.length > 0) {
+      for (const f of failed) {
+        console.error("[daemon] Service startup failed:", (f as PromiseRejectedResult).reason);
+      }
     }
   }
 
-  console.log("\n[daemon] All services started. Press Ctrl+C to stop.");
+  console.log(`\n[daemon] Started in ${mode} mode. Press Ctrl+C to stop.`);
 }
 
 main().catch((err) => {

@@ -24,7 +24,7 @@ function sendNotification(title: string, message: string, clickUrl?: string) {
 }
 import { withAdminLock } from "./admin-lock.js";
 import { getFhevmInstance } from "./fhe.js";
-import { markBidsForAuction } from "./db.js";
+import { markBids } from "./mark-bids.js";
 
 const ETHERSCAN_URL = "https://sepolia.etherscan.io/tx";
 const marketplaceAddress = config.secretMarketplaceAddress as `0x${string}`;
@@ -250,7 +250,7 @@ async function handleSettlementResponse(
             }),
           );
           await waitForReceipt(closeHash);
-          markBidsForAuction(Number(auctionId), "won");
+          await markBids(Number(auctionId), "won");
           console.log(`[resolver] Pre-closed auction ${auctionId} and marked bids as won`);
         }
       } catch (err) {
