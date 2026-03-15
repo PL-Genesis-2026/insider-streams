@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useSignTypedData } from "wagmi";
+import { useSignMessage } from "wagmi";
+import stringify from "fast-json-stable-stringify";
 import {
   AlertCircle,
   Calendar,
@@ -35,8 +36,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import {
   CREATE_AUCTION_DURATIONS,
-  CREATE_AUCTION_EIP712_DOMAIN,
-  CREATE_AUCTION_EIP712_TYPES,
+  CREATE_AUCTION_DURATION_SECONDS,
   type CreateAuctionDuration,
   type CreateAuctionResponse,
 } from "@/lib/create-auction/shared";
@@ -155,7 +155,7 @@ export function CreateAuctionDraftForm({
   isDeepLinkedFromTrade = false,
 }: CreateAuctionDraftFormProps) {
   const walletSession = useWalletSession();
-  const { signTypedDataAsync } = useSignTypedData();
+  const { signMessageAsync } = useSignMessage();
   const [draft, setDraft] = useState<DraftState>(() => ({
     ...initialDraftState,
     eventId: initialEventId ?? "",
@@ -276,18 +276,27 @@ export function CreateAuctionDraftForm({
 
     const timestamp = Math.floor(Date.now() / 1000);
 
+    // Compute the daemon-format payload fields so the signature covers
+    // exactly what verifySignedRequest will verify (personal_sign / EIP-191).
+    const durationSeconds =
+      CREATE_AUCTION_DURATION_SECONDS[draft.duration];
+    const endTime = String(timestamp + durationSeconds);
+    const prediction = draft.privateLeg === "yes" ? "true" : "false";
+    const secretPayload = draft.secretPayload;
+
+    const daemonPayload = {
+      eventId: draft.eventId,
+      eventTitle: selectedEvent.title,
+      endTime,
+      prediction,
+      secretPayload,
+      timestamp,
+    };
+
     let signature: `0x${string}`;
     try {
-      signature = await signTypedDataAsync({
-        domain: CREATE_AUCTION_EIP712_DOMAIN,
-        types: CREATE_AUCTION_EIP712_TYPES,
-        primaryType: "CreateAuction",
-        message: {
-          eventId: draft.eventId,
-          privateLeg: draft.privateLeg,
-          duration: draft.duration,
-          timestamp: BigInt(timestamp),
-        },
+      signature = await signMessageAsync({
+        message: stringify(daemonPayload),
       });
     } catch (error) {
       setSubmitState({

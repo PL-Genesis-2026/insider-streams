@@ -55,7 +55,7 @@ test.describe("Create auction flow", () => {
 
     // Step 6: Duration defaults to 24h, leave as-is
 
-    // Step 7: Click submit — triggers EIP-712 signTypedData, posts to daemon
+    // Step 7: Click submit — triggers personal_sign, posts to daemon
     const submitButton = page.getByRole("button", { name: "Sell YES signal" });
     await expect(submitButton).toBeEnabled();
     await submitButton.click();

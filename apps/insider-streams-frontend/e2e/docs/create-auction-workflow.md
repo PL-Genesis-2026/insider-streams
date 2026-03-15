@@ -4,7 +4,7 @@ Reference doc for E2E testing. Updated as bugs are found/fixed.
 
 ## Overview
 
-The create-auction flow lets a user sell their prediction signal as an encrypted auction. It spans: frontend form, EIP-712 signature, Next.js proxy, daemon API, and on-chain FHE marketplace.
+The create-auction flow lets a user sell their prediction signal as an encrypted auction. It spans: frontend form, personal_sign signature, Next.js proxy, daemon API, and on-chain FHE marketplace.
 
 ## End-to-End Flow
 
@@ -17,10 +17,10 @@ User on /create
   |   Enter secret reasoning (plaintext textarea)
   |   Select duration (5m to 48h)
   |
-  | Step 2: EIP-712 signature
-  |   Domain: { name: "InsiderStreams", version: "1", chainId: 11155111 }
-  |   Types: CreateAuction [eventId, privateLeg, duration, timestamp]
-  |   signTypedData via wallet (mock wallet auto-signs in tests)
+  | Step 2: personal_sign signature (EIP-191)
+  |   Message: stringify({ eventId, eventTitle, endTime, prediction,
+  |            secretPayload, timestamp })
+  |   signMessage via wallet (mock wallet auto-signs in tests)
   |
   | Step 3: POST /api/create-auction (Next.js proxy)
   |   Body: { eventId, eventTitle, endTime, prediction, secretPayload,
@@ -86,25 +86,15 @@ Main form with these elements:
 | Error alert | `locator('[data-slot="alert-description"]')` | Error details |
 | Events error | `getByText("Failed to load events")` | If contract read fails |
 
-### 2. EIP-712 Signature
+### 2. personal_sign Signature (EIP-191)
 
-**File:** `packages/common/src/create-auction.ts`
+The frontend computes the daemon-format payload (transforming `privateLeg` → `prediction`, `duration` → `endTime`) and signs it with `signMessage` (personal_sign / EIP-191), matching the daemon's `verifySignedRequest` which uses `recoverMessageAddress`.
 
 ```typescript
-const CREATE_AUCTION_EIP712_DOMAIN = {
-  name: "InsiderStreams",
-  version: "1",
-  chainId: 11155111,
+const daemonPayload = {
+  eventId, eventTitle, endTime, prediction, secretPayload, timestamp,
 };
-
-const CREATE_AUCTION_EIP712_TYPES = {
-  CreateAuction: [
-    { name: "eventId", type: "string" },
-    { name: "privateLeg", type: "string" },
-    { name: "duration", type: "string" },
-    { name: "timestamp", type: "uint256" },
-  ],
-};
+const signature = await signMessageAsync({ message: stringify(daemonPayload) });
 ```
 
 Duration values: `"5m"`, `"15m"`, `"30m"`, `"1h"`, `"3h"`, `"6h"`, `"12h"`, `"24h"`, `"48h"`
@@ -298,7 +288,7 @@ if (isNotFound) {
 | --- | --- |
 | `src/app/create/page.tsx` | Create auction form UI |
 | `src/app/api/create-auction/route.ts` | Next.js proxy -> daemon /create-auction |
-| `packages/common/src/create-auction.ts` | EIP-712 types, duration constants |
+| `packages/common/src/create-auction.ts` | Duration constants |
 | `apps/daemon/src/api.ts` | Daemon POST /create-auction handler |
 | `apps/daemon/src/marketplace.ts` | `createAuction()` on-chain submission |
 | `apps/daemon/src/fhe.ts` | `encryptBatch()` for ebool + euint256 |
