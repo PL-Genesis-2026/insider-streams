@@ -260,11 +260,12 @@ async function main() {
 
   const FRONTEND_URL = "https://insider-streams-insider-streams-fro.vercel.app";
 
-  // Shuffle auctions for variety
+  // Shuffle and pick up to 5 random auctions per run
   for (let i = auctions.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [auctions[i], auctions[j]] = [auctions[j], auctions[i]];
   }
+  auctions = auctions.slice(0, 5);
 
   let bidsPlaced = 0;
   let skippedLowBalance = 0;

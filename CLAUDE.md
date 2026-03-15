@@ -101,10 +101,10 @@ Scripts for populating the marketplace with test data. Scheduled via OS cron on 
 
 | Script | Cron | What |
 | ------ | ---- | ---- |
-| `create-events` | `*/15 * * * *` | Generate AI events + place bets |
+| `create-events` | `*/20 * * * *` | Generate AI events + place bets |
 | `spawn-auctions` | `*/10 * * * *` | Create auction via daemon API |
-| `place-bids` | `* * * * *` | Place bids on open auctions via daemon API |
-| `request-settlements` | `* * * * *` | Request settlement for closed events |
+| `place-bids` | `*/3 * * * *` | Place bids on open auctions via daemon API (up to 5 random auctions per run) |
+| `request-settlements` | `*/15 * * * *` | Request settlement for closed events |
 
 ```bash
 cd scripts
