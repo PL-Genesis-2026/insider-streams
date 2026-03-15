@@ -29,6 +29,10 @@ const ETHERSCAN_URL = "https://sepolia.etherscan.io/tx";
 const marketplaceAddress = config.secretMarketplaceAddress as `0x${string}`;
 const pmAddress = config.predictionMarketAddress as `0x${string}`;
 
+function auctionUrl(auctionId: bigint): string | undefined {
+  return config.frontendUrl ? `${config.frontendUrl}/auction/${auctionId}` : undefined;
+}
+
 // ExamplePredictionMarket Outcome enum
 const PM_OUTCOME = { None: 0, No: 1, Yes: 2, Inconclusive: 3 } as const;
 
@@ -86,6 +90,21 @@ async function finalizeAuctionReputation(auctionId: bigint): Promise<void> {
  * Finalize reputation for all pending auctions tied to an event.
  * Errors on individual auctions are logged but don't stop the rest.
  */
+async function getSellerScore(sellerId: string): Promise<bigint | null> {
+  try {
+    const publicClient = getPublicClient();
+    const seller = await publicClient.readContract({
+      address: marketplaceAddress,
+      abi: fheSecretMarketplaceAbi,
+      functionName: "getSeller",
+      args: [sellerId],
+    });
+    return seller.reputationScore;
+  } catch {
+    return null;
+  }
+}
+
 async function finalizeEventReputations(eventId: bigint): Promise<void> {
   const publicClient = getPublicClient();
 
@@ -97,6 +116,7 @@ async function finalizeEventReputations(eventId: bigint): Promise<void> {
   });
 
   let finalized = 0;
+  const details: string[] = [];
   for (const auctionId of auctionIds) {
     const pending = await publicClient.readContract({
       address: marketplaceAddress,
@@ -109,16 +129,33 @@ async function finalizeEventReputations(eventId: bigint): Promise<void> {
     try {
       await finalizeAuctionReputation(auctionId);
       finalized++;
+
+      // Read the auction to get seller and prediction result
+      const auction = await publicClient.readContract({
+        address: marketplaceAddress,
+        abi: fheSecretMarketplaceAbi,
+        functionName: "getAuction",
+        args: [auctionId],
+      });
+      const sellerId = auction[0]; // sellerId field
+      const score = await getSellerScore(sellerId);
+      const scoreStr = score !== null ? ` (rep: ${score >= 0n ? "+" : ""}${score})` : "";
+      details.push(`  #${auctionId} seller=${sellerId}${scoreStr}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[resolver] Failed to finalize auction ${auctionId}:`, msg);
+      details.push(`  #${auctionId} FAILED: ${msg.slice(0, 80)}`);
     }
   }
 
   if (finalized > 0) {
-    const msg = `Event ${eventId}: finalized reputation for ${finalized} auction(s)`;
-    console.log(`[resolver] ${msg}`);
-    await sendNotification("Reputation Finalized", msg);
+    const summary = `Event ${eventId}: finalized ${finalized} auction(s)\n${details.join("\n")}`;
+    console.log(`[resolver] ${summary}`);
+    await sendNotification(
+      "Reputation Finalized",
+      summary,
+      auctionUrl(auctionIds[0]),
+    );
   }
 }
 
@@ -182,10 +219,12 @@ async function handleSettlementResponse(
     const txHash = resolveReceipt.transactionHash;
     console.log(`[resolver] Resolved event ${eventId}: ${txHash}`);
 
+    const outcomeLabel = actualOutcomeIsYes ? "YES" : "NO";
+    const auctionList = auctionIds.map((id) => `#${id}`).join(", ");
     await sendNotification(
       `Reputation Resolved: Event ${eventId}`,
-      `Event ${eventId}: ${auctionIds.length} auction(s) resolved.\ntx: ${ETHERSCAN_URL}/${txHash}`,
-      `${ETHERSCAN_URL}/${txHash}`,
+      `Event ${eventId}: outcome=${outcomeLabel}, ${auctionIds.length} auction(s) [${auctionList}] resolved.\ntx: ${ETHERSCAN_URL}/${txHash}`,
+      auctionUrl(auctionIds[0]) ?? `${ETHERSCAN_URL}/${txHash}`,
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

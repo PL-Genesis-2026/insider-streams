@@ -41,6 +41,9 @@ export const config = {
   // SQLite
   dbPath: process.env.DB_PATH || "",
 
+  // Frontend URLs (for ntfy click links)
+  frontendUrl: process.env.FRONTEND_URL || "",
+
   // Subgraph — prod gateway URL. Set SUBGRAPH_API_KEY for Bearer auth.
   subgraphUrl: process.env.SUBGRAPH_URL ||
     "https://gateway.thegraph.com/api/subgraphs/id/BttcQ7pVTEz7L94PgnhkFJCY33K5Vwk1vhffckmjgf5f",

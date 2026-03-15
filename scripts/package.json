@@ -16,6 +16,7 @@
     "fast-json-stable-stringify": "^2.1.0",
     "graphql": "^16.13.1",
     "graphql-request": "^7.4.0",
+    "graphql-tag": "^2.12.6",
     "openai": "^6.27.0",
     "viem": "^2.47.0",
     "zod": "^4.3.6"

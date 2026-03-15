@@ -181,6 +181,11 @@ info "  Installing pnpm dependencies..."
 remote_exec 'pnpm install --frozen-lockfile 2>/dev/null || pnpm install' >/dev/null 2>&1
 success "Dependencies installed"
 
+# Rebuild native modules (better-sqlite3 must match runtime Node version)
+info "  Rebuilding native modules..."
+remote_exec 'pnpm --filter @private-streams/daemon rebuild better-sqlite3' >/dev/null 2>&1
+success "Native modules rebuilt"
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Phase 3: Set up env files
 # ═══════════════════════════════════════════════════════════════════════════════

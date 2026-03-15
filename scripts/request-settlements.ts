@@ -214,6 +214,11 @@ async function main() {
     lines.push(
       `Failed: [${failed.map((f) => f.eventId).join(", ")}] (${failed.length})`,
     );
+    for (const f of failed) {
+      // Truncate long error messages for readability in notifications
+      const shortErr = f.error.length > 120 ? f.error.slice(0, 120) + "..." : f.error;
+      lines.push(`  event ${f.eventId}: ${shortErr}`);
+    }
   }
   const summary = lines.join("\n");
   console.log(`[request-settlements] ${summary}`);

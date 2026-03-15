@@ -23,6 +23,10 @@ import { withAdminLock } from "./admin-lock.js";
 const ETHERSCAN_URL = "https://sepolia.etherscan.io/tx";
 const marketplaceAddress = config.secretMarketplaceAddress as `0x${string}`;
 
+function auctionUrl(auctionId: bigint): string | undefined {
+  return config.frontendUrl ? `${config.frontendUrl}/auction/${auctionId}` : undefined;
+}
+
 async function findExpiredAuctions(): Promise<bigint[]> {
   const publicClient = getPublicClient();
   const openAuctions = await publicClient.readContract({
@@ -87,10 +91,29 @@ async function runCloserCycle(): Promise<void> {
     const txHash = await closeAuction(auctionId);
     if (txHash) {
       markBidsForAuction(Number(auctionId), "won");
+
+      // Read auction metadata for richer notification
+      let meta = "";
+      try {
+        const publicClient = getPublicClient();
+        const auction = await publicClient.readContract({
+          address: marketplaceAddress,
+          abi: fheSecretMarketplaceAbi,
+          functionName: "getAuction",
+          args: [auctionId],
+        });
+        const sellerId = auction[0]; // sellerId
+        const eventId = auction[4]; // eventId
+        const eventTitle = auction[5]; // eventTitle
+        meta = `\nevent: #${eventId} "${eventTitle}"\nseller: ${sellerId}`;
+      } catch {
+        // non-fatal — send notification without metadata
+      }
+
       await sendNotification(
         `Auction Closed: #${auctionId}`,
-        `Auction ${auctionId} closed.\ntx: ${ETHERSCAN_URL}/${txHash}`,
-        `${ETHERSCAN_URL}/${txHash}`,
+        `Auction #${auctionId} closed.${meta}\ntx: ${ETHERSCAN_URL}/${txHash}`,
+        auctionUrl(auctionId) ?? `${ETHERSCAN_URL}/${txHash}`,
       );
     }
   }
