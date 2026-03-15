@@ -201,6 +201,7 @@ const OPEN_AUCTIONS_QUERY = gql`
     ) {
       auctionId
       sellerId
+      eventTitle
       endTime
     }
   }
@@ -210,6 +211,7 @@ type OpenAuctionsResponse = {
   auctionCreateds: {
     auctionId: string;
     sellerId: string;
+    eventTitle: string;
     endTime: string;
   }[];
 };
@@ -256,6 +258,8 @@ async function main() {
 
   console.log(`[place-bids] Found ${auctions.length} open auction(s)`);
 
+  const FRONTEND_URL = "https://insider-streams-insider-streams-fro.vercel.app";
+
   // Shuffle auctions for variety
   for (let i = auctions.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -268,6 +272,7 @@ async function main() {
   let errors = 0;
   const rejectReasons: string[] = [];
   const errorMessages: string[] = [];
+  const successDetails: string[] = [];
 
   for (const auction of auctions) {
     // Pick a random account — daemon uses pseudonymous IDs so we can't
@@ -309,6 +314,12 @@ async function main() {
           `  [place-bids] Bid placed: bidId=${data.bidId}, status=${data.status}`,
         );
         bidsPlaced++;
+        const usdcAmount = (Number(bidAmount) / 1e6).toFixed(0);
+        successDetails.push(
+          `  ${account.address.slice(0, 6)}.. bid $${usdcAmount} on #${auction.auctionId}` +
+          (auction.eventTitle ? ` — ${auction.eventTitle.slice(0, 50)}` : "") +
+          `\n  ${FRONTEND_URL}/auction/${auction.auctionId}`,
+        );
       } else {
         const err = (await resp.json().catch(() => ({
           error: resp.statusText,
@@ -334,6 +345,7 @@ async function main() {
   }
 
   const lines = [`Placed ${bidsPlaced} bid(s) across ${auctions.length} auction(s)`];
+  if (successDetails.length > 0) lines.push(...successDetails);
   if (skippedLowBalance > 0) lines.push(`Skipped (low balance): ${skippedLowBalance}`);
   if (rejectedBids > 0) lines.push(`Rejected: ${rejectedBids}`);
   if (errors > 0) lines.push(`Errors: ${errors}`);

@@ -206,16 +206,21 @@ async function main() {
   }
 
   // 4. Summary + ntfy
+  const eventMap = new Map(toSettle.map((e) => [e.eventId, e.question]));
+
   const lines: string[] = [];
   if (succeeded.length > 0) {
-    lines.push(`Settled: [${succeeded.join(", ")}] (${succeeded.length})`);
+    lines.push(`Settled ${succeeded.length} event(s):`);
+    for (const id of succeeded) {
+      const q = eventMap.get(id) ?? "Unknown";
+      lines.push(`  #${id}: ${q}`);
+    }
   }
   if (failed.length > 0) {
     lines.push(
       `Failed: [${failed.map((f) => f.eventId).join(", ")}] (${failed.length})`,
     );
     for (const f of failed) {
-      // Truncate long error messages for readability in notifications
       const shortErr = f.error.length > 120 ? f.error.slice(0, 120) + "..." : f.error;
       lines.push(`  event ${f.eventId}: ${shortErr}`);
     }
