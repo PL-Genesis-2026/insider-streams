@@ -136,7 +136,7 @@ export function readTestState(): TestState | null {
 const SUBGRAPH_URL =
   process.env.NEXT_PUBLIC_SUBGRAPH_URL ||
   "https://gateway.thegraph.com/api/subgraphs/id/BttcQ7pVTEz7L94PgnhkFJCY33K5Vwk1vhffckmjgf5f";
-const SUBGRAPH_API_KEY = process.env.NEXT_PUBLIC_SUBGRAPH_API_KEY || "a075bc6e2e48577d2588bb458b939bdc";
+const SUBGRAPH_API_KEY = process.env.NEXT_PUBLIC_SUBGRAPH_API_KEY || "";
 
 /** Query the subgraph for open auctions (not cancelled/closed). */
 export async function findOpenAuctions(

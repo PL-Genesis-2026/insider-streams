@@ -41,7 +41,7 @@ if (!OWNER_PK) {
 const SUBGRAPH_URL =
   process.env.SUBGRAPH_URL ??
   "https://gateway.thegraph.com/api/subgraphs/id/BttcQ7pVTEz7L94PgnhkFJCY33K5Vwk1vhffckmjgf5f";
-const SUBGRAPH_API_KEY = process.env.SUBGRAPH_API_KEY ?? "a075bc6e2e48577d2588bb458b939bdc";
+const SUBGRAPH_API_KEY = process.env.SUBGRAPH_API_KEY ?? "";
 
 // ---------------------------------------------------------------------------
 // ntfy (optional)

@@ -24,6 +24,7 @@ function sendNotification(title: string, message: string, clickUrl?: string) {
 }
 import { withAdminLock } from "./admin-lock.js";
 import { getFhevmInstance } from "./fhe.js";
+import { markBidsForAuction } from "./db.js";
 
 const ETHERSCAN_URL = "https://sepolia.etherscan.io/tx";
 const marketplaceAddress = config.secretMarketplaceAddress as `0x${string}`;
@@ -67,10 +68,16 @@ async function finalizeAuctionReputation(auctionId: bigint): Promise<void> {
   // Decrypt via Zama Relayer — returns cleartext boolean + proof
   const instance = await getFhevmInstance();
   const decryptPromise = instance.publicDecrypt([handle]);
-  const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error(`publicDecrypt timed out after ${DECRYPT_TIMEOUT_MS / 1000}s`)), DECRYPT_TIMEOUT_MS),
-  );
-  const result = await Promise.race([decryptPromise, timeoutPromise]);
+  let timer: ReturnType<typeof setTimeout>;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`publicDecrypt timed out after ${DECRYPT_TIMEOUT_MS / 1000}s`)), DECRYPT_TIMEOUT_MS);
+  });
+  let result;
+  try {
+    result = await Promise.race([decryptPromise, timeoutPromise]);
+  } finally {
+    clearTimeout(timer!);
+  }
 
   const predictionWasCorrect = Boolean(result.clearValues[handle]);
   const decryptionProof = result.decryptionProof;
@@ -243,7 +250,8 @@ async function handleSettlementResponse(
             }),
           );
           await waitForReceipt(closeHash);
-          console.log(`[resolver] Pre-closed auction ${auctionId}`);
+          markBidsForAuction(Number(auctionId), "won");
+          console.log(`[resolver] Pre-closed auction ${auctionId} and marked bids as won`);
         }
       } catch (err) {
         console.warn(`[resolver] Pre-close failed for auction ${auctionId}:`, err instanceof Error ? err.message : err);
