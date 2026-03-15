@@ -366,7 +366,9 @@ export function startApi(): void {
       }
 
       // ── Text payload path (or file without Filecoin) ──
-      const effectiveSecretPayload = secretPayload || (file ? file.buffer.toString("utf8") : undefined);
+      // Only use file content as text fallback for actual text files — not binary (images, PDFs, etc.)
+      const isTextFile = file ? /\.(txt|md|json)$/i.test(file.originalname) : false;
+      const effectiveSecretPayload = secretPayload || (file && isTextFile ? file.buffer.toString("utf8") : undefined);
 
       // If secretPayload is provided (plaintext), generate CID/key from it
       if (effectiveSecretPayload && !secretDataCid) {
