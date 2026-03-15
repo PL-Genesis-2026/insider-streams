@@ -59,8 +59,7 @@ graph TD
     S -->|Fact-check| GM
     S -->|settleEvent| EPM
     S -->|Audit trail| FS
-    AC -->|closeAuction + finalize| SM
-    AC -->|Decrypt winning bid| ZR
+    AC -->|closeAuction| SM
     RR -->|resolveEventPredictions| SM
     RR -->|Decrypt result| ZR
     RR -->|finalizeReputationResult| SM
@@ -113,11 +112,8 @@ sequenceDiagram
     API->>MKT: placeBid() — deducts balance, refunds previous bidder
     MKT-->>SUB: BidPlaced event (no bidder address)
 
-    Note over AC,SUB: Auction Close (2-step FHE)
-    AC->>MKT: closeAuction() — marks closed
-    AC->>FHE: publicDecrypt(winningBid)
-    FHE-->>AC: Decrypted value + proof
-    AC->>MKT: finalizeAuctionClose(proof)
+    Note over AC,SUB: Auction Close
+    AC->>MKT: closeAuction() — marks closed, credits seller
     MKT-->>SUB: AuctionClosed event
 
     Note over STL,PM: AI Settlement
