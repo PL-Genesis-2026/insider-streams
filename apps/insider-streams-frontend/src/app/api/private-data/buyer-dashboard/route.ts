@@ -4,7 +4,7 @@ import { subgraphClient } from "@/lib/subgraph-client";
 import type { BuyerDashboardAuction, BuyerDashboardResponse } from "@/lib/buyer-dashboard/types";
 import type { PrivateBidRecord, PrivateBidStatus } from "@/lib/private-data/types";
 
-export const maxDuration = 60;
+export const maxDuration = 90;
 
 type DaemonBid = {
   auctionId: number;
