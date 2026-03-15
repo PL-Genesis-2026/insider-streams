@@ -1,6 +1,6 @@
 # Insider Streams
 
-Encrypted prediction marketplace built on [Zama fhEVM](https://docs.zama.ai/fhevm) with Fully Homomorphic Encryption (FHE) privacy. Users trade secret predictions on real-world events with encrypted bids, encrypted balances, and pseudonymous identities.
+Encrypted prediction marketplace built on [Zama fhEVM](https://docs.zama.ai/fhevm) with Fully Homomorphic Encryption (FHE) privacy and decentralized storage using Filecoin's Synapse SDK. Users trade secret predictions on real-world events with encrypted bids, encrypted balances, and pseudonymous identities.
 
 ## Links
 
