@@ -12,7 +12,7 @@ import stringify from "fast-json-stable-stringify";
 import { type PrivateKeyAccount } from "viem/accounts";
 import type { TestState } from "./global-setup";
 
-const DAEMON_URL = "http://localhost:3001";
+const DAEMON_URL = process.env.DAEMON_URL || "http://localhost:3001";
 
 /** Sign a payload and POST it to the daemon. */
 export async function signedDaemonRequest(
@@ -116,7 +116,7 @@ export async function createTestAuctionWithFile(
   const res = await fetch(`${DAEMON_URL}/create-auction`, {
     method: "POST",
     body: form,
-    signal: AbortSignal.timeout(120_000),
+    signal: AbortSignal.timeout(180_000),
   });
   const data = await res.json();
   return { status: res.status, data };
