@@ -7,7 +7,8 @@
   "types": "./src/index.ts",
   "scripts": {
     "wagmi": "wagmi generate",
-    "build": "tsc"
+    "build": "tsc",
+    "test:unit": "node --import tsx --test src/verify-signed-request.test.ts"
   },
   "dependencies": {
     "@wagmi/cli": "^2.10.0",
@@ -15,6 +16,7 @@
     "viem": "^2.47.0"
   },
   "devDependencies": {
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }
 }

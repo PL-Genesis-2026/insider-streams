@@ -294,10 +294,16 @@ export function SecretRevealCard({ auctionId }: SecretRevealCardProps) {
 
   if (!isLoading && secretState?.kind === "forbidden") {
     return (
-      <p className="text-sm leading-7 text-muted-foreground">
-        This secret exists, but only the seller and the winning bidder can view
-        it.
-      </p>
+      <div className="space-y-3">
+        <p className="text-sm leading-7 text-muted-foreground">
+          This secret exists, but only the seller and the winning bidder can view
+          it.
+        </p>
+        <Button variant="ghost" size="sm" onClick={handleReveal}>
+          <Eye className="size-3.5" />
+          Retry
+        </Button>
+      </div>
     );
   }
 
