@@ -17,7 +17,7 @@ import { sendNotification as _sendNotification } from "./notify.js";
 function sendNotification(title: string, message: string, clickUrl?: string) {
   return _sendNotification(title, message, clickUrl, config.ntfyTopicCloser);
 }
-import { markBidsForAuction } from "./db.js";
+import { markBids } from "./mark-bids.js";
 import { withAdminLock } from "./admin-lock.js";
 
 const ETHERSCAN_URL = "https://sepolia.etherscan.io/tx";
@@ -90,7 +90,16 @@ async function runCloserCycle(): Promise<void> {
   for (const auctionId of expired) {
     const txHash = await closeAuction(auctionId);
     if (txHash) {
-      markBidsForAuction(Number(auctionId), "won");
+      try {
+        await markBids(Number(auctionId), "won");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[closer] markBids failed for auction ${auctionId}:`, msg);
+        await sendNotification(
+          `markBids FAILED: auction #${auctionId}`,
+          `Status 'won' was NOT applied — bid winners may not see secrets.\nError: ${msg}`,
+        );
+      }
 
       // Read auction metadata for richer notification
       let meta = "";
@@ -150,7 +159,14 @@ export async function startAuctionCloser(): Promise<void> {
       for (const log of logs) {
         const { auctionId } = log.args as { auctionId: bigint };
         console.log(`[closer] AuctionCancelled event: auction ${auctionId}`);
-        markBidsForAuction(Number(auctionId), "cancelled");
+        markBids(Number(auctionId), "cancelled").catch(async (err) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(`[closer] Failed to mark bids as cancelled for auction ${auctionId}:`, msg);
+          await sendNotification(
+            `markBids FAILED: auction #${auctionId}`,
+            `Status 'cancelled' was NOT applied.\nError: ${msg}`,
+          );
+        });
       }
     },
   });
