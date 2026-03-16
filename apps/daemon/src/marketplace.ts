@@ -10,7 +10,7 @@
 
 import { getContract, zeroHash, decodeEventLog, toHex, type GetContractReturnType } from "viem";
 import { fheSecretMarketplaceAbi } from "@private-streams/common";
-import { encryptUint64, encryptAuctionInputs, getFhevmInstance } from "@private-streams/common/fhe";
+import { encryptUint64, encryptAuctionInputs, publicDecryptUint64 } from "@private-streams/common/fhe";
 import { config } from "./config.js";
 import { getPublicClient, getWalletClient, getAccount, waitForReceipt } from "./provider.js";
 import { withAdminLock } from "./admin-lock.js";
@@ -239,30 +239,6 @@ export function getOnChainBalance(userId: string): Promise<bigint> {
   return promise;
 }
 
-async function _publicDecryptWithTimeout(
-  instance: Awaited<ReturnType<typeof getFhevmInstance>>,
-  handle: `0x${string}`,
-): Promise<bigint> {
-  const DECRYPT_TIMEOUT_MS = 60_000;
-  console.log(`[marketplace] publicDecrypt(${handle}) — waiting for relayer...`);
-
-  const decryptPromise = instance.publicDecrypt([handle]);
-  let timer: ReturnType<typeof setTimeout>;
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`publicDecrypt timed out after ${DECRYPT_TIMEOUT_MS / 1000}s`)), DECRYPT_TIMEOUT_MS);
-  });
-  let result;
-  try {
-    result = await Promise.race([decryptPromise, timeoutPromise]);
-  } finally {
-    clearTimeout(timer!);
-  }
-
-  const clearValue = result.clearValues[handle];
-  if (clearValue === undefined || clearValue === null) return 0n;
-  return BigInt(clearValue as bigint);
-}
-
 async function _getOnChainBalanceImpl(userId: string): Promise<bigint> {
   const publicClient = getPublicClient();
   const marketplaceAddress = config.secretMarketplaceAddress as `0x${string}`;
@@ -278,14 +254,12 @@ async function _getOnChainBalanceImpl(userId: string): Promise<bigint> {
   if (!handle || handle === zeroHash) return 0n;
   console.log(`[marketplace] getOnChainBalance(${userId}) — handle: ${handle}`);
 
-  const instance = await getFhevmInstance(config.rpcUrl);
-
   // Try publicDecrypt directly first (fast path, ~7s).
   // If the handle hasn't been marked for public decryption yet, the relayer
   // returns "not allowed for public decryption" — then we submit the on-chain
   // requestBalanceDecrypt tx and retry.
   try {
-    const value = await _publicDecryptWithTimeout(instance, handle);
+    const value = await publicDecryptUint64(handle, config.rpcUrl);
     console.log(`[marketplace] getOnChainBalance(${userId}) — decrypted: ${String(value)}`);
     return value;
   } catch (err) {
@@ -307,7 +281,7 @@ async function _getOnChainBalanceImpl(userId: string): Promise<bigint> {
   );
   await waitForReceipt(decryptTxHash);
 
-  const value = await _publicDecryptWithTimeout(instance, handle);
+  const value = await publicDecryptUint64(handle, config.rpcUrl);
   console.log(`[marketplace] getOnChainBalance(${userId}) — decrypted: ${String(value)}`);
   return value;
 }

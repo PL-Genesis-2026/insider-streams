@@ -18,6 +18,7 @@ import multer from "multer";
 import { createHash, randomBytes } from "node:crypto";
 import { decodeEventLog } from "viem";
 import { verifySignedRequest, fheConfidentialUsdcAbi, fheSecretMarketplaceAbi, PLATFORM_EOA_ADDRESS } from "@private-streams/common";
+import { publicDecryptUint64 } from "@private-streams/common/fhe";
 import { config } from "./config.js";
 import {
   getOrCreateUser,
@@ -625,12 +626,9 @@ export function startApi(): void {
       }
 
       // Verify the on-chain transfer: confirm the tx exists, succeeded,
-      // was sent to the cUSDC contract, and emitted a ConfidentialTransfer
-      // from the signer to the platform EOA.
-      // NOTE: The transfer amount is an encrypted euint64 handle (FHE privacy)
-      // and cannot be verified from logs. We trust the client-supplied amount
-      // because the on-chain FHE balance accounting is the ultimate source of
-      // truth — depositFor will fail if the admin doesn't actually hold enough.
+      // was sent to the cUSDC contract, emitted a ConfidentialTransfer
+      // from the signer to the platform EOA, and the decrypted transfer
+      // amount matches the client-supplied amount.
       const publicClient = getPublicClient();
       let receipt;
       try {
@@ -657,10 +655,10 @@ export function startApi(): void {
       }
 
       // Verify a ConfidentialTransfer event was emitted from the cUSDC contract
-      // with from=signer and to=platformEOA
+      // with from=signer and to=platformEOA, and decrypt the transfer amount
       const platformEoa = PLATFORM_EOA_ADDRESS.toLowerCase();
       const signerLower = userAddress.toLowerCase();
-      let foundValidTransfer = false;
+      let transferAmountHandle: `0x${string}` | null = null;
       for (const log of receipt.logs) {
         if (log.address.toLowerCase() !== cUsdcAddress) continue;
         try {
@@ -676,7 +674,7 @@ export function startApi(): void {
             (decoded.args.from as string).toLowerCase() === signerLower &&
             (decoded.args.to as string).toLowerCase() === platformEoa
           ) {
-            foundValidTransfer = true;
+            transferAmountHandle = decoded.args.amount as `0x${string}`;
             break;
           }
         } catch {
@@ -684,10 +682,36 @@ export function startApi(): void {
         }
       }
 
-      if (!foundValidTransfer) {
+      if (!transferAmountHandle) {
         res.status(400).json({
           error: "No valid cUSDC transfer from your address to the platform was found in this transaction",
           code: "TRANSFER_NOT_FOUND",
+        });
+        return;
+      }
+
+      // Decrypt the actual transfer amount via Zama Relayer (~10s).
+      // The platform EOA is the recipient and has ACL permission to decrypt.
+      let actualAmount: bigint;
+      try {
+        actualAmount = await publicDecryptUint64(transferAmountHandle, config.rpcUrl);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[api] Failed to decrypt deposit amount: ${msg}`);
+        res.status(500).json({
+          error: "Could not verify transfer amount. Please try again.",
+          code: "DECRYPT_FAILED",
+        });
+        return;
+      }
+
+      if (actualAmount !== parsedAmount) {
+        console.warn(
+          `[api] Deposit amount mismatch: claimed=${parsedAmount}, actual=${actualAmount}, user=${userAddress}`,
+        );
+        res.status(400).json({
+          error: `Transfer amount mismatch: you claimed ${parsedAmount} but the on-chain transfer was ${actualAmount}`,
+          code: "AMOUNT_MISMATCH",
         });
         return;
       }

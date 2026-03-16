@@ -58,7 +58,7 @@ export function useDeposit() {
       // Step 1: Encrypt the amount using the Zama relayer SDK
       setDepositStep("encrypting");
       const contractAddress = CONFIDENTIAL_USDC_ADDRESS as `0x${string}`;
-      const input = (fhevmInstance as any).createEncryptedInput(
+      const input = fhevmInstance.createEncryptedInput(
         contractAddress,
         address,
       );

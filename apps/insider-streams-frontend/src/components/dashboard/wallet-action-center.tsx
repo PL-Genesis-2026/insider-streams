@@ -509,7 +509,7 @@ export function WalletActionCenter({
                                 : depositStep === "transferring"
                                   ? "Submitting confidential transfer..."
                                   : depositStep === "notifying"
-                                    ? "Registering deposit..."
+                                    ? "Verifying deposit amount (FHE decrypt)..."
                                     : depositStep === "done"
                                       ? "Deposit complete"
                                       : "Depositing..."}
