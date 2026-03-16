@@ -38,9 +38,8 @@ import {
   SECRET_MARKETPLACE_ADDRESS,
   fheConfidentialUsdcAbi,
   fheSecretMarketplaceAbi,
-  encryptUint64,
-  getFhevmInstance,
 } from "@private-streams/common";
+import { encryptUint64, getFhevmInstance } from "@private-streams/common/fhe";
 
 // ---------------------------------------------------------------------------
 // Config

@@ -9,7 +9,8 @@
  */
 
 import { getContract, zeroHash, decodeEventLog, toHex, type GetContractReturnType } from "viem";
-import { fheSecretMarketplaceAbi, encryptUint64, encryptAuctionInputs, getFhevmInstance } from "@private-streams/common";
+import { fheSecretMarketplaceAbi } from "@private-streams/common";
+import { encryptUint64, encryptAuctionInputs, getFhevmInstance } from "@private-streams/common/fhe";
 import { config } from "./config.js";
 import { getPublicClient, getWalletClient, getAccount, waitForReceipt } from "./provider.js";
 import { withAdminLock } from "./admin-lock.js";

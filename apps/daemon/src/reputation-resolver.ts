@@ -23,7 +23,7 @@ function sendNotification(title: string, message: string, clickUrl?: string) {
   return _sendNotification(title, message, clickUrl, config.ntfyTopicReputation);
 }
 import { withAdminLock } from "./admin-lock.js";
-import { getFhevmInstance } from "@private-streams/common";
+import { getFhevmInstance } from "@private-streams/common/fhe";
 import { markBids } from "./mark-bids.js";
 import { ProcessingTracker } from "./processing-tracker.js";
 

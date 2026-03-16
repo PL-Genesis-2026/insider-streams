@@ -42,8 +42,8 @@ import {
   type CreateAuctionDuration,
   SECRET_MARKETPLACE_ADDRESS,
   fheSecretMarketplaceAbi,
-  encryptAuctionInputs,
 } from "@private-streams/common";
+import { encryptAuctionInputs } from "@private-streams/common/fhe";
 
 // ---------------------------------------------------------------------------
 // Config
