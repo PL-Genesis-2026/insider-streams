@@ -14,7 +14,6 @@ import {
   SepoliaConfig,
   type FhevmInstance,
 } from "@zama-fhe/relayer-sdk/node";
-import { config } from "./config.js";
 
 let _instance: FhevmInstance | null = null;
 let _initPromise: Promise<FhevmInstance> | null = null;
@@ -22,8 +21,9 @@ let _initPromise: Promise<FhevmInstance> | null = null;
 /**
  * Get or create the singleton FhevmInstance.
  * First call downloads TFHE public key from the relayer (may take a few seconds).
+ * @param rpcUrl - Ethereum RPC URL (e.g. Sepolia)
  */
-export async function getFhevmInstance(): Promise<FhevmInstance> {
+export async function getFhevmInstance(rpcUrl: string): Promise<FhevmInstance> {
   if (_instance) return _instance;
 
   // Deduplicate concurrent init calls
@@ -34,13 +34,12 @@ export async function getFhevmInstance(): Promise<FhevmInstance> {
     try {
       const instance = await createInstance({
         ...SepoliaConfig,
-        network: config.rpcUrl,
+        network: rpcUrl,
       });
       console.log("[fhe] FhevmInstance ready.");
       _instance = instance;
       return instance;
     } finally {
-      // Always clear the promise so failures can be retried
       _initPromise = null;
     }
   })();
@@ -58,13 +57,15 @@ export interface EncryptedInput {
  * @param contractAddress - The target contract address
  * @param signerAddress - The address that will submit the tx (admin EOA)
  * @param value - The plaintext uint64 value
+ * @param rpcUrl - Ethereum RPC URL
  */
 export async function encryptUint64(
   contractAddress: string,
   signerAddress: string,
   value: bigint,
+  rpcUrl: string,
 ): Promise<EncryptedInput> {
-  const instance = await getFhevmInstance();
+  const instance = await getFhevmInstance(rpcUrl);
   const input = instance.createEncryptedInput(contractAddress, signerAddress);
   input.add64(value);
   return input.encrypt();
@@ -77,8 +78,9 @@ export async function encryptBool(
   contractAddress: string,
   signerAddress: string,
   value: boolean,
+  rpcUrl: string,
 ): Promise<EncryptedInput> {
-  const instance = await getFhevmInstance();
+  const instance = await getFhevmInstance(rpcUrl);
   const input = instance.createEncryptedInput(contractAddress, signerAddress);
   input.addBool(value);
   return input.encrypt();
@@ -91,8 +93,9 @@ export async function encryptUint256(
   contractAddress: string,
   signerAddress: string,
   value: bigint,
+  rpcUrl: string,
 ): Promise<EncryptedInput> {
-  const instance = await getFhevmInstance();
+  const instance = await getFhevmInstance(rpcUrl);
   const input = instance.createEncryptedInput(contractAddress, signerAddress);
   input.add256(value);
   return input.encrypt();
@@ -107,8 +110,9 @@ export async function encryptAuctionInputs(
   signerAddress: string,
   prediction: boolean,
   secretKey: bigint,
+  rpcUrl: string,
 ): Promise<EncryptedInput> {
-  const instance = await getFhevmInstance();
+  const instance = await getFhevmInstance(rpcUrl);
   const input = instance.createEncryptedInput(contractAddress, signerAddress);
   input.addBool(prediction);
   input.add256(secretKey);

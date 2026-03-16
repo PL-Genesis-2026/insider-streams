@@ -10,9 +10,9 @@
 
 import { getContract, zeroHash, decodeEventLog, toHex, type GetContractReturnType } from "viem";
 import { fheSecretMarketplaceAbi } from "@private-streams/common";
+import { encryptUint64, encryptAuctionInputs, getFhevmInstance } from "@private-streams/common/fhe";
 import { config } from "./config.js";
 import { getPublicClient, getWalletClient, getAccount, waitForReceipt } from "./provider.js";
-import { encryptUint64, encryptAuctionInputs, getFhevmInstance } from "./fhe.js";
 import { withAdminLock } from "./admin-lock.js";
 
 /** Convert a Uint8Array from FHE encryption to a 0x-prefixed hex string. */
@@ -53,6 +53,7 @@ export async function depositFor(
     config.secretMarketplaceAddress,
     account.address,
     amount,
+    config.rpcUrl,
   );
 
   console.log(`[marketplace] depositFor(${userId}, ${amount}) — submitting tx...`);
@@ -83,6 +84,7 @@ export async function withdrawFor(
     config.secretMarketplaceAddress,
     account.address,
     amount,
+    config.rpcUrl,
   );
 
   console.log(`[marketplace] withdrawFor(${userId}, ${amount}) — submitting tx...`);
@@ -115,6 +117,7 @@ export async function placeBid(
     config.secretMarketplaceAddress,
     account.address,
     amount,
+    config.rpcUrl,
   );
 
   console.log(`[marketplace] placeBid(auction=${auctionId}, bidder=${bidderId}, amount=${amount}) — submitting tx...`);
@@ -158,6 +161,7 @@ export async function createAuction(
     account.address,
     prediction,
     secretKey,
+    config.rpcUrl,
   );
 
   console.log(`[marketplace] createAuction(seller=${sellerId}, event=${eventId}) — submitting tx...`);
@@ -274,7 +278,7 @@ async function _getOnChainBalanceImpl(userId: string): Promise<bigint> {
   if (!handle || handle === zeroHash) return 0n;
   console.log(`[marketplace] getOnChainBalance(${userId}) — handle: ${handle}`);
 
-  const instance = await getFhevmInstance();
+  const instance = await getFhevmInstance(config.rpcUrl);
 
   // Try publicDecrypt directly first (fast path, ~7s).
   // If the handle hasn't been marked for public decryption yet, the relayer

@@ -991,6 +991,131 @@ export function startApi(): void {
   });
 
   // ---------------------------------------------------------------------------
+  // POST /internal/register-user — internal, API-key authenticated
+  //
+  // Called by scripts running on a separate VPS to register/get a user's
+  // pseudonymous ID without going through signature auth. Keeps user
+  // records in sync so scripts can submit on-chain txs directly while
+  // the daemon tracks the user mapping.
+  // ---------------------------------------------------------------------------
+  app.post("/internal/register-user", jsonMiddleware, async (req: Request, res: Response) => {
+    try {
+      const key = req.headers["x-internal-key"];
+      if (!config.internalApiKey || key !== config.internalApiKey) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+
+      // Express req.body is `any` without middleware typing; fields validated below
+      const { address } = req.body as { address: string };
+      if (!address) {
+        res.status(400).json({ error: "Missing address" });
+        return;
+      }
+
+      const user = getOrCreateUser(address);
+      res.json({ userId: user.userId, address: user.address, created: user.created });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[api] POST /internal/register-user error:", msg);
+      res.status(500).json({ error: msg });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // POST /internal/record-bid — internal, API-key authenticated
+  //
+  // Called by scripts to record a bid in SQLite after submitting it
+  // on-chain directly. The daemon needs this record so the auction-closer
+  // and reputation-resolver can mark bids as won/cancelled.
+  // ---------------------------------------------------------------------------
+  app.post("/internal/record-bid", jsonMiddleware, async (req: Request, res: Response) => {
+    try {
+      const key = req.headers["x-internal-key"];
+      if (!config.internalApiKey || key !== config.internalApiKey) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+
+      // Express req.body is `any` without middleware typing; fields validated below
+      const { auctionId, bidderId, amount, txHash } = req.body as {
+        auctionId: number;
+        bidderId: string;
+        amount: string;
+        txHash?: string;
+      };
+
+      if (auctionId == null || typeof auctionId !== "number") {
+        res.status(400).json({ error: "Missing or invalid auctionId" });
+        return;
+      }
+      if (!bidderId) {
+        res.status(400).json({ error: "Missing bidderId" });
+        return;
+      }
+      if (!amount) {
+        res.status(400).json({ error: "Missing amount" });
+        return;
+      }
+
+      const bid = recordBid(auctionId, bidderId, amount, txHash);
+      console.log(`[api] /internal/record-bid: auction=${auctionId} bidder=${bidderId} amount=${amount} bidId=${bid.id}`);
+      res.json({ ok: true, bidId: bid.id });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[api] POST /internal/record-bid error:", msg);
+      res.status(500).json({ error: msg });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // POST /internal/insert-secret — internal, API-key authenticated
+  //
+  // Called by scripts to store auction secret data in SQLite after
+  // creating an auction on-chain directly.
+  // ---------------------------------------------------------------------------
+  app.post("/internal/insert-secret", jsonMiddleware, async (req: Request, res: Response) => {
+    try {
+      const key = req.headers["x-internal-key"];
+      if (!config.internalApiKey || key !== config.internalApiKey) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+
+      // Express req.body is `any` without middleware typing; fields validated below
+      const { auctionId, sellerId, secretDataCid, secretDataKey, secretData, eventData } = req.body as {
+        auctionId: number;
+        sellerId: string;
+        secretDataCid: string;
+        secretDataKey?: string;
+        secretData?: string;
+        eventData?: string;
+      };
+
+      if (auctionId == null || typeof auctionId !== "number") {
+        res.status(400).json({ error: "Missing or invalid auctionId" });
+        return;
+      }
+      if (!sellerId) {
+        res.status(400).json({ error: "Missing sellerId" });
+        return;
+      }
+      if (!secretDataCid) {
+        res.status(400).json({ error: "Missing secretDataCid" });
+        return;
+      }
+
+      insertSecret(auctionId, sellerId, secretDataCid, secretDataKey, secretData, eventData);
+      console.log(`[api] /internal/insert-secret: auction=${auctionId} seller=${sellerId}`);
+      res.json({ ok: true });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[api] POST /internal/insert-secret error:", msg);
+      res.status(500).json({ error: msg });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
   // Start server
   // ---------------------------------------------------------------------------
   app.listen(config.apiPort, () => {

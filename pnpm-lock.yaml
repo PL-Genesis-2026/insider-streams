@@ -376,6 +376,9 @@ importers:
       '@wagmi/cli':
         specifier: ^2.10.0
         version: 2.10.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      '@zama-fhe/relayer-sdk':
+        specifier: ^0.4.2
+        version: 0.4.2(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       fast-json-stable-stringify:
         specifier: ^2.1.0
         version: 2.1.0
@@ -395,6 +398,9 @@ importers:
       '@private-streams/common':
         specifier: workspace:*
         version: link:../packages/common
+      '@zama-fhe/relayer-sdk':
+        specifier: ^0.4.2
+        version: 0.4.2(bufferutil@4.1.0)(utf-8-validate@6.0.6)
       fast-json-stable-stringify:
         specifier: ^2.1.0
         version: 2.1.0
