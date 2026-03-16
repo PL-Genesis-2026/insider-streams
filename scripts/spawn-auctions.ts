@@ -2,8 +2,13 @@
 /**
  * spawn-auctions.ts — Create auctions on open prediction market events.
  *
- * Uses the daemon HTTP API directly (POST /create-auction) with personal_sign
- * authentication, matching verifySignedRequest in @private-streams/common.
+ * Performs FHE encryption and on-chain contract calls directly via OWNER_PK
+ * (admin EOA), bypassing the daemon HTTP API. This lets the scripts VPS run
+ * its own Zama relayer rate limit bucket independently from the API VPS.
+ *
+ * Daemon SQLite is kept in sync via lightweight internal API calls
+ * (/internal/register-user, /internal/insert-secret) which don't touch
+ * the Zama relayer.
  *
  * Runs once per invocation; scheduling is handled by cron.
  *
@@ -11,28 +16,33 @@
  *   1. Load test accounts from env (TEST_ACCOUNT_1..25)
  *   2. Query subgraph for open events (exclude settled)
  *   3. Pick a random account and event
- *   4. If VENICE_API_KEY is set, research the event via AI and generate a
- *      structured secret (text/txt/md/json). File formats (txt/md/json) are
- *      uploaded as multipart attachments — the daemon handles Filecoin upload
- *      when configured.
- *   5. Sign and POST to daemon /create-auction
+ *   4. If VENICE_API_KEY is set, research the event via AI
+ *   5. FHE-encrypt prediction + secret key, call createAuction on-chain
+ *   6. Sync auction secret to daemon SQLite via internal API
  *
  * Env vars (scripts/.env):
- *   TEST_ACCOUNT_1..25      — private keys for auction creators
- *   DAEMON_URL / BASE_URL   — daemon origin (default: http://localhost:3001)
+ *   OWNER_PK                — admin EOA private key (submits all on-chain txs)
+ *   RPC_URL                 — Ethereum RPC URL (default: publicnode Sepolia)
+ *   INTERNAL_API_KEY        — shared secret for daemon internal API
+ *   DAEMON_URL / BASE_URL   — daemon origin for internal API (default: http://localhost:3001)
+ *   TEST_ACCOUNT_1..25      — private keys for auction creators (identity only)
  *   SUBGRAPH_URL            — subgraph endpoint (default: insider-streams-zama)
  *   VENICE_API_KEY          — (optional) Venice AI key for researched secrets
  */
 
-import stringify from "fast-json-stable-stringify";
+import { createHash, randomBytes } from "node:crypto";
 import { GraphQLClient, gql } from "graphql-request";
 import OpenAI from "openai";
 import { privateKeyToAccount } from "viem/accounts";
-import { type Hex } from "viem";
+import { createPublicClient, createWalletClient, decodeEventLog, http, toHex, type Hex } from "viem";
+import { sepolia } from "viem/chains";
 import { z } from "zod";
 import {
   CREATE_AUCTION_DURATION_SECONDS,
   type CreateAuctionDuration,
+  SECRET_MARKETPLACE_ADDRESS,
+  fheSecretMarketplaceAbi,
+  encryptAuctionInputs,
 } from "@private-streams/common";
 
 // ---------------------------------------------------------------------------
@@ -43,8 +53,15 @@ const SUBGRAPH_URL = process.env.SUBGRAPH_URL ??
   "https://gateway.thegraph.com/api/subgraphs/id/BttcQ7pVTEz7L94PgnhkFJCY33K5Vwk1vhffckmjgf5f";
 const SUBGRAPH_API_KEY = process.env.SUBGRAPH_API_KEY ?? "";
 
+// DAEMON_URL is now only used for lightweight internal API calls (DB sync),
+// not for on-chain operations. On-chain ops use OWNER_PK directly.
 const DAEMON_URL =
   process.env.DAEMON_URL ?? process.env.BASE_URL ?? "http://localhost:3001";
+const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY ?? "";
+
+const RPC_URL =
+  process.env.RPC_URL ?? "https://ethereum-sepolia-rpc.publicnode.com";
+const OWNER_PK = process.env.OWNER_PK;
 
 const VENICE_API_KEY = process.env.VENICE_API_KEY ?? "";
 
@@ -210,80 +227,183 @@ function getTestAccounts(): TestAccount[] {
   return keys;
 }
 
-function timestamp(): number {
+function nowTimestamp(): number {
   return Math.floor(Date.now() / 1000);
 }
 
 // ---------------------------------------------------------------------------
-// Daemon API helper (personal_sign, matches verifySignedRequest)
+// Daemon internal API helpers (lightweight DB sync, no FHE/rate limits)
 // ---------------------------------------------------------------------------
 
-async function signedPost(
-  account: TestAccount,
+async function internalPost(
   endpoint: string,
-  fields: Record<string, unknown> = {},
-): Promise<{ ok: boolean; status: number; body: unknown }> {
-  const ts = timestamp();
-  const payload = { ...fields, timestamp: ts };
-  const message = stringify(payload);
-  const signature = await account.account.signMessage({ message });
-
+  body: Record<string, unknown>,
+): Promise<{ ok: boolean; status: number; data: Record<string, unknown> }> {
   const response = await fetch(`${DAEMON_URL}${endpoint}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...payload, signature }),
-    signal: AbortSignal.timeout(120_000),
+    headers: {
+      "Content-Type": "application/json",
+      "X-Internal-Key": INTERNAL_API_KEY,
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(30_000),
   });
-
-  const text = await response.text();
-  let body: unknown = text;
-  try {
-    body = JSON.parse(text);
-  } catch {
-    // keep raw text
-  }
-
-  return { ok: response.ok, status: response.status, body };
+  const data = (await response.json()) as Record<string, unknown>;
+  return { ok: response.ok, status: response.status, data };
 }
 
-/** Send a multipart FormData request with a file attachment + signed form fields. */
-async function signedFilePost(
-  account: TestAccount,
-  endpoint: string,
-  fields: Record<string, string>,
-  fileContent: Buffer,
-  fileName: string,
-  mimeType: string,
-): Promise<{ ok: boolean; status: number; body: unknown }> {
-  const ts = timestamp();
-  // Signature covers all form fields (as strings) + timestamp, but NOT the file
-  const payload: Record<string, unknown> = { ...fields, timestamp: ts };
-  const message = stringify(payload);
-  const signature = await account.account.signMessage({ message });
-
-  const formData = new FormData();
-  for (const [key, value] of Object.entries(fields)) {
-    formData.append(key, value);
+async function registerUser(address: string): Promise<string> {
+  const result = await internalPost("/internal/register-user", { address });
+  if (!result.ok) {
+    throw new Error(`register-user failed: ${JSON.stringify(result.data)}`);
   }
-  formData.append("timestamp", String(ts));
-  formData.append("signature", signature);
-  formData.append("file", new Blob([new Uint8Array(fileContent)], { type: mimeType }), fileName);
+  return result.data.userId as string;
+}
 
-  const response = await fetch(`${DAEMON_URL}${endpoint}`, {
-    method: "POST",
-    body: formData,
-    signal: AbortSignal.timeout(120_000),
+// ---------------------------------------------------------------------------
+// On-chain interaction (direct via OWNER_PK)
+//
+// Duplicated from daemon marketplace.ts to offload FHE operations to a
+// separate VPS, avoiding Zama relayer rate limit contention with the
+// daemon API VPS.
+// ---------------------------------------------------------------------------
+
+function getOwnerClients() {
+  if (!OWNER_PK) throw new Error("OWNER_PK is required");
+  const pk = normalizePrivateKey(OWNER_PK);
+  const account = privateKeyToAccount(pk);
+  const publicClient = createPublicClient({
+    chain: sepolia,
+    transport: http(RPC_URL, { timeout: 30_000 }),
+  });
+  const walletClient = createWalletClient({
+    account,
+    chain: sepolia,
+    transport: http(RPC_URL, { timeout: 30_000 }),
+  });
+  return { walletClient, publicClient, account };
+}
+
+function toHexBytes(bytes: Uint8Array): `0x${string}` {
+  return toHex(bytes);
+}
+
+/** Wait for tx receipt with retry for "indexing in progress" errors. */
+async function waitForReceipt(
+  publicClient: ReturnType<typeof createPublicClient>,
+  hash: `0x${string}`,
+  maxAttempts = 10,
+) {
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      return await publicClient.waitForTransactionReceipt({ hash });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("indexing is in progress") && i < maxAttempts - 1) {
+        console.log(`[spawn-auctions] Tx receipt pending (attempt ${i + 1}/${maxAttempts}), retrying in 5s...`);
+        await new Promise((r) => setTimeout(r, 5_000));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error(`Transaction receipt not available after ${maxAttempts} attempts`);
+}
+
+async function createAuctionOnChain(
+  sellerId: string,
+  eventId: number,
+  eventTitle: string,
+  endTime: number,
+  prediction: boolean,
+  secretPayload: string,
+): Promise<{ auctionId: number; txHash: string }> {
+  const { walletClient, publicClient, account } = getOwnerClients();
+  const marketplaceAddress = SECRET_MARKETPLACE_ADDRESS as `0x${string}`;
+
+  // Generate secret data CID (SHA256 of payload) and random secret key
+  const secretDataCid = "0x" + createHash("sha256").update(secretPayload).digest("hex");
+  const secretDataKey = "0x" + randomBytes(32).toString("hex");
+
+  // FHE-encrypt prediction (bool) + secretKey (uint256)
+  console.log(`[spawn-auctions] FHE-encrypting auction inputs...`);
+  const encrypted = await encryptAuctionInputs(
+    marketplaceAddress,
+    account.address,
+    prediction,
+    BigInt(secretDataKey),
+    RPC_URL,
+  );
+
+  // Submit createAuction on-chain
+  console.log(`[spawn-auctions] submitting createAuction tx...`);
+  const hash = await walletClient.writeContract({
+    address: marketplaceAddress,
+    abi: fheSecretMarketplaceAbi,
+    functionName: "createAuction",
+    args: [
+      sellerId,
+      BigInt(eventId),
+      eventTitle,
+      BigInt(endTime),
+      toHexBytes(encrypted.handles[0]),  // prediction (ebool)
+      secretDataCid as `0x${string}`,    // secretDataCid (bytes32)
+      toHexBytes(encrypted.handles[1]),  // secretKey (euint256)
+      toHexBytes(encrypted.inputProof),
+    ],
+  });
+  const receipt = await waitForReceipt(publicClient, hash);
+
+  // Parse AuctionCreated event to get the auction ID
+  const mktAddr = marketplaceAddress.toLowerCase();
+  let auctionId = -1;
+  for (const log of receipt.logs) {
+    if (log.address.toLowerCase() !== mktAddr) continue;
+    try {
+      const decoded = decodeEventLog({
+        abi: fheSecretMarketplaceAbi,
+        data: log.data,
+        topics: log.topics,
+      });
+      if (decoded.eventName === "AuctionCreated") {
+        auctionId = Number((decoded.args as { auctionId: bigint }).auctionId);
+        break;
+      }
+    } catch {
+      // Not our event
+    }
+  }
+
+  if (auctionId === -1) {
+    console.warn(
+      `[spawn-auctions] AuctionCreated event NOT found in ${receipt.logs.length} logs. ` +
+      `Receipt status: ${receipt.status}, tx: ${receipt.transactionHash}`,
+    );
+  }
+
+  // Sync secret to daemon SQLite via internal API
+  const eventDataJson = JSON.stringify({
+    marketplace: "insider-streams",
+    event: eventTitle,
+    marketId: eventId,
+    outcome: prediction ? "yes" : "no",
   });
 
-  const text = await response.text();
-  let body: unknown = text;
   try {
-    body = JSON.parse(text);
-  } catch {
-    // keep raw text
+    await internalPost("/internal/insert-secret", {
+      auctionId,
+      sellerId,
+      secretDataCid,
+      secretDataKey,
+      secretData: secretPayload,
+      eventData: eventDataJson,
+    });
+  } catch (err) {
+    // Non-fatal: auction is created on-chain even if DB sync fails
+    console.warn(`[spawn-auctions] insert-secret sync failed:`, err instanceof Error ? err.message : err);
   }
 
-  return { ok: response.ok, status: response.status, body };
+  return { auctionId, txHash: receipt.transactionHash };
 }
 
 // ---------------------------------------------------------------------------
@@ -319,12 +439,6 @@ async function fetchOpenEvents(
 // Main cycle
 // ---------------------------------------------------------------------------
 
-const SKIPPABLE_CODES = new Set([
-  "EVENT_NOT_FOUND",
-  "EVENT_NOT_OPEN",
-  "EVENT_EXPIRED",
-]);
-
 function shuffle<T>(arr: T[]): T[] {
   const out = [...arr];
   for (let i = out.length - 1; i > 0; i--) {
@@ -340,10 +454,8 @@ async function submitAuction(
   duration: CreateAuctionDuration,
   durationSeconds: number,
   secretPayload: string,
-  prediction: string,
-  format: SecretFormat,
+  prediction: boolean,
 ): Promise<{ ok: boolean; done: boolean }> {
-  const isFileFormat = format === "txt" || format === "md" || format === "json";
   const MAX_RETRIES = 2;
   let lastErr = "";
 
@@ -354,72 +466,26 @@ async function submitAuction(
       await new Promise((r) => setTimeout(r, delay));
     }
 
-    const endTime = timestamp() + durationSeconds;
+    const endTime = nowTimestamp() + durationSeconds;
 
     try {
-      let result: { ok: boolean; status: number; body: unknown };
+      // Register user to get pseudonymous ID
+      const sellerId = await registerUser(ta.address);
+      console.log(`[spawn-auctions] seller: ${sellerId} (${ta.address.slice(0, 10)}...)`);
 
-      if (isFileFormat) {
-        const ext = format === "txt" ? ".txt" : format === "md" ? ".md" : ".json";
-        const mimeType = format === "json" ? "application/json" : "text/plain";
-        const fileName = `research${ext}`;
-        const fileBuffer = Buffer.from(secretPayload, "utf8");
+      const { auctionId, txHash } = await createAuctionOnChain(
+        sellerId,
+        Number(event.eventId),
+        event.question,
+        endTime,
+        prediction,
+        secretPayload,
+      );
 
-        console.log(`[spawn-auctions] uploading file: ${fileName} (${fileBuffer.byteLength} bytes)`);
-
-        result = await signedFilePost(
-          ta,
-          "/create-auction",
-          {
-            eventId: event.eventId,
-            eventTitle: event.question,
-            endTime: String(endTime),
-            prediction,
-          },
-          fileBuffer,
-          fileName,
-          mimeType,
-        );
-      } else {
-        result = await signedPost(ta, "/create-auction", {
-          eventId: event.eventId,
-          eventTitle: event.question,
-          endTime: String(endTime),
-          prediction,
-          secretPayload,
-        });
-      }
-
-      if (result.ok) {
-        const auctionId =
-          result.body != null &&
-          typeof result.body === "object" &&
-          "auctionId" in result.body
-            ? String((result.body as Record<string, unknown>).auctionId)
-            : "?";
-        const fileSuffix = isFileFormat ? ` [file: research.${format}]` : "";
-        const msg = `Auction ${auctionId} (${duration}) for event ${event.eventId}${fileSuffix}\n"${event.question}"`;
-        console.log(`[spawn-auctions] ${msg}`);
-        await ntfy("Auction Created", msg, ["tada"]);
-        return { ok: true, done: true };
-      }
-
-      const code =
-        result.body != null &&
-        typeof result.body === "object" &&
-        "code" in result.body
-          ? String((result.body as Record<string, unknown>).code)
-          : undefined;
-
-      if (result.status === 400 && code && SKIPPABLE_CODES.has(code)) {
-        console.log(
-          `[spawn-auctions] event ${event.eventId} not eligible (${code}), trying next`,
-        );
-        return { ok: false, done: false }; // try next event
-      }
-
-      lastErr = `HTTP ${result.status}: ${JSON.stringify(result.body).slice(0, 200)}`;
-      console.warn(`[spawn-auctions] attempt ${attempt}: ${lastErr}`);
+      const msg = `Auction ${auctionId} (${duration}) for event ${event.eventId}\n"${event.question}"\ntx: ${txHash.slice(0, 14)}...`;
+      console.log(`[spawn-auctions] ${msg}`);
+      await ntfy("Auction Created", msg, ["tada"]);
+      return { ok: true, done: true };
     } catch (err) {
       lastErr = err instanceof Error ? err.message : String(err);
       console.warn(`[spawn-auctions] attempt ${attempt}: ${lastErr}`);
@@ -462,20 +528,17 @@ async function runCycle(client: GraphQLClient, accounts: TestAccount[]): Promise
     console.log(`[spawn-auctions] signer: ${ta.address}`);
 
     let secretPayload: string;
-    let prediction: string;
-    let format: SecretFormat;
+    let prediction: boolean;
 
     if (venice) {
       console.log(`[spawn-auctions] researching event via Venice AI...`);
       const research = await researchEventAnswer(venice, event.question);
       secretPayload = research.content;
-      prediction = research.prediction ? "true" : "false";
-      format = research.format;
-      console.log(`[spawn-auctions] format: ${format}, prediction: ${prediction}, content: ${secretPayload.length} chars`);
+      prediction = research.prediction;
+      console.log(`[spawn-auctions] format: ${research.format}, prediction: ${prediction}, content: ${secretPayload.length} chars`);
     } else {
       secretPayload = pickRandom(SECRET_POOL);
-      prediction = secretPayload.includes("YES") ? "true" : "false";
-      format = "text";
+      prediction = secretPayload.includes("YES");
       console.log(`[spawn-auctions] secret: "${secretPayload}" (no Venice AI)`);
     }
 
@@ -484,7 +547,7 @@ async function runCycle(client: GraphQLClient, accounts: TestAccount[]): Promise
     console.log(`[spawn-auctions] duration: ${duration}`);
 
     const { done } = await submitAuction(
-      ta, event, duration, durationSeconds, secretPayload, prediction, format,
+      ta, event, duration, durationSeconds, secretPayload, prediction,
     );
     if (done) return;
   }
@@ -496,6 +559,16 @@ async function runCycle(client: GraphQLClient, accounts: TestAccount[]): Promise
 // Entry point
 // ---------------------------------------------------------------------------
 
+if (!OWNER_PK) {
+  console.error("[spawn-auctions] OWNER_PK is required — set it in scripts/.env");
+  process.exit(1);
+}
+
+if (!INTERNAL_API_KEY) {
+  console.error("[spawn-auctions] INTERNAL_API_KEY is required — set it in scripts/.env");
+  process.exit(1);
+}
+
 const accounts = getTestAccounts();
 if (accounts.length === 0) {
   console.error(
@@ -505,9 +578,10 @@ if (accounts.length === 0) {
 }
 
 console.log(`[spawn-auctions] loaded ${accounts.length} test account(s)`);
-console.log(`[spawn-auctions] daemon: ${DAEMON_URL}`);
+console.log(`[spawn-auctions] daemon (internal API): ${DAEMON_URL}`);
+console.log(`[spawn-auctions] rpc: ${RPC_URL}`);
 console.log(`[spawn-auctions] subgraph: ${SUBGRAPH_URL}`);
-console.log(`[spawn-auctions] venice AI: ${VENICE_API_KEY ? "enabled (researched secrets + file uploads)" : "disabled (simple secrets)"}`);
+console.log(`[spawn-auctions] venice AI: ${VENICE_API_KEY ? "enabled" : "disabled"}`);
 
 const client = new GraphQLClient(SUBGRAPH_URL, {
   headers: { Authorization: `Bearer ${SUBGRAPH_API_KEY}` },
