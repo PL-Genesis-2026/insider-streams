@@ -15,6 +15,15 @@ import { requestFundingWithdrawal } from "@/lib/funding/api";
 import { getFundingSnapshotQueryKey } from "@/lib/funding/queries";
 import { useWalletSession } from "@/lib/wallet/use-wallet-session";
 import { useFhevm } from "@/lib/fhevm/use-fhevm";
+import { useState } from "react";
+
+export type DepositStep =
+  | "idle"
+  | "encrypting"
+  | "confirming"
+  | "transferring"
+  | "notifying"
+  | "done";
 
 export function useDeposit() {
   const queryClient = useQueryClient();
@@ -24,8 +33,9 @@ export function useDeposit() {
   const { data: walletClient } = useWalletClient();
   const publicClient = usePublicClient();
   const { instance: fhevmInstance } = useFhevm();
+  const [depositStep, setDepositStep] = useState<DepositStep>("idle");
 
-  return useMutation({
+  const mutation = useMutation({
     mutationFn: async (amountHuman: string) => {
       if (!walletSession.address || !address) {
         throw new Error("Connect your wallet to deposit.");
@@ -46,6 +56,7 @@ export function useDeposit() {
       }
 
       // Step 1: Encrypt the amount using the Zama relayer SDK
+      setDepositStep("encrypting");
       const contractAddress = CONFIDENTIAL_USDC_ADDRESS as `0x${string}`;
       const input = (fhevmInstance as any).createEncryptedInput(
         contractAddress,
@@ -55,6 +66,7 @@ export function useDeposit() {
       const encrypted = await input.encrypt();
 
       // Step 2: Transfer cUSDC from user's wallet to admin EOA (on-chain tx)
+      setDepositStep("confirming");
       const handle = toHex(encrypted.handles[0] as Uint8Array);
       const proof = toHex(encrypted.inputProof as Uint8Array);
       const txHash = await walletClient.writeContract({
@@ -69,9 +81,11 @@ export function useDeposit() {
       });
 
       // Wait for confirmation
+      setDepositStep("transferring");
       await publicClient.waitForTransactionReceipt({ hash: txHash });
 
       // Step 3: Notify daemon to deposit from admin → marketplace
+      setDepositStep("notifying");
       const timestamp = Math.floor(Date.now() / 1000);
       const payload = { txHash, amount: parsed.toString(), timestamp };
       const signature = await signMessageAsync({
@@ -87,9 +101,15 @@ export function useDeposit() {
         queryKey: getFundingSnapshotQueryKey(walletSession.address),
       });
 
+      setDepositStep("done");
       return result;
     },
+    onSettled: () => {
+      setTimeout(() => setDepositStep("idle"), 1500);
+    },
   });
+
+  return { ...mutation, depositStep };
 }
 
 export function useWithdraw() {

@@ -138,6 +138,38 @@ function getErrorDetails(result: CreateAuctionResponse) {
   };
 }
 
+type SubmittingStepDef = {
+  label: string;
+  detail: string;
+};
+
+function getSubmittingSteps(hasFile: boolean): SubmittingStepDef[] {
+  const steps: SubmittingStepDef[] = [
+    { label: "Preparing", detail: "Verifying signature" },
+  ];
+  if (hasFile) {
+    steps.push({
+      label: "Encrypting file for Filecoin",
+      detail: "AES-256 encryption and uploading to Filecoin storage",
+    });
+  }
+  steps.push(
+    {
+      label: "FHE Encryption",
+      detail: "Encrypting prediction (ebool) and secret key (euint256) via Zama fhEVM Relayer \u2014 generating zero-knowledge proof",
+    },
+    {
+      label: "On-chain submission",
+      detail: "Submitting encrypted auction to FHESecretMarketplace on Sepolia",
+    },
+    {
+      label: "Block confirmation",
+      detail: "Waiting for Sepolia block confirmation",
+    },
+  );
+  return steps;
+}
+
 function validateFile(file: File): string | null {
   if (file.size === 0) return "File is empty";
   if (file.size > MAX_FILE_SIZE_BYTES) return `File too large (max ${MAX_FILE_SIZE_BYTES / 1024 / 1024} MB)`;
@@ -169,6 +201,35 @@ export function CreateAuctionDraftForm({
   const [submitState, setSubmitState] = useState<SubmitState>({
     status: "idle",
   });
+
+  const [submittingStep, setSubmittingStep] = useState(0);
+
+  useEffect(() => {
+    if (submitState.status !== "submitting") {
+      setSubmittingStep(0);
+      return;
+    }
+
+    const hasFile = attachment !== null;
+    const delays = hasFile
+      ? [2000, 7000, 15000, 3000]
+      : [2000, 15000, 3000];
+
+    const timeouts: ReturnType<typeof setTimeout>[] = [];
+    let cumulative = 0;
+    for (let i = 0; i < delays.length; i++) {
+      cumulative += delays[i];
+      const step = i + 1;
+      timeouts.push(setTimeout(() => setSubmittingStep(step), cumulative));
+    }
+
+    return () => timeouts.forEach(clearTimeout);
+  }, [submitState.status, attachment]);
+
+  const submittingSteps = useMemo(
+    () => getSubmittingSteps(attachment !== null),
+    [attachment],
+  );
 
   function setDraftField<Key extends keyof DraftState>(
     key: Key,
@@ -797,7 +858,7 @@ export function CreateAuctionDraftForm({
               ) : submitState.status === "submitting" ? (
                 <>
                   <Loader2 className="size-4 animate-spin" />
-                  Creating auction...
+                  {submittingSteps[submittingStep]?.label ?? "Creating auction..."}
                 </>
               ) : draft.privateLeg === "yes" ? (
                 "Sell YES signal"
@@ -811,6 +872,43 @@ export function CreateAuctionDraftForm({
               <Link href="/#auctions">Browse auctions</Link>
             </Button>
           </div>
+
+          {submitState.status === "submitting" && (
+            <div className="border-t border-border/60 pt-6">
+              <ol className="space-y-3">
+                {submittingSteps.map((step, i) => {
+                  const isCompleted = submittingStep > i;
+                  const isActive = submittingStep === i;
+                  return (
+                    <li key={step.label} className="flex items-start gap-3">
+                      <div className="mt-0.5 flex size-5 shrink-0 items-center justify-center">
+                        {isCompleted ? (
+                          <Check className="size-4 text-emerald-400" />
+                        ) : isActive ? (
+                          <Loader2 className="size-4 animate-spin text-accent" />
+                        ) : (
+                          <div className="size-2 rounded-full bg-muted-foreground/30" />
+                        )}
+                      </div>
+                      <div>
+                        <p className={cn(
+                          "text-sm font-medium",
+                          isCompleted ? "text-muted-foreground" : isActive ? "text-foreground" : "text-muted-foreground/50"
+                        )}>
+                          {step.label}
+                        </p>
+                        {isActive && (
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {step.detail}
+                          </p>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+            </div>
+          )}
         </CardContent>
       </Card>
     </section>

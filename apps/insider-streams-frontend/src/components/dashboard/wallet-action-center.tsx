@@ -114,7 +114,7 @@ export function WalletActionCenter({
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const fundingSnapshot = useFundingSnapshot({ enabled: isRevealed });
-  const depositMutation = useDeposit();
+  const { depositStep, ...depositMutation } = useDeposit();
   const withdrawMutation = useWithdraw();
   const walletBalance = useConfidentialBalance();
   const { status: fheSdkStatus, error: fheSdkError } = useFhevm();
@@ -502,7 +502,17 @@ export function WalletActionCenter({
                         {isDepositing ? (
                           <>
                             <Loader2 className="size-4 animate-spin" />
-                            Depositing...
+                            {depositStep === "encrypting"
+                              ? "Encrypting deposit with FHE..."
+                              : depositStep === "confirming"
+                                ? "Confirm transfer in wallet..."
+                                : depositStep === "transferring"
+                                  ? "Submitting confidential transfer..."
+                                  : depositStep === "notifying"
+                                    ? "Registering deposit..."
+                                    : depositStep === "done"
+                                      ? "Deposit complete"
+                                      : "Depositing..."}
                           </>
                         ) : fheSdkStatus === "loading" ? (
                           <>
