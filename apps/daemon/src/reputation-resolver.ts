@@ -23,7 +23,7 @@ function sendNotification(title: string, message: string, clickUrl?: string) {
   return _sendNotification(title, message, clickUrl, config.ntfyTopicReputation);
 }
 import { withAdminLock } from "./admin-lock.js";
-import { getFhevmInstance } from "./fhe.js";
+import { getFhevmInstance } from "@private-streams/common";
 import { markBids } from "./mark-bids.js";
 import { ProcessingTracker } from "./processing-tracker.js";
 
@@ -67,7 +67,7 @@ async function finalizeAuctionReputation(auctionId: bigint): Promise<void> {
   console.log(`[resolver] Auction ${auctionId}: decrypting reputation handle ${handle}...`);
 
   // Decrypt via Zama Relayer — returns cleartext boolean + proof
-  const instance = await getFhevmInstance();
+  const instance = await getFhevmInstance(config.rpcUrl);
   const decryptPromise = instance.publicDecrypt([handle]);
   let timer: ReturnType<typeof setTimeout>;
   const timeoutPromise = new Promise<never>((_, reject) => {
