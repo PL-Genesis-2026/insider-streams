@@ -101,18 +101,31 @@ interface TestAccount {
   account: ReturnType<typeof privateKeyToAccount>;
 }
 
+function normalizePrivateKey(value: string): Hex {
+  const normalized = value.startsWith("0x") ? value : `0x${value}`;
+  if (!/^0x[a-fA-F0-9]{64}$/.test(normalized)) {
+    throw new Error(`Invalid private key: ${value.slice(0, 10)}...`);
+  }
+  // Cast is safe: regex above guarantees 0x-prefixed hex
+  return normalized as Hex;
+}
+
 function loadTestAccounts(): TestAccount[] {
   const accounts: TestAccount[] = [];
   for (let i = 1; i <= 25; i++) {
     const pk = process.env[`TEST_ACCOUNT_${i}`];
     if (!pk) continue;
-    const normalized = pk.startsWith("0x") ? pk : `0x${pk}`;
-    const account = privateKeyToAccount(normalized as Hex);
-    accounts.push({
-      privateKey: normalized as Hex,
-      address: account.address,
-      account,
-    });
+    try {
+      const normalized = normalizePrivateKey(pk);
+      const account = privateKeyToAccount(normalized);
+      accounts.push({
+        privateKey: normalized,
+        address: account.address,
+        account,
+      });
+    } catch {
+      console.warn(`[place-bids] TEST_ACCOUNT_${i} is invalid, skipping`);
+    }
   }
   return accounts;
 }
@@ -134,6 +147,7 @@ async function internalPost(
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(30_000),
   });
+  // fetch().json() returns unknown; our internal API always returns JSON objects
   const data = (await response.json()) as Record<string, unknown>;
   return { ok: response.ok, status: response.status, data };
 }
@@ -143,6 +157,7 @@ async function registerUser(address: string): Promise<string> {
   if (!result.ok) {
     throw new Error(`register-user failed: ${JSON.stringify(result.data)}`);
   }
+  // API returns { userId: string } — cast from unknown
   return result.data.userId as string;
 }
 
@@ -154,9 +169,12 @@ async function registerUser(address: string): Promise<string> {
 // daemon API VPS.
 // ---------------------------------------------------------------------------
 
-function getOwnerClients() {
+// Cached singleton clients — avoids recreating per call (matches daemon pattern)
+let _ownerClients: ReturnType<typeof _createOwnerClients> | null = null;
+
+function _createOwnerClients() {
   if (!OWNER_PK) throw new Error("OWNER_PK is required");
-  const pk = (OWNER_PK.startsWith("0x") ? OWNER_PK : `0x${OWNER_PK}`) as Hex;
+  const pk = normalizePrivateKey(OWNER_PK);
   const account = privateKeyToAccount(pk);
   const publicClient = createPublicClient({
     chain: sepolia,
@@ -168,6 +186,11 @@ function getOwnerClients() {
     transport: http(RPC_URL, { timeout: 30_000 }),
   });
   return { walletClient, publicClient, account };
+}
+
+function getOwnerClients() {
+  if (!_ownerClients) _ownerClients = _createOwnerClients();
+  return _ownerClients;
 }
 
 function toHexBytes(bytes: Uint8Array): `0x${string}` {
@@ -200,7 +223,7 @@ const DECRYPT_TIMEOUT_MS = 60_000;
 
 async function getOnChainBalance(userId: string): Promise<bigint> {
   const { publicClient } = getOwnerClients();
-  const marketplaceAddress = SECRET_MARKETPLACE_ADDRESS as `0x${string}`;
+  const marketplaceAddress = SECRET_MARKETPLACE_ADDRESS;
 
   // Get the handle — if zero, user has no balance
   const rawHandle = await publicClient.readContract({
@@ -209,6 +232,7 @@ async function getOnChainBalance(userId: string): Promise<bigint> {
     functionName: "getBalance",
     args: [userId],
   });
+  // Contract returns bytes32 — always 0x-prefixed hex
   const handle = rawHandle as `0x${string}`;
   if (!handle || handle === zeroHash) return 0n;
 
@@ -249,7 +273,7 @@ async function publicDecryptWithTimeout(
   console.log(`[place-bids] publicDecrypt(${handle.slice(0, 14)}...) — waiting for relayer...`);
 
   const decryptPromise = instance.publicDecrypt([handle]);
-  let timer: ReturnType<typeof setTimeout>;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = new Promise<never>((_, reject) => {
     timer = setTimeout(() => reject(new Error(`publicDecrypt timed out after ${DECRYPT_TIMEOUT_MS / 1000}s`)), DECRYPT_TIMEOUT_MS);
   });
@@ -257,17 +281,18 @@ async function publicDecryptWithTimeout(
   try {
     result = await Promise.race([decryptPromise, timeoutPromise]);
   } finally {
-    clearTimeout(timer!);
+    if (timer) clearTimeout(timer);
   }
 
   const clearValue = result.clearValues[handle];
   if (clearValue === undefined || clearValue === null) return 0n;
+  // Relayer returns numeric clear values; BigInt() coerces safely
   return BigInt(clearValue as bigint);
 }
 
 async function depositForUser(userId: string, amount: bigint): Promise<string> {
   const { walletClient, publicClient, account } = getOwnerClients();
-  const marketplaceAddress = SECRET_MARKETPLACE_ADDRESS as `0x${string}`;
+  const marketplaceAddress = SECRET_MARKETPLACE_ADDRESS;
 
   // FHE-encrypt the deposit amount
   const encrypted = await encryptUint64(
@@ -296,7 +321,7 @@ async function placeBidOnChain(
   amount: bigint,
 ): Promise<string> {
   const { walletClient, publicClient, account } = getOwnerClients();
-  const marketplaceAddress = SECRET_MARKETPLACE_ADDRESS as `0x${string}`;
+  const marketplaceAddress = SECRET_MARKETPLACE_ADDRESS;
 
   // FHE-encrypt the bid amount
   const encrypted = await encryptUint64(
@@ -354,7 +379,7 @@ async function ensureBalance(account: TestAccount, userId: string): Promise<bigi
 
     // Step 1: Mint cUSDC to admin address
     const mintHash = await walletClient.writeContract({
-      address: CONFIDENTIAL_USDC_ADDRESS as `0x${string}`,
+      address: CONFIDENTIAL_USDC_ADDRESS,
       abi: fheConfidentialUsdcAbi,
       functionName: "mintPlaintext",
       args: [walletClient.account.address, TOPUP_AMOUNT],
@@ -457,9 +482,7 @@ async function main() {
 
   let bidsPlaced = 0;
   let skippedLowBalance = 0;
-  let rejectedBids = 0;
   let errors = 0;
-  const rejectReasons: string[] = [];
   const errorMessages: string[] = [];
   const successDetails: string[] = [];
 
@@ -498,12 +521,12 @@ async function main() {
       try {
         const { publicClient } = getOwnerClients();
         const auctionData = await publicClient.readContract({
-          address: SECRET_MARKETPLACE_ADDRESS as `0x${string}`,
+          address: SECRET_MARKETPLACE_ADDRESS,
           abi: fheSecretMarketplaceAbi,
           functionName: "getAuction",
           args: [BigInt(auction.auctionId)],
         });
-        // auctionData is a readonly tuple: [sellerId, endTime, secretDataCid, currentBidderId, ...]
+        // auctionData tuple: [sellerId, endTime, currentBid, currentBidderId, ...]
         previousBidderId = auctionData[3] || "";
       } catch {
         // Auction may not exist yet — proceed without previousBidderId
@@ -565,10 +588,8 @@ async function main() {
   const lines = [`Placed ${bidsPlaced} bid(s) across ${auctions.length} auction(s)`];
   if (successDetails.length > 0) lines.push(...successDetails);
   if (skippedLowBalance > 0) lines.push(`Skipped (low balance): ${skippedLowBalance}`);
-  if (rejectedBids > 0) lines.push(`Rejected: ${rejectedBids}`);
   if (errors > 0) lines.push(`Errors: ${errors}`);
-  if (rejectReasons.length > 0) lines.push(`Rejects:\n${rejectReasons.join("\n")}`);
-  if (errorMessages.length > 0) lines.push(`Errors:\n${errorMessages.join("\n")}`);
+  if (errorMessages.length > 0) lines.push(`Details:\n${errorMessages.join("\n")}`);
   const summary = lines.join("\n");
   console.log(`[place-bids] ${summary}`);
   await ntfy(

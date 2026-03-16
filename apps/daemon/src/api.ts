@@ -1006,6 +1006,7 @@ export function startApi(): void {
         return;
       }
 
+      // Express req.body is `any` without middleware typing; fields validated below
       const { address } = req.body as { address: string };
       if (!address) {
         res.status(400).json({ error: "Missing address" });
@@ -1036,6 +1037,7 @@ export function startApi(): void {
         return;
       }
 
+      // Express req.body is `any` without middleware typing; fields validated below
       const { auctionId, bidderId, amount, txHash } = req.body as {
         auctionId: number;
         bidderId: string;
@@ -1080,6 +1082,7 @@ export function startApi(): void {
         return;
       }
 
+      // Express req.body is `any` without middleware typing; fields validated below
       const { auctionId, sellerId, secretDataCid, secretDataKey, secretData, eventData } = req.body as {
         auctionId: number;
         sellerId: string;

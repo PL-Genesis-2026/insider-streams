@@ -1111,3 +1111,252 @@ describe("POST /internal/mark-bids", () => {
     assert.equal(data.updated, 0);
   });
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// Internal endpoint: POST /internal/register-user
+// ════════════════════════════════════════════════════════════════════════════
+
+describe("POST /internal/register-user", () => {
+  const INTERNAL_KEY = "test-secret-key-12345";
+
+  it("rejects request without API key", async () => {
+    const { status } = await api("POST", "/internal/register-user", {
+      address: ALICE.address,
+    });
+    assert.equal(status, 401);
+  });
+
+  it("rejects request with wrong API key", async () => {
+    const resp = await fetch(`${BASE_URL}/internal/register-user`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Key": "wrong-key",
+      },
+      body: JSON.stringify({ address: ALICE.address }),
+    });
+    assert.equal(resp.status, 401);
+  });
+
+  it("rejects missing address", async () => {
+    const resp = await fetch(`${BASE_URL}/internal/register-user`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Key": INTERNAL_KEY,
+      },
+      body: JSON.stringify({}),
+    });
+    assert.equal(resp.status, 400);
+  });
+
+  it("registers a user and returns userId", async () => {
+    const resp = await fetch(`${BASE_URL}/internal/register-user`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Key": INTERNAL_KEY,
+      },
+      body: JSON.stringify({ address: CHARLIE.address }),
+    });
+    assert.equal(resp.status, 200);
+    const data = (await resp.json()) as { userId: string; address: string };
+    assert.ok(data.userId, "should return a userId");
+    assert.equal(data.address, CHARLIE.address.toLowerCase());
+  });
+
+  it("returns same userId for same address (idempotent)", async () => {
+    const resp1 = await fetch(`${BASE_URL}/internal/register-user`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Key": INTERNAL_KEY,
+      },
+      body: JSON.stringify({ address: CHARLIE.address }),
+    });
+    const data1 = (await resp1.json()) as { userId: string };
+
+    const resp2 = await fetch(`${BASE_URL}/internal/register-user`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Key": INTERNAL_KEY,
+      },
+      body: JSON.stringify({ address: CHARLIE.address }),
+    });
+    const data2 = (await resp2.json()) as { userId: string };
+
+    assert.equal(data1.userId, data2.userId);
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// Internal endpoint: POST /internal/record-bid
+// ════════════════════════════════════════════════════════════════════════════
+
+describe("POST /internal/record-bid", () => {
+  const INTERNAL_KEY = "test-secret-key-12345";
+
+  it("rejects request without API key", async () => {
+    const { status } = await api("POST", "/internal/record-bid", {
+      auctionId: 1,
+      bidderId: "test-user",
+      amount: "5000000",
+    });
+    assert.equal(status, 401);
+  });
+
+  it("rejects request with wrong API key", async () => {
+    const resp = await fetch(`${BASE_URL}/internal/record-bid`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Key": "wrong-key",
+      },
+      body: JSON.stringify({ auctionId: 1, bidderId: "test-user", amount: "5000000" }),
+    });
+    assert.equal(resp.status, 401);
+  });
+
+  it("rejects missing auctionId", async () => {
+    const resp = await fetch(`${BASE_URL}/internal/record-bid`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Key": INTERNAL_KEY,
+      },
+      body: JSON.stringify({ bidderId: "test-user", amount: "5000000" }),
+    });
+    assert.equal(resp.status, 400);
+  });
+
+  it("rejects missing bidderId", async () => {
+    const resp = await fetch(`${BASE_URL}/internal/record-bid`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Key": INTERNAL_KEY,
+      },
+      body: JSON.stringify({ auctionId: 1, amount: "5000000" }),
+    });
+    assert.equal(resp.status, 400);
+  });
+
+  it("rejects missing amount", async () => {
+    const resp = await fetch(`${BASE_URL}/internal/record-bid`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Key": INTERNAL_KEY,
+      },
+      body: JSON.stringify({ auctionId: 1, bidderId: "test-user" }),
+    });
+    assert.equal(resp.status, 400);
+  });
+
+  it("records a bid and returns bidId", async () => {
+    const resp = await fetch(`${BASE_URL}/internal/record-bid`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Key": INTERNAL_KEY,
+      },
+      body: JSON.stringify({
+        auctionId: 8000,
+        bidderId: "test-bidder-1",
+        amount: "5000000",
+        txHash: "0xabc123",
+      }),
+    });
+    assert.equal(resp.status, 200);
+    const data = (await resp.json()) as { ok: boolean; bidId: number };
+    assert.equal(data.ok, true);
+    assert.ok(typeof data.bidId === "number", "should return a numeric bidId");
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// Internal endpoint: POST /internal/insert-secret
+// ════════════════════════════════════════════════════════════════════════════
+
+describe("POST /internal/insert-secret", () => {
+  const INTERNAL_KEY = "test-secret-key-12345";
+
+  it("rejects request without API key", async () => {
+    const { status } = await api("POST", "/internal/insert-secret", {
+      auctionId: 1,
+      sellerId: "test-seller",
+      secretDataCid: "0xabc",
+    });
+    assert.equal(status, 401);
+  });
+
+  it("rejects request with wrong API key", async () => {
+    const resp = await fetch(`${BASE_URL}/internal/insert-secret`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Key": "wrong-key",
+      },
+      body: JSON.stringify({ auctionId: 1, sellerId: "test-seller", secretDataCid: "0xabc" }),
+    });
+    assert.equal(resp.status, 401);
+  });
+
+  it("rejects missing auctionId", async () => {
+    const resp = await fetch(`${BASE_URL}/internal/insert-secret`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Key": INTERNAL_KEY,
+      },
+      body: JSON.stringify({ sellerId: "test-seller", secretDataCid: "0xabc" }),
+    });
+    assert.equal(resp.status, 400);
+  });
+
+  it("rejects missing sellerId", async () => {
+    const resp = await fetch(`${BASE_URL}/internal/insert-secret`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Key": INTERNAL_KEY,
+      },
+      body: JSON.stringify({ auctionId: 1, secretDataCid: "0xabc" }),
+    });
+    assert.equal(resp.status, 400);
+  });
+
+  it("rejects missing secretDataCid", async () => {
+    const resp = await fetch(`${BASE_URL}/internal/insert-secret`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Key": INTERNAL_KEY,
+      },
+      body: JSON.stringify({ auctionId: 1, sellerId: "test-seller" }),
+    });
+    assert.equal(resp.status, 400);
+  });
+
+  it("inserts a secret successfully", async () => {
+    const resp = await fetch(`${BASE_URL}/internal/insert-secret`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Key": INTERNAL_KEY,
+      },
+      body: JSON.stringify({
+        auctionId: 7000,
+        sellerId: "test-seller-1",
+        secretDataCid: "0x" + "ab".repeat(32),
+        secretDataKey: "0x" + "cd".repeat(32),
+        secretData: "The answer is YES.",
+        eventData: JSON.stringify({ marketplace: "test", event: "test event" }),
+      }),
+    });
+    assert.equal(resp.status, 200);
+    const data = (await resp.json()) as { ok: boolean };
+    assert.equal(data.ok, true);
+  });
+});

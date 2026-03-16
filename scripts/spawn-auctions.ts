@@ -201,6 +201,7 @@ function normalizePrivateKey(value: string): Hex {
   if (!/^0x[a-fA-F0-9]{64}$/.test(normalized)) {
     throw new Error(`Invalid private key: ${value.slice(0, 10)}...`);
   }
+  // Cast is safe: regex above guarantees 0x-prefixed hex
   return normalized as Hex;
 }
 
@@ -248,6 +249,7 @@ async function internalPost(
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(30_000),
   });
+  // fetch().json() returns unknown; our internal API always returns JSON objects
   const data = (await response.json()) as Record<string, unknown>;
   return { ok: response.ok, status: response.status, data };
 }
@@ -257,6 +259,7 @@ async function registerUser(address: string): Promise<string> {
   if (!result.ok) {
     throw new Error(`register-user failed: ${JSON.stringify(result.data)}`);
   }
+  // API returns { userId: string } — cast from unknown
   return result.data.userId as string;
 }
 
@@ -268,7 +271,10 @@ async function registerUser(address: string): Promise<string> {
 // daemon API VPS.
 // ---------------------------------------------------------------------------
 
-function getOwnerClients() {
+// Cached singleton clients — avoids recreating per call (matches daemon pattern)
+let _ownerClients: ReturnType<typeof _createOwnerClients> | null = null;
+
+function _createOwnerClients() {
   if (!OWNER_PK) throw new Error("OWNER_PK is required");
   const pk = normalizePrivateKey(OWNER_PK);
   const account = privateKeyToAccount(pk);
@@ -282,6 +288,11 @@ function getOwnerClients() {
     transport: http(RPC_URL, { timeout: 30_000 }),
   });
   return { walletClient, publicClient, account };
+}
+
+function getOwnerClients() {
+  if (!_ownerClients) _ownerClients = _createOwnerClients();
+  return _ownerClients;
 }
 
 function toHexBytes(bytes: Uint8Array): `0x${string}` {
@@ -319,7 +330,7 @@ async function createAuctionOnChain(
   secretPayload: string,
 ): Promise<{ auctionId: number; txHash: string }> {
   const { walletClient, publicClient, account } = getOwnerClients();
-  const marketplaceAddress = SECRET_MARKETPLACE_ADDRESS as `0x${string}`;
+  const marketplaceAddress = SECRET_MARKETPLACE_ADDRESS;
 
   // Generate secret data CID (SHA256 of payload) and random secret key
   const secretDataCid = "0x" + createHash("sha256").update(secretPayload).digest("hex");
@@ -347,6 +358,7 @@ async function createAuctionOnChain(
       eventTitle,
       BigInt(endTime),
       toHexBytes(encrypted.handles[0]),  // prediction (ebool)
+      // secretDataCid is "0x" + hex from SHA256 — already 0x-prefixed
       secretDataCid as `0x${string}`,    // secretDataCid (bytes32)
       toHexBytes(encrypted.handles[1]),  // secretKey (euint256)
       toHexBytes(encrypted.inputProof),
@@ -366,6 +378,7 @@ async function createAuctionOnChain(
         topics: log.topics,
       });
       if (decoded.eventName === "AuctionCreated") {
+        // decodeEventLog returns generic args; AuctionCreated has { auctionId: bigint }
         auctionId = Number((decoded.args as { auctionId: bigint }).auctionId);
         break;
       }
@@ -379,6 +392,9 @@ async function createAuctionOnChain(
       `[spawn-auctions] AuctionCreated event NOT found in ${receipt.logs.length} logs. ` +
       `Receipt status: ${receipt.status}, tx: ${receipt.transactionHash}`,
     );
+    // Skip DB sync — can't insert a secret without a valid auction ID.
+    // The on-chain auction exists but we can't correlate it to a DB record.
+    return { auctionId, txHash: receipt.transactionHash };
   }
 
   // Sync secret to daemon SQLite via internal API
