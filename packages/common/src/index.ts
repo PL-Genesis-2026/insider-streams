@@ -14,3 +14,4 @@ export * from "./consts";
 export * from "./create-auction";
 export * from "./faucet";
 export * from "./verify-signed-request";
+export * from "./fhe";

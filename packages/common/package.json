@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@wagmi/cli": "^2.10.0",
+    "@zama-fhe/relayer-sdk": "^0.4.2",
     "fast-json-stable-stringify": "^2.1.0",
     "viem": "^2.47.0"
   },
