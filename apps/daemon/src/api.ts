@@ -16,6 +16,7 @@
 import express, { type Request, type Response } from "express";
 import multer from "multer";
 import { createHash, randomBytes } from "node:crypto";
+import { decodeEventLog } from "viem";
 import { verifySignedRequest, fheConfidentialUsdcAbi, fheSecretMarketplaceAbi, PLATFORM_EOA_ADDRESS } from "@private-streams/common";
 import { config } from "./config.js";
 import {
@@ -624,7 +625,12 @@ export function startApi(): void {
       }
 
       // Verify the on-chain transfer: confirm the tx exists, succeeded,
-      // and transferred cUSDC to the platform EOA.
+      // was sent to the cUSDC contract, and emitted a ConfidentialTransfer
+      // from the signer to the platform EOA.
+      // NOTE: The transfer amount is an encrypted euint64 handle (FHE privacy)
+      // and cannot be verified from logs. We trust the client-supplied amount
+      // because the on-chain FHE balance accounting is the ultimate source of
+      // truth — depositFor will fail if the admin doesn't actually hold enough.
       const publicClient = getPublicClient();
       let receipt;
       try {
@@ -637,6 +643,52 @@ export function startApi(): void {
 
       if (receipt.status !== "success") {
         res.status(400).json({ error: "Transaction failed on-chain", code: "TX_FAILED" });
+        return;
+      }
+
+      // Verify the tx targeted the correct cUSDC contract
+      const cUsdcAddress = config.confidentialUsdcAddress.toLowerCase();
+      if (receipt.to?.toLowerCase() !== cUsdcAddress) {
+        res.status(400).json({
+          error: "Transaction was not sent to the cUSDC contract",
+          code: "WRONG_CONTRACT",
+        });
+        return;
+      }
+
+      // Verify a ConfidentialTransfer event was emitted from the cUSDC contract
+      // with from=signer and to=platformEOA
+      const platformEoa = PLATFORM_EOA_ADDRESS.toLowerCase();
+      const signerLower = userAddress.toLowerCase();
+      let foundValidTransfer = false;
+      for (const log of receipt.logs) {
+        if (log.address.toLowerCase() !== cUsdcAddress) continue;
+        try {
+          const decoded = decodeEventLog({
+            abi: fheConfidentialUsdcAbi,
+            data: log.data,
+            topics: log.topics,
+          });
+          if (
+            decoded.eventName === "ConfidentialTransfer" &&
+            "from" in decoded.args &&
+            "to" in decoded.args &&
+            (decoded.args.from as string).toLowerCase() === signerLower &&
+            (decoded.args.to as string).toLowerCase() === platformEoa
+          ) {
+            foundValidTransfer = true;
+            break;
+          }
+        } catch {
+          // Not a matching event — skip
+        }
+      }
+
+      if (!foundValidTransfer) {
+        res.status(400).json({
+          error: "No valid cUSDC transfer from your address to the platform was found in this transaction",
+          code: "TRANSFER_NOT_FOUND",
+        });
         return;
       }
 
