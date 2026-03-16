@@ -156,7 +156,7 @@ function getSubmittingSteps(hasFile: boolean): SubmittingStepDef[] {
   steps.push(
     {
       label: "FHE Encryption",
-      detail: "Encrypting prediction (ebool) and secret key (euint256) via Zama fhEVM Relayer",
+      detail: "Encrypting prediction (ebool) and secret key (euint256) via Zama fhEVM Relayer \u2014 generating zero-knowledge proof",
     },
     {
       label: "On-chain submission",
@@ -225,6 +225,11 @@ export function CreateAuctionDraftForm({
 
     return () => timeouts.forEach(clearTimeout);
   }, [submitState.status, attachment]);
+
+  const submittingSteps = useMemo(
+    () => getSubmittingSteps(attachment !== null),
+    [attachment],
+  );
 
   function setDraftField<Key extends keyof DraftState>(
     key: Key,
@@ -853,7 +858,7 @@ export function CreateAuctionDraftForm({
               ) : submitState.status === "submitting" ? (
                 <>
                   <Loader2 className="size-4 animate-spin" />
-                  {getSubmittingSteps(attachment !== null)[submittingStep]?.label ?? "Creating auction..."}
+                  {submittingSteps[submittingStep]?.label ?? "Creating auction..."}
                 </>
               ) : draft.privateLeg === "yes" ? (
                 "Sell YES signal"
@@ -871,7 +876,7 @@ export function CreateAuctionDraftForm({
           {submitState.status === "submitting" && (
             <div className="border-t border-border/60 pt-6">
               <ol className="space-y-3">
-                {getSubmittingSteps(attachment !== null).map((step, i) => {
+                {submittingSteps.map((step, i) => {
                   const isCompleted = submittingStep > i;
                   const isActive = submittingStep === i;
                   return (
